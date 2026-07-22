@@ -1,0 +1,101 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+export interface CustomField {
+  name: string;
+  type: 'text' | 'select' | 'textarea';
+  label: string;
+  placeholder?: string;
+  options?: string[];
+  required?: boolean;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  category: 'Uniforms' | 'IDs & Accessories' | 'Print Materials' | 'Promo Items';
+  description: string;
+  imageUrl: string;
+  basePrice: number;
+  originalPrice?: number; // Retail or original price before B2B negotiation
+  saleCount?: number;     // e.g. 9 for "9/10 Sale"
+  saleLimit?: number;     // e.g. 10 for "9/10 Sale"
+  minQuantity: number;
+  unit: string;
+  sizeOptions?: string[];
+  colorOptions?: string[];
+  customFields?: CustomField[];
+  frequentlyOrdered?: boolean;
+  shippingFee?: number;
+  leadTime?: string;
+  imageUrls?: string[];
+}
+
+export interface OrderItem {
+  productId: string;
+  productName: string;
+  imageUrl: string;
+  quantity: number;
+  price: number;
+  selectedSize?: string;
+  selectedColor?: string;
+  customDetails?: Record<string, string>;
+}
+
+export interface Order {
+  id: string;
+  orderNumber: string;
+  companyName: string;
+  contactEmail: string;
+  items: OrderItem[];
+  status: 'Pending' | 'Approved' | 'In Production' | 'Shipped' | 'Completed' | 'Canceled';
+  totalAmount: number;
+  createdAt: string;
+  deliveryAddress: string;
+  contactPerson: string;
+  poNumber?: string;
+  notes?: string;
+}
+
+export interface CompanyProfile {
+  id: string;
+  name: string;
+  logoUrl?: string;
+  deliveryAddress: string;
+  contactPerson: string;
+  contactEmail: string;
+  contactPhone: string;
+  poRequired: boolean;
+  username?: string;         // Portal login username
+  passcode?: string;         // Portal login passcode
+  enabledProductIds?: string[]; // IDs of products available to this client. If undefined/empty, all are available.
+  customProducts?: Product[]; // Company-specific products
+}
+
+export interface CartItem {
+  id: string; // Composite key to differentiate items with different configurations
+  product: Product;
+  quantity: number;
+  selectedSize?: string;
+  selectedColor?: string;
+  customDetails: Record<string, string>;
+}
+
+export interface AppsScriptConfig {
+  webAppUrl: string;
+  isConnected: boolean;
+  lastSyncTime?: string;
+}
+
+export interface SystemSettings {
+  hubName: string;
+  shortHubName: string;
+  orderPrefix: string;
+  currencySymbol: string;
+  colorTheme?: string;
+  adminEmail?: string;
+  logoUrl?: string;
+}
+

@@ -1,0 +1,449 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState } from 'react';
+import { CompanyProfile, AppsScriptConfig } from '../types';
+import AppsScriptInstructions from './AppsScriptInstructions';
+import { Link, Check, Wifi, WifiOff, AlertCircle, Plus, Building, Save, FileSpreadsheet, RefreshCw } from 'lucide-react';
+import { sheetsService } from '../lib/sheetsService';
+
+interface SettingsPanelProps {
+  config: AppsScriptConfig;
+  onUpdateConfig: (config: AppsScriptConfig) => void;
+  companies: CompanyProfile[];
+  onAddCompany: (co: CompanyProfile) => void;
+  onUpdateCompany: (co: CompanyProfile) => void;
+  totalOrders: number;
+  productsCount: number;
+  onForceSyncAll: () => Promise<boolean>;
+}
+
+export default function SettingsPanel({
+  config,
+  onUpdateConfig,
+  companies,
+  onAddCompany,
+  onUpdateCompany,
+  totalOrders,
+  productsCount,
+  onForceSyncAll
+}: SettingsPanelProps) {
+  // Sync States
+  const [url, setUrl] = useState(config.webAppUrl);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<'idle' | 'success' | 'failed'>('idle');
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'failed'>('idle');
+
+  // Company Editor States
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [contact, setContact] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [poReq, setPoReq] = useState(false);
+  const [isAddingNew, setIsAddingNew] = useState(false);
+
+  const handleTestConnection = async () => {
+    if (!url.trim()) {
+      alert('Please enter an Apps Script URL first.');
+      return;
+    }
+    setIsTesting(true);
+    setTestResult('idle');
+    
+    // We try to test connection
+    const success = await sheetsService.testConnection(url);
+    setIsTesting(false);
+    
+    if (success) {
+      setTestResult('success');
+      onUpdateConfig({
+        webAppUrl: url.trim(),
+        isConnected: true,
+        lastSyncTime: new Date().toISOString()
+      });
+    } else {
+      setTestResult('failed');
+      // Still update url so they don't lose it, but marked as offline
+      onUpdateConfig({
+        webAppUrl: url.trim(),
+        isConnected: false
+      });
+    }
+  };
+
+  const handleTriggerSyncAll = async () => {
+    setIsSyncingAll(true);
+    setSyncStatus('idle');
+    const ok = await onForceSyncAll();
+    setIsSyncingAll(false);
+    if (ok) {
+      setSyncStatus('success');
+      setTimeout(() => setSyncStatus('idle'), 4000);
+    } else {
+      setSyncStatus('failed');
+      setTimeout(() => setSyncStatus('idle'), 4000);
+    }
+  };
+
+  const startEdit = (co: CompanyProfile) => {
+    setEditingId(co.id);
+    setIsAddingNew(false);
+    setName(co.name);
+    setContact(co.contactPerson);
+    setEmail(co.contactEmail);
+    setPhone(co.contactPhone);
+    setAddress(co.deliveryAddress);
+    setPoReq(co.poRequired);
+  };
+
+  const startAddNew = () => {
+    setEditingId(null);
+    setIsAddingNew(true);
+    setName('');
+    setContact('');
+    setEmail('');
+    setPhone('');
+    setAddress('');
+    setPoReq(false);
+  };
+
+  const handleSaveCompany = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !contact.trim() || !email.trim() || !address.trim()) {
+      alert('Please fill out all required fields.');
+      return;
+    }
+
+    if (isAddingNew) {
+      const newCo: CompanyProfile = {
+        id: `co-${Date.now()}`,
+        name: name.trim(),
+        logoUrl: '',
+        contactPerson: contact.trim(),
+        contactEmail: email.trim(),
+        contactPhone: phone.trim(),
+        deliveryAddress: address.trim(),
+        poRequired: poReq,
+        username: name.trim().toLowerCase().replace(/[^a-z0-9]/g, ''),
+        passcode: Math.floor(1000 + Math.random() * 9000).toString(),
+        enabledProductIds: [],
+        customProducts: []
+      };
+      onAddCompany(newCo);
+      setIsAddingNew(false);
+    } else if (editingId) {
+      const existing = companies.find(c => c.id === editingId);
+      const updatedCo: CompanyProfile = {
+        ...existing,
+        id: editingId,
+        name: name.trim(),
+        contactPerson: contact.trim(),
+        contactEmail: email.trim(),
+        contactPhone: phone.trim(),
+        deliveryAddress: address.trim(),
+        poRequired: poReq
+      };
+      onUpdateCompany(updatedCo);
+      setEditingId(null);
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
+      {/* Left Column: Connections & Company Editors */}
+      <div className="space-y-8">
+        
+        {/* Google Sheet Connection Card */}
+        <div className="bg-white border-2 border-black p-6 space-y-5 rounded-none">
+          <div className="flex items-center justify-between border-b border-gray-150 pb-3">
+            <div className="flex items-center space-x-2">
+              <FileSpreadsheet className="w-5 h-5 text-black" />
+              <h3 className="text-sm font-bold uppercase tracking-wider text-black">Google Sheets Connection</h3>
+            </div>
+            
+            {config.isConnected ? (
+              <span className="flex items-center gap-1.5 text-[9px] font-mono font-bold uppercase tracking-wider bg-black text-white px-2 py-0.5 border border-black">
+                <Wifi className="w-3 h-3 text-white" /> Synced Live
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-[9px] font-mono font-bold uppercase tracking-wider bg-white text-gray-400 px-2 py-0.5 border border-gray-300">
+                <WifiOff className="w-3 h-3 text-gray-400" /> Offline Mode
+              </span>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            <label className="block text-[10px] uppercase tracking-wider text-black font-bold font-mono">
+              Google Apps Script Web App URL:
+            </label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://script.google.com/macros/s/.../exec"
+                className="flex-1 bg-white border border-black text-xs px-2.5 py-2 text-black font-mono focus:outline-none"
+                id="apps-script-url-input"
+              />
+              <button
+                onClick={handleTestConnection}
+                disabled={isTesting}
+                className="bg-black text-white px-4 py-2 text-xs uppercase font-bold tracking-widest border border-black hover:bg-white hover:text-black transition-colors shrink-0 cursor-pointer focus:outline-none"
+                id="test-connection-btn"
+              >
+                {isTesting ? 'Testing...' : 'Test & Connect'}
+              </button>
+            </div>
+          </div>
+
+          {/* Test Outcomes Message */}
+          {testResult === 'success' && (
+            <div className="bg-gray-50 border border-black p-3.5 text-xs text-black font-mono leading-relaxed flex items-start gap-2 animate-slide-up">
+              <Check className="w-4 h-4 text-black shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold uppercase text-[9px] tracking-wider">Connection Verified!</p>
+                <p className="text-gray-600 mt-0.5">Your Google Spreadsheet backend is now active and syncing live orders.</p>
+              </div>
+            </div>
+          )}
+
+          {testResult === 'failed' && (
+            <div className="bg-red-50 border border-red-200 p-4 text-xs text-red-900 font-mono leading-relaxed space-y-2 animate-slide-up rounded-xl">
+              <div className="flex items-center gap-2 font-bold uppercase text-[10px] text-red-700">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>Web App Connection Failed</span>
+              </div>
+              <p className="text-red-800 text-[11px]">
+                Could not establish connection to the Google Apps Script endpoint. Please double-check the following 4 deployment settings:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-[10px] text-red-900 bg-white/70 p-2.5 rounded-lg border border-red-100">
+                <li><strong>Access Level:</strong> "Who has access" MUST be set to <strong>Anyone</strong> (not "Only myself").</li>
+                <li><strong>Execution Mode:</strong> "Execute as" MUST be set to <strong>Me (your email)</strong>.</li>
+                <li><strong>URL Endpoint:</strong> Ensure URL ends with <code className="bg-red-100 px-1 font-bold text-red-900">/exec</code> (NOT <code className="line-through text-gray-500">/edit</code> or <code className="line-through text-gray-500">/dev</code>).</li>
+                <li><strong>Updating existing code:</strong> Click <strong>Deploy &gt; Manage deployments &gt; Edit (Pencil) &gt; Version: New version &gt; Deploy</strong>.</li>
+              </ul>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4 pt-2 border-t border-gray-100 font-mono text-[10px] text-gray-500">
+            <div>
+              <span>Synced Orders:</span>
+              <span className="font-bold text-black block text-sm mt-0.5">{totalOrders} records</span>
+            </div>
+            <div>
+              <span>Database Status:</span>
+              <span className="font-bold text-black block text-sm mt-0.5">
+                {config.isConnected ? 'Connected Cloud' : 'Local Storage'}
+              </span>
+            </div>
+          </div>
+
+          {config.isConnected && (
+            <div className="pt-3 border-t border-gray-100 flex flex-col gap-2">
+              <button
+                onClick={handleTriggerSyncAll}
+                disabled={isSyncingAll}
+                className="w-full bg-black hover:bg-neutral-800 text-white disabled:bg-gray-200 disabled:text-gray-400 py-2.5 px-4 text-xs font-bold uppercase tracking-wider border border-black flex items-center justify-center gap-2 cursor-pointer focus:outline-none transition-colors"
+                id="force-sync-sheets-btn"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncingAll ? 'animate-spin' : ''}`} />
+                {isSyncingAll ? 'Pushing All Sandbox Data...' : 'Push All Sandbox Data to Google Sheet'}
+              </button>
+
+              {syncStatus === 'success' && (
+                <p className="text-[10px] text-green-600 font-mono text-center animate-pulse">
+                  ✓ Successfully pushed all companies, products, and orders to your Google Sheet!
+                </p>
+              )}
+              {syncStatus === 'failed' && (
+                <p className="text-[10px] text-red-600 font-mono text-center">
+                  ✗ Push failed. Please check your App Script logs.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Company Profiles Manager */}
+        <div className="bg-white border border-black p-6 space-y-6 rounded-none">
+          <div className="flex items-center justify-between border-b border-gray-150 pb-3">
+            <div className="flex items-center space-x-2">
+              <Building className="w-5 h-5 text-black" />
+              <h3 className="text-sm font-bold uppercase tracking-wider text-black">Client Company Accounts</h3>
+            </div>
+            
+            {!isAddingNew && !editingId && (
+              <button
+                onClick={startAddNew}
+                className="bg-black text-white text-[10px] uppercase font-bold tracking-wider px-2.5 py-1.5 hover:bg-white hover:text-black border border-black transition-colors flex items-center gap-1 cursor-pointer focus:outline-none"
+                id="add-new-company-btn"
+              >
+                <Plus className="w-3 h-3" /> New Account
+              </button>
+            )}
+          </div>
+
+          {/* List of Companies */}
+          {!isAddingNew && !editingId ? (
+            <div className="divide-y divide-gray-100 max-h-72 overflow-y-auto no-scrollbar border border-gray-200 p-2">
+              {companies.map((co) => (
+                <div key={co.id} className="py-3.5 flex justify-between items-start gap-3">
+                  <div>
+                    <h4 className="font-bold text-xs text-black uppercase tracking-tight">{co.name}</h4>
+                    <span className="text-[10px] text-gray-500 font-mono mt-0.5 block">
+                      Rep: {co.contactPerson} · PO Required: {co.poRequired ? 'Yes' : 'No'}
+                    </span>
+                    <span className="text-[9px] text-gray-400 font-mono block overflow-hidden text-ellipsis whitespace-nowrap max-w-[280px]">
+                      {co.deliveryAddress}
+                    </span>
+                  </div>
+                  
+                  <button
+                    onClick={() => startEdit(co)}
+                    className="border border-black text-black hover:bg-black hover:text-white text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-1 transition-all cursor-pointer focus:outline-none"
+                    id={`edit-company-btn-${co.id}`}
+                  >
+                    Edit
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* Create / Edit Company Form */
+            <form onSubmit={handleSaveCompany} className="space-y-4 border border-black p-4 bg-gray-50/50 animate-slide-up">
+              <h4 className="font-bold text-xs uppercase text-black font-mono border-b border-gray-200 pb-2">
+                {isAddingNew ? 'Create New Client Account' : `Modify Account: ${name}`}
+              </h4>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[9px] uppercase tracking-wider text-black font-bold font-mono mb-1">
+                    Company Name: <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    placeholder="e.g. Acme Labs"
+                    className="w-full bg-white border border-gray-300 text-xs px-2 py-1 text-black font-sans focus:border-black focus:outline-none"
+                    id="company-name-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] uppercase tracking-wider text-black font-bold font-mono mb-1">
+                    Contact Person (Buyer): <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={contact}
+                    onChange={(e) => setContact(e.target.value)}
+                    required
+                    placeholder="Jane Doe"
+                    className="w-full bg-white border border-gray-300 text-xs px-2 py-1 text-black font-sans focus:border-black focus:outline-none"
+                    id="company-contact-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] uppercase tracking-wider text-black font-bold font-mono mb-1">
+                    Authorized Email: <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    placeholder="buyer@acme.com"
+                    className="w-full bg-white border border-gray-300 text-xs px-2 py-1 text-black font-sans focus:border-black focus:outline-none"
+                    id="company-email-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] uppercase tracking-wider text-black font-bold font-mono mb-1">
+                    Phone (Billing):
+                  </label>
+                  <input
+                    type="text"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+1 (555) 123-4567"
+                    className="w-full bg-white border border-gray-300 text-xs px-2 py-1 text-black font-sans focus:border-black focus:outline-none"
+                    id="company-phone-input"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-[9px] uppercase tracking-wider text-black font-bold font-mono mb-1">
+                    Primary Delivery Address: <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    required
+                    rows={2}
+                    placeholder="Street, Suite #, City, Zip Code"
+                    className="w-full bg-white border border-gray-300 text-xs p-1.5 text-black font-sans focus:border-black focus:outline-none resize-none leading-normal"
+                    id="company-address-input"
+                  />
+                </div>
+              </div>
+
+              {/* B2B Compliance Rules */}
+              <div className="pt-2 border-t border-gray-200">
+                <label className="relative flex items-center space-x-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={poReq}
+                    onChange={(e) => setPoReq(e.target.checked)}
+                    className="sr-only peer"
+                    id="company-po-required-check"
+                  />
+                  <div className="w-4 h-4 border border-black rounded-none flex items-center justify-center bg-white peer-checked:bg-black peer-checked:border-black transition-colors">
+                    {poReq && <Check className="w-3 h-3 text-white stroke-[3px]" />}
+                  </div>
+                  <span className="text-[10px] font-mono font-bold text-gray-700 uppercase">
+                    Mandatory PO Numbers required at checkout
+                  </span>
+                </label>
+                <p className="text-[9px] text-gray-400 font-mono mt-1 pl-6 leading-normal">
+                  If enabled, checking out on behalf of this company forces authorized buyers to specify a corporate Purchase Order (PO) invoice string before orders are authorized.
+                </p>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingNew(false);
+                    setEditingId(null);
+                  }}
+                  className="flex-1 bg-white border border-gray-300 text-gray-500 py-2 text-xs uppercase font-bold tracking-wider hover:text-black hover:border-black transition-colors focus:outline-none cursor-pointer"
+                  id="company-cancel-edit-btn"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-black text-white border border-black py-2 text-xs uppercase font-bold tracking-wider hover:bg-white hover:text-black transition-all focus:outline-none cursor-pointer flex items-center justify-center gap-1.5"
+                  id="company-save-edit-btn"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{isAddingNew ? 'Create Account' : 'Save Changes'}</span>
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+
+      {/* Right Column: Copyable Google Apps Script Instructions */}
+      <div>
+        <AppsScriptInstructions />
+      </div>
+    </div>
+  );
+}

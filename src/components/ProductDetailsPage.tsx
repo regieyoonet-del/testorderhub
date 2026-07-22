@@ -1,0 +1,363 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react';
+import { createPortal } from 'react-dom';
+import { motion } from 'motion/react';
+import { X, Check, ArrowLeft, ShieldCheck, HelpCircle, Layers, Tag, Award, Edit, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
+import { Product } from '../types';
+
+interface ProductDetailsPageProps {
+  product: Product;
+  onClose: () => void;
+  onEdit?: (product: Product) => void;
+  editLabel?: string;
+}
+
+// Map color names to Tailwind CSS bg-classes or hex codes for realistic render
+const getColorHex = (colorName: string): string => {
+  const normalized = colorName.toLowerCase();
+  if (normalized.includes('black')) return '#171717';
+  if (normalized.includes('slate grey') || normalized.includes('graphite')) return '#52525b';
+  if (normalized.includes('grey') || normalized.includes('gray')) return '#71717a';
+  if (normalized.includes('white') || normalized.includes('natural')) return '#f5f5f4'; // Warm white
+  if (normalized.includes('navy')) return '#1e3a8a';
+  if (normalized.includes('blue')) return '#2563eb';
+  if (normalized.includes('forest') || normalized.includes('green')) return '#14532d';
+  if (normalized.includes('red')) return '#b91c1c';
+  if (normalized.includes('yellow')) return '#eab308';
+  return '#d4d4d4'; // default grey
+};
+
+export default function ProductDetailsPage({ product, onClose, onEdit, editLabel = 'Edit Specs' }: ProductDetailsPageProps) {
+  // Calculate savings percentage
+  const retailPrice = product.originalPrice || product.basePrice * 1.8;
+  const savingsPercent = Math.round(((retailPrice - product.basePrice) / retailPrice) * 100);
+
+  // Carousel Image Logic (max 5 images)
+  const allImages = React.useMemo(() => {
+    if (product.imageUrls && product.imageUrls.length > 0) {
+      return product.imageUrls.filter(Boolean).slice(0, 5);
+    }
+    return product.imageUrl ? [product.imageUrl] : [];
+  }, [product.imageUrl, product.imageUrls]);
+
+  const [currentImageIdx, setCurrentImageIdx] = React.useState(0);
+  const activeImg = allImages[currentImageIdx] || product.imageUrl;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[120] bg-white flex flex-col overflow-hidden" id="product-details-fullscreen-page">
+      {/* Top Navigation Bar */}
+      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
+        <button
+          onClick={onClose}
+          className="flex items-center gap-2 text-gray-500 hover:text-black transition-colors font-sans text-xs uppercase font-extrabold tracking-wider cursor-pointer"
+          id="back-to-list-btn"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Products</span>
+        </button>
+
+        <span className="text-[10px] font-mono uppercase tracking-widest text-gray-400 font-extrabold hidden sm:inline">
+          Secure B2B Spec Sheet
+        </span>
+
+        <div className="flex items-center gap-2.5">
+          {onEdit && (
+            <button
+              onClick={() => onEdit(product)}
+              className="px-3.5 py-1.5 bg-black border border-black text-white hover:bg-neutral-900 rounded-xl text-xs uppercase font-extrabold tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+              id="details-edit-specs-top-btn"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>{editLabel}</span>
+            </button>
+          )}
+
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full border border-gray-200 hover:border-black flex items-center justify-center text-gray-500 hover:text-black transition-all cursor-pointer bg-white"
+            aria-label="Close details"
+            id="close-details-top-x-btn"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Main Content Area (Scrollable) */}
+      <div className="flex-1 overflow-y-auto bg-[#fafafa] p-6 md:p-12 lg:p-16">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start"
+        >
+          {/* Left Side: Product Media Container */}
+          <div className="lg:col-span-5 space-y-4">
+            <div className="bg-[#edf0f3] aspect-square rounded-[2rem] relative flex items-center justify-center overflow-hidden border border-gray-200 shadow-sm group">
+              {activeImg && activeImg.startsWith('http') ? (
+                <img
+                  src={activeImg}
+                  alt={product.name}
+                  className="w-full h-full object-cover transition-all duration-300"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="text-8xl select-none">{activeImg || product.imageUrl}</div>
+              )}
+
+              {product.frequentlyOrdered && (
+                <span className="absolute top-4 left-4 bg-black text-white text-[9px] font-mono font-bold tracking-widest px-3 py-1 rounded-full uppercase z-10">
+                  B2B Best-Seller
+                </span>
+              )}
+
+              {/* Carousel Navigation Arrows */}
+              {allImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentImageIdx(prev => (prev - 1 + allImages.length) % allImages.length)}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/90 hover:bg-white text-black shadow-md flex items-center justify-center cursor-pointer transition-all hover:scale-105 z-20"
+                    id="carousel-prev-btn"
+                    title="Previous Image"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentImageIdx(prev => (prev + 1) % allImages.length)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/90 hover:bg-white text-black shadow-md flex items-center justify-center cursor-pointer transition-all hover:scale-105 z-20"
+                    id="carousel-next-btn"
+                    title="Next Image"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+
+                  <span className="absolute bottom-3 right-3 bg-black/80 backdrop-blur-md text-white text-[9px] font-mono font-bold px-2.5 py-1 rounded-full uppercase z-10">
+                    {currentImageIdx + 1} / {allImages.length}
+                  </span>
+                </>
+              )}
+            </div>
+
+            {/* Thumbnail Gallery Bar (Max 5) */}
+            {allImages.length > 1 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                {allImages.map((imgUrl, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => setCurrentImageIdx(index)}
+                    className={`w-16 h-16 rounded-2xl overflow-hidden border-2 shrink-0 transition-all cursor-pointer bg-gray-100 ${
+                      currentImageIdx === index
+                        ? 'border-black ring-2 ring-black/20 scale-105 shadow-xs'
+                        : 'border-gray-200 opacity-60 hover:opacity-100 hover:border-gray-400'
+                    }`}
+                    id={`carousel-thumb-${index}`}
+                  >
+                    {imgUrl.startsWith('http') ? (
+                      <img src={imgUrl} alt={`Thumbnail ${index + 1}`} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-lg">{imgUrl}</div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Spec Highlights Card */}
+            <div className="bg-white border border-gray-200 rounded-3xl p-5 space-y-4">
+              <h4 className="font-extrabold text-[10px] uppercase font-mono tracking-widest text-black border-b border-gray-100 pb-2.5 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-neutral-900" />
+                Enterprise Fulfillment Grade
+              </h4>
+              <div className="grid grid-cols-2 gap-4 text-xs font-mono">
+                <div>
+                  <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold leading-none">B2B Standard</span>
+                  <span className="font-bold text-black uppercase mt-1 block">Certified Logo Match</span>
+                </div>
+                <div>
+                  <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold leading-none">Fulfillment</span>
+                  <span className="font-bold text-black uppercase mt-1 block">Custom-on-Demand</span>
+                </div>
+                <div>
+                  <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold leading-none">Min Order</span>
+                  <span className="font-bold text-black uppercase mt-1 block">{product.minQuantity} {product.unit}</span>
+                </div>
+                <div>
+                  <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold leading-none">Lead Time</span>
+                  <span className="font-bold text-green-600 uppercase mt-1 block">{product.leadTime || '5-7 Business Days'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Side: Product Details & Options */}
+          <div className="lg:col-span-7 space-y-8 bg-white border border-gray-200 rounded-[2rem] p-6 md:p-8 lg:p-10 shadow-sm">
+            {/* Title Block */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2.5 py-0.5 bg-gray-100 text-gray-700 text-[9px] font-bold tracking-widest uppercase rounded font-mono">
+                  {product.category}
+                </span>
+                <span className="px-2.5 py-0.5 bg-neutral-900 text-white text-[9px] font-bold tracking-widest uppercase rounded font-mono flex items-center gap-1">
+                  <Award className="w-3 h-3" />
+                  Pre-Approved Contract Spec
+                </span>
+              </div>
+
+              <h1 className="text-2xl md:text-3xl font-black uppercase text-black tracking-tight leading-tight">
+                {product.name}
+              </h1>
+
+              <p className="text-gray-500 text-xs md:text-sm leading-relaxed font-sans">
+                {product.description}
+              </p>
+            </div>
+
+            {/* Price Table Component */}
+            <div className="p-5 bg-[#fafafa] border border-gray-200 rounded-2xl grid grid-cols-3 gap-4 font-mono items-center">
+              <div>
+                <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold">B2B Deal Price</span>
+                <span className="text-xl font-black text-black block mt-0.5">Php {product.basePrice.toFixed(2)}</span>
+                <span className="text-[9px] text-gray-400 block">per {product.unit}</span>
+              </div>
+              <div className="border-l border-gray-200 pl-4">
+                <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold">MSRP Retail</span>
+                <span className="text-sm font-bold text-gray-400 line-through block mt-1">Php {retailPrice.toFixed(2)}</span>
+                <span className="text-[9px] text-red-500 font-bold block">Save {savingsPercent}%</span>
+              </div>
+              <div className="border-l border-gray-200 pl-4">
+                <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold">Allocated Limit</span>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <div className="w-12 bg-gray-200 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-black h-full rounded-full"
+                      style={{ width: `${((product.saleCount || 5) / (product.saleLimit || 10)) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-bold text-black">{product.saleCount || 5}/{product.saleLimit || 10}</span>
+                </div>
+                <span className="text-[9px] text-gray-400 block">Order stream count</span>
+              </div>
+            </div>
+
+            {/* Shipping Logistics Fee Display */}
+            <div className="flex items-center gap-2 p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono text-black">
+              <span className="font-bold uppercase tracking-wider text-[9px] text-gray-400">Shipping Logistics Fee:</span>
+              <span className="font-bold text-black">Php {product.shippingFee !== undefined ? product.shippingFee.toFixed(2) : '15.00'}</span>
+              <span className="text-[10px] text-gray-500">(flat-rate logistics fee for this product line)</span>
+            </div>
+
+            {/* Sizes Section */}
+            {product.sizeOptions && product.sizeOptions.length > 0 && (
+              <div className="space-y-3 pt-2 border-t border-gray-100">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-[10px] uppercase font-mono tracking-widest text-black font-extrabold flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-gray-400" />
+                    Authorized Corporate Sizes
+                  </h3>
+                  <span className="text-[9px] text-gray-400 font-mono">Selectable on checkout</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {product.sizeOptions.map((sz) => (
+                    <div
+                      key={sz}
+                      className="px-3.5 py-2 border-2 border-black text-black bg-[#fcfcfc] text-xs font-mono font-black rounded-xl select-none"
+                    >
+                      {sz}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Colors Section */}
+            {product.colorOptions && product.colorOptions.length > 0 && (
+              <div className="space-y-3 pt-4 border-t border-gray-100">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-[10px] uppercase font-mono tracking-widest text-black font-extrabold flex items-center gap-1.5">
+                    <Tag className="w-4 h-4 text-gray-400" />
+                    Available Corporate Color Palette
+                  </h3>
+                  <span className="text-[9px] text-gray-400 font-mono">Matched to brand standard</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {product.colorOptions.map((col) => {
+                    const colorHex = getColorHex(col);
+                    const isWhite = colorHex === '#ffffff' || colorHex === '#f5f5f4';
+                    return (
+                      <div
+                        key={col}
+                        className="flex items-center space-x-3 p-2.5 rounded-xl border border-gray-100 bg-gray-50/50"
+                      >
+                        <span
+                          className={`w-6 h-6 rounded-full block border shadow-xs`}
+                          style={{
+                            backgroundColor: colorHex,
+                            borderColor: isWhite ? '#d4d4d4' : colorHex
+                          }}
+                        />
+                        <span className="text-xs font-bold text-gray-800 uppercase tracking-tight">{col}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Custom Pre-Approved Variants Section */}
+            {product.customFields && product.customFields.length > 0 && (
+              <div className="space-y-3.5 pt-4 border-t border-gray-100">
+                <h3 className="text-[10px] uppercase font-mono tracking-widest text-black font-extrabold flex items-center gap-1.5">
+                  <HelpCircle className="w-4 h-4 text-gray-400" />
+                  Pre-Configured Customization Specs
+                </h3>
+                <div className="space-y-3">
+                  {product.customFields.map((field) => (
+                    <div
+                      key={field.name}
+                      className="p-4 bg-gray-50/40 border border-gray-200 rounded-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-xs"
+                    >
+                      <div className="space-y-0.5">
+                        <span className="font-extrabold text-black uppercase tracking-tight block">
+                          {field.label}
+                        </span>
+                        <span className="text-[9px] text-gray-400 font-mono uppercase block">
+                          Field Type: {field.type} {field.required ? '• Required' : '• Optional'}
+                        </span>
+                      </div>
+                      <div className="shrink-0">
+                        {field.type === 'select' && field.options ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {field.options.map((opt) => (
+                              <span
+                                key={opt}
+                                className="bg-white border border-gray-200 text-[10px] px-2.5 py-1 rounded-md font-mono font-bold text-gray-700"
+                              >
+                                {opt}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="bg-white border border-gray-200 text-[10px] px-3 py-1 rounded-md font-mono text-gray-500 italic">
+                            {field.placeholder || 'Client personal input text'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      </div>
+    </div>,
+    document.body
+  );
+}

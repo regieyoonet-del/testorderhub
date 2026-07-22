@@ -1,0 +1,6 @@
+{
+  "name": "ARH Print Hub",
+  "description": "Minimal B2B ordering hub for company uniforms, IDs, business cards, and promo products, featuring quick repeating orders and Google Sheets synchronization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
