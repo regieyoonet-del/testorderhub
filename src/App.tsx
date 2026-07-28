@@ -23,6 +23,7 @@ import AdminDashboard from './components/AdminDashboard';
 import OrderPortals from './components/OrderPortals';
 import PublicOrderPortal from './components/PublicOrderPortal';
 import { Check, AlertCircle, ShoppingBag, ArrowRight, Printer, RefreshCw, LogOut } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
 
 function getThemeStyles(colorHex: string) {
   let primary = colorHex || '#000000';
@@ -1381,6 +1382,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      <Analytics />
     </div>
   );
 }
