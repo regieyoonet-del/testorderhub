@@ -708,7 +708,14 @@ export const sheetsService = {
           productIds: (() => {
             const val = getProp(item, ['ProductIDs', 'productIds', 'Product IDs']);
             if (!val) return [];
-            return String(val).split(',').map((s: string) => s.trim()).filter(Boolean);
+            const valStr = String(val).trim();
+            if (valStr.startsWith('[') && valStr.endsWith(']')) {
+              try {
+                const parsed = JSON.parse(valStr);
+                if (Array.isArray(parsed)) return parsed.map(s => String(s).trim()).filter(Boolean);
+              } catch (e) {}
+            }
+            return valStr.split(',').map((s: string) => s.trim()).filter(Boolean);
           })(),
           createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
           updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString()),

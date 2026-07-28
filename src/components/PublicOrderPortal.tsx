@@ -56,10 +56,12 @@ export default function PublicOrderPortal({
   onClosePublicView,
   isLoggedIn = false
 }: PublicOrderPortalProps) {
-  // Filter products included in this portal; fallback to all company products if portal.productIds is empty
-  const portalProducts = (portal.productIds && portal.productIds.length > 0)
-    ? products.filter(p => portal.productIds.includes(p.id))
+  // Filter products included in this portal; fallback to all provided products if portal.productIds is empty or matches none
+  const portalProductIdsSet = new Set((portal.productIds || []).map(id => String(id).trim()));
+  const matchedPortalProducts = (portalProductIdsSet.size > 0)
+    ? products.filter(p => portalProductIdsSet.has(String(p.id).trim()))
     : products;
+  const portalProducts = matchedPortalProducts.length > 0 ? matchedPortalProducts : products;
 
   // Storefront Order Cart State
   const [cartItems, setCartItems] = useState<{

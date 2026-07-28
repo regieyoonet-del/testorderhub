@@ -37,6 +37,7 @@ interface OrderPortalsProps {
   onUpdatePortal: (portal: OrderPortal) => void;
   onDeletePortal: (portalId: string) => void;
   onViewPortal: (portal: OrderPortal) => void;
+  appsScriptUrl?: string;
 }
 
 export default function OrderPortals({
@@ -47,7 +48,8 @@ export default function OrderPortals({
   onCreatePortal,
   onUpdatePortal,
   onDeletePortal,
-  onViewPortal
+  onViewPortal,
+  appsScriptUrl
 }: OrderPortalsProps) {
   // Filter portals belonging to active company
   const companyPortals = portals.filter(p => p.companyId === activeCompany.id);
@@ -71,7 +73,11 @@ export default function OrderPortals({
     const origin = window.location.origin;
     const pathname = window.location.pathname;
     const shareParam = portal.shareToken || portal.id;
-    return `${origin}${pathname}?portal=${shareParam}`;
+    let url = `${origin}${pathname}?portal=${shareParam}`;
+    if (appsScriptUrl && appsScriptUrl.trim()) {
+      url += `&script=${encodeURIComponent(appsScriptUrl.trim())}`;
+    }
+    return url;
   };
 
   const handleCopyLink = (portal: OrderPortal, e?: React.MouseEvent) => {
@@ -472,7 +478,10 @@ export default function OrderPortals({
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {companyPortals.map((portal) => {
-            const portalProducts = availableProducts.filter(p => portal.productIds.includes(p.id));
+            const portalSet = new Set((portal.productIds || []).map(id => String(id).trim()));
+            const portalProducts = portalSet.size > 0
+              ? availableProducts.filter(p => portalSet.has(String(p.id).trim()))
+              : availableProducts;
             const portalUrl = getPortalUrl(portal);
 
             return (

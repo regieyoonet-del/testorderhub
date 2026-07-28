@@ -257,7 +257,22 @@ export default function App() {
 
   const [appsScriptConfig, setAppsScriptConfig] = useState<AppsScriptConfig>(() => {
     const cached = localStorage.getItem('rp_apps_script_config');
-    return cached ? JSON.parse(cached) : { webAppUrl: '', isConnected: false };
+    let parsedConfig: AppsScriptConfig = cached ? JSON.parse(cached) : { webAppUrl: '', isConnected: false };
+
+    // Check if script URL was passed in query parameters (e.g., ?script=... or ?appsScriptUrl=...)
+    const params = new URLSearchParams(window.location.search);
+    const urlScript = params.get('script') || params.get('appsScriptUrl') || params.get('webAppUrl');
+    const envScript = (((import.meta as any).env?.VITE_APPS_SCRIPT_URL) as string) || '';
+
+    const effectiveUrl = (urlScript && urlScript.trim()) || parsedConfig.webAppUrl || (envScript && envScript.trim());
+    if (effectiveUrl) {
+      parsedConfig = {
+        webAppUrl: effectiveUrl.trim(),
+        isConnected: true
+      };
+      localStorage.setItem('rp_apps_script_config', JSON.stringify(parsedConfig));
+    }
+    return parsedConfig;
   });
 
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => {
@@ -349,39 +364,145 @@ export default function App() {
       return;
     }
 
-    // 1. Check local state first
-    const match = orderPortals.find(p => p.shareToken === urlPortalToken || p.id === urlPortalToken);
+    const tokenClean = urlPortalToken.trim();
+
+    // 1. Check local portals first
+    let match = orderPortals.find(p =>
+      p.shareToken?.toLowerCase() === tokenClean.toLowerCase() ||
+      p.id?.toLowerCase() === tokenClean.toLowerCase() ||
+      p.companyId?.toLowerCase() === tokenClean.toLowerCase()
+    );
+
+    // 2. If no direct portal match, check matching companies
+    if (!match && companies.length > 0) {
+      const matchedCompany = companies.find(c =>
+        c.id.toLowerCase() === tokenClean.toLowerCase() ||
+        c.username?.toLowerCase() === tokenClean.toLowerCase() ||
+        c.name?.toLowerCase() === tokenClean.toLowerCase() ||
+        tokenClean.toLowerCase().includes(c.id.toLowerCase()) ||
+        tokenClean.toLowerCase().includes((c.username || '').toLowerCase())
+      );
+
+      if (matchedCompany) {
+        // Find existing portal for this company if any
+        match = orderPortals.find(p => p.companyId === matchedCompany.id);
+
+        if (!match) {
+          // Virtualize / auto-create default active portal for this company
+          const defaultPortal: OrderPortal = {
+            id: `portal-${matchedCompany.id}`,
+            companyId: matchedCompany.id,
+            companyName: matchedCompany.name,
+            name: `${matchedCompany.name} Corporate Storefront`,
+            description: `Official corporate merchandise & promotional ordering portal for ${matchedCompany.name}.`,
+            status: 'Active',
+            productIds: matchedCompany.enabledProductIds && matchedCompany.enabledProductIds.length > 0
+              ? matchedCompany.enabledProductIds
+              : products.map(p => p.id),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            shareToken: `portal-${matchedCompany.username || matchedCompany.id}`
+          };
+          match = defaultPortal;
+          setOrderPortals(prev => [...prev, defaultPortal]);
+        }
+      }
+    }
+
     if (match) {
       setActivePublicPortal(match);
       setIsResolvingPortal(false);
       return;
     }
 
-    // 2. If not found locally yet, attempt direct fetch if Google Sheets is connected
+    // 3. If not found locally yet or if connected to Sheets, fetch live data from Google Sheets
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
       setIsResolvingPortal(true);
-      sheetsService.fetchPortals(appsScriptConfig.webAppUrl).then(fetchedPortals => {
-        if (fetchedPortals && fetchedPortals.length > 0) {
-          setOrderPortals(prev => {
-            const map = new Map<string, OrderPortal>();
+      const url = appsScriptConfig.webAppUrl;
+      Promise.all([
+        sheetsService.fetchPortals(url),
+        sheetsService.fetchCompanies(url),
+        sheetsService.fetchProducts(url)
+      ]).then(([fetchedPortals, fetchedCompanies, fetchedProducts]) => {
+        if (fetchedProducts && fetchedProducts.length > 0) {
+          setProducts(prev => {
+            const map = new Map<string, Product>();
             prev.forEach(p => map.set(p.id, p));
-            fetchedPortals.forEach(p => map.set(p.id, p));
+            fetchedProducts.forEach(p => map.set(p.id, p));
             return Array.from(map.values());
           });
-          const fetchedMatch = fetchedPortals.find(p => p.shareToken === urlPortalToken || p.id === urlPortalToken);
-          if (fetchedMatch) {
-            setActivePublicPortal(fetchedMatch);
+        }
+
+        let updatedCompaniesList = companies;
+        if (fetchedCompanies && fetchedCompanies.length > 0) {
+          const coMap = new Map<string, CompanyProfile>();
+          companies.forEach(c => coMap.set(c.id, c));
+          fetchedCompanies.forEach(c => coMap.set(c.id, sanitizeCompany(c)));
+          updatedCompaniesList = Array.from(coMap.values());
+          setCompanies(updatedCompaniesList);
+        }
+
+        let updatedPortalsList = orderPortals;
+        if (fetchedPortals && fetchedPortals.length > 0) {
+          const poMap = new Map<string, OrderPortal>();
+          orderPortals.forEach(p => poMap.set(p.id, p));
+          fetchedPortals.forEach(p => poMap.set(p.id, p));
+          updatedPortalsList = Array.from(poMap.values());
+          setOrderPortals(updatedPortalsList);
+        }
+
+        // Search in updated portals
+        let fetchedMatch = updatedPortalsList.find(p =>
+          p.shareToken?.toLowerCase() === tokenClean.toLowerCase() ||
+          p.id?.toLowerCase() === tokenClean.toLowerCase() ||
+          p.companyId?.toLowerCase() === tokenClean.toLowerCase()
+        );
+
+        // If no direct portal match, check updated companies
+        if (!fetchedMatch && updatedCompaniesList.length > 0) {
+          const matchedCo = updatedCompaniesList.find(c =>
+            c.id.toLowerCase() === tokenClean.toLowerCase() ||
+            c.username?.toLowerCase() === tokenClean.toLowerCase() ||
+            c.name?.toLowerCase() === tokenClean.toLowerCase() ||
+            tokenClean.toLowerCase().includes(c.id.toLowerCase()) ||
+            tokenClean.toLowerCase().includes((c.username || '').toLowerCase())
+          );
+
+          if (matchedCo) {
+            fetchedMatch = updatedPortalsList.find(p => p.companyId === matchedCo.id);
+            if (!fetchedMatch) {
+              const defaultPortal: OrderPortal = {
+                id: `portal-${matchedCo.id}`,
+                companyId: matchedCo.id,
+                companyName: matchedCo.name,
+                name: `${matchedCo.name} Corporate Storefront`,
+                description: `Official corporate merchandise & promotional ordering portal for ${matchedCo.name}.`,
+                status: 'Active',
+                productIds: matchedCo.enabledProductIds && matchedCo.enabledProductIds.length > 0
+                  ? matchedCo.enabledProductIds
+                  : (fetchedProducts || products).map(p => p.id),
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                shareToken: `portal-${matchedCo.username || matchedCo.id}`
+              };
+              fetchedMatch = defaultPortal;
+              setOrderPortals(prev => [...prev, defaultPortal]);
+            }
           }
+        }
+
+        if (fetchedMatch) {
+          setActivePublicPortal(fetchedMatch);
         }
         setIsResolvingPortal(false);
       }).catch(err => {
-        console.error('Error fetching portals for share token:', err);
+        console.error('Error fetching portals and companies for share token:', err);
         setIsResolvingPortal(false);
       });
     } else {
       setIsResolvingPortal(false);
     }
-  }, [urlPortalToken, orderPortals, appsScriptConfig.isConnected, appsScriptConfig.webAppUrl]);
+  }, [urlPortalToken, orderPortals, companies, products, appsScriptConfig.isConnected, appsScriptConfig.webAppUrl]);
 
   useEffect(() => {
     if (loggedInUser) {
@@ -466,7 +587,26 @@ export default function App() {
         // 3. Fetch orders
         const fetchedOrders = await sheetsService.fetchOrders(url);
         if (fetchedOrders !== null) {
-          setOrders(fetchedOrders);
+          setOrders(prevOrders => {
+            const map = new Map<string, Order>();
+            prevOrders.forEach(o => map.set(o.id, o));
+
+            fetchedOrders.forEach(fo => {
+              const local = map.get(fo.id);
+              if (local) {
+                const isLocalStatusSet = local.status && local.status !== 'Pending' && local.status !== 'Pending Approval';
+                map.set(fo.id, {
+                  ...fo,
+                  status: isLocalStatusSet ? local.status : fo.status,
+                  items: (fo.items && fo.items.length > 0) ? fo.items : local.items
+                });
+              } else {
+                map.set(fo.id, fo);
+              }
+            });
+
+            return Array.from(map.values());
+          });
         }
 
         // 4. Fetch admin settings
@@ -554,7 +694,7 @@ export default function App() {
   const handleAddCompany = (newCo: CompanyProfile) => {
     const co = sanitizeCompany(newCo);
 
-    if (!co.enabledProductIds || co.enabledProductIds.length === 0) {
+    if (co.enabledProductIds === undefined) {
       co.enabledProductIds = products.map(p => p.id);
     }
     setCompanies(prev => [...prev, co]);
@@ -1147,7 +1287,42 @@ export default function App() {
   // Render public order portal if active or opened via share link
   if (activePublicPortal) {
     const portalCompany = companies.find(c => c.id === activePublicPortal.companyId) || activeCompany;
-    const companyAvailableProducts = getCompanyProducts(portalCompany, products);
+    
+    // Aggregate master products, company custom products, and catalog products
+    const productMap = new Map<string, Product>();
+    products.forEach(p => productMap.set(p.id, p));
+    if (portalCompany && Array.isArray(portalCompany.customProducts)) {
+      portalCompany.customProducts.forEach(cp => productMap.set(cp.id, cp));
+    }
+    catalogProducts.forEach(cp => {
+      if (!productMap.has(cp.id)) {
+        productMap.set(cp.id, {
+          id: cp.id,
+          name: cp.name,
+          category: cp.category,
+          basePrice: cp.basePrice,
+          minQuantity: cp.minQuantity,
+          unit: 'pcs',
+          description: cp.description,
+          imageUrl: cp.imageUrl,
+          sizeOptions: cp.sizes,
+          colorOptions: cp.colors
+        });
+      }
+    });
+
+    const allProductsArray = Array.from(productMap.values());
+    const companyAvailableProducts = getCompanyProducts(portalCompany, allProductsArray);
+
+    // Guarantee that products explicitly in activePublicPortal.productIds are included
+    if (activePublicPortal.productIds && activePublicPortal.productIds.length > 0) {
+      const portalSet = new Set(activePublicPortal.productIds.map(id => String(id).trim()));
+      allProductsArray.forEach(p => {
+        if (portalSet.has(String(p.id).trim()) && !companyAvailableProducts.some(cap => String(cap.id).trim() === String(p.id).trim())) {
+          companyAvailableProducts.push(p);
+        }
+      });
+    }
 
     return (
       <>
@@ -1322,6 +1497,7 @@ export default function App() {
                 onUpdatePortal={handleUpdatePortal}
                 onDeletePortal={handleDeletePortal}
                 onViewPortal={(portal) => setActivePublicPortal(portal)}
+                appsScriptUrl={appsScriptConfig.isConnected ? appsScriptConfig.webAppUrl : undefined}
               />
             )}
 

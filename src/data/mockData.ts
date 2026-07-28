@@ -359,6 +359,30 @@ export const INITIAL_PORTALS = [
     createdAt: '2026-07-18T14:20:00.000Z',
     updatedAt: '2026-07-22T09:15:00.000Z',
     shareToken: 'portal-acme-exec-2026'
+  },
+  {
+    id: 'portal-103',
+    companyId: 'co-2',
+    companyName: 'GreenLife Logistics',
+    name: 'GreenLife Corporate Storefront',
+    description: 'Official promotional apparel and corporate gear for GreenLife Logistics team members.',
+    status: 'Active' as const,
+    productIds: ['prod-polo', 'prod-cap', 'prod-bag', 'prod-tumbler'],
+    createdAt: '2026-07-19T08:00:00.000Z',
+    updatedAt: '2026-07-22T10:00:00.000Z',
+    shareToken: 'portal-greenlife'
+  },
+  {
+    id: 'portal-104',
+    companyId: 'co-3',
+    companyName: 'Internal Operations',
+    name: 'Internal Operations Storefront',
+    description: 'Internal requisitions and supply order portal for internal operations staff.',
+    status: 'Active' as const,
+    productIds: ['prod-polo', 'prod-cap', 'prod-bag', 'prod-tumbler', 'prod-pen', 'prod-mug', 'prod-id', 'prod-lanyard'],
+    createdAt: '2026-07-20T08:00:00.000Z',
+    updatedAt: '2026-07-22T10:00:00.000Z',
+    shareToken: 'portal-internal'
   }
 ];
 

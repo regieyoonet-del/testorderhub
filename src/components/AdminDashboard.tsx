@@ -236,7 +236,7 @@ export default function AdminDashboard({
       contactEmail: '',
       contactPhone: '',
       poRequired: false,
-      enabledProductIds: [] // default no products enabled
+      enabledProductIds: products.map(p => p.id) // enable master catalog products by default
     });
     setShowClientForm(true);
   };
@@ -746,6 +746,65 @@ export default function AdminDashboard({
                     placeholder="Building 4, Hollywood Blvd, Los Angeles, CA 90028"
                     className="w-full bg-gray-50 border border-gray-200 focus:bg-white focus:border-black rounded-xl p-3 text-xs focus:outline-none font-semibold text-black resize-none"
                   />
+                </div>
+              </div>
+
+              {/* Product Catalog Allocation Section */}
+              <div className="space-y-3 bg-gray-50/80 border border-gray-200 rounded-2xl p-4">
+                <div className="flex items-center justify-between border-b border-gray-200 pb-2 gap-2">
+                  <div>
+                    <h4 className="text-xs font-mono font-bold uppercase text-black">
+                      Assigned Catalog Products ({clientForm.enabledProductIds?.length || 0} / {products.length})
+                    </h4>
+                    <p className="text-[10px] text-gray-500 font-sans mt-0.5">
+                      Select master catalog products available to this company. Clear all if company has custom items only.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setClientForm(prev => ({ ...prev, enabledProductIds: products.map(p => p.id) }))}
+                      className="text-[10px] font-mono font-bold text-black hover:underline cursor-pointer bg-white px-2 py-1 rounded-lg border border-gray-200 shadow-2xs"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setClientForm(prev => ({ ...prev, enabledProductIds: [] }))}
+                      className="text-[10px] font-mono font-bold text-gray-500 hover:text-red-600 hover:underline cursor-pointer bg-white px-2 py-1 rounded-lg border border-gray-200 shadow-2xs"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-1">
+                  {products.map((prod) => {
+                    const isChecked = (clientForm.enabledProductIds || []).includes(prod.id);
+                    return (
+                      <label
+                        key={prod.id}
+                        className={`flex items-center space-x-2.5 p-2 rounded-xl border text-xs cursor-pointer transition-colors ${
+                          isChecked ? 'bg-white border-black font-semibold text-black' : 'bg-white/50 border-gray-200 text-gray-500'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const current = clientForm.enabledProductIds || [];
+                            if (e.target.checked) {
+                              setClientForm({ ...clientForm, enabledProductIds: [...current, prod.id] });
+                            } else {
+                              setClientForm({ ...clientForm, enabledProductIds: current.filter(id => id !== prod.id) });
+                            }
+                          }}
+                          className="w-4 h-4 accent-black rounded cursor-pointer"
+                        />
+                        <span className="truncate">{prod.name}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
 

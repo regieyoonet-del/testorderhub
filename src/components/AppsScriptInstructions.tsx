@@ -512,7 +512,7 @@ function savePortal(ss, portal) {
   
   var rowIndex = -1;
   for (var i = 1; i < data.length; i++) {
-    if (data[i][idIndex] === portal.id) {
+    if (String(data[i][idIndex]).trim() === String(portal.id).trim()) {
       rowIndex = i + 1;
       break;
     }
@@ -605,11 +605,14 @@ function updateOrderStatus(ss, orderId, status) {
   var headers = data[0];
   
   var idIndex = -1;
+  var orderNumIndex = -1;
   var statusIndex = -1;
   for (var c = 0; c < headers.length; c++) {
     var normH = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
     if (normH === "orderid") {
       idIndex = c;
+    } else if (normH === "ordernumber") {
+      orderNumIndex = c;
     } else if (normH === "status") {
       statusIndex = c;
     }
@@ -617,8 +620,11 @@ function updateOrderStatus(ss, orderId, status) {
   if (idIndex === -1) idIndex = 0;
   if (statusIndex === -1) statusIndex = 8;
   
+  var cleanTargetId = String(orderId).trim();
   for (var i = 1; i < data.length; i++) {
-    if (data[i][idIndex] === orderId) {
+    var rowId = String(data[i][idIndex]).trim();
+    var rowOrderNum = orderNumIndex !== -1 ? String(data[i][orderNumIndex]).trim() : "";
+    if (rowId === cleanTargetId || (rowOrderNum && rowOrderNum === cleanTargetId)) {
       sheet.getRange(i + 1, statusIndex + 1).setValue(status);
       return { status: "success", orderId: orderId, updated: true };
     }
