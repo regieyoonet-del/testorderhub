@@ -410,13 +410,6 @@ export default function OrderPortals({
       {/* Header Bar */}
       <div className="bg-white border border-gray-200 rounded-3xl p-6 md:p-8 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div className="space-y-1 max-w-2xl">
-          <div className="flex items-center gap-2">
-            <span className="bg-black text-white text-[10px] font-mono uppercase tracking-widest font-extrabold px-2.5 py-1 rounded-full flex items-center gap-1.5">
-              <Globe className="w-3 h-3 text-emerald-400" />
-              B2B Storefronts
-            </span>
-            <span className="text-xs font-mono text-gray-500">{activeCompany.name}</span>
-          </div>
           <h2 className="text-2xl font-black text-black uppercase tracking-tight font-sans">
             Custom Order Portals
           </h2>

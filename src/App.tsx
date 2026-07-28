@@ -22,7 +22,7 @@ import LoginScreen from './components/LoginScreen';
 import AdminDashboard from './components/AdminDashboard';
 import OrderPortals from './components/OrderPortals';
 import PublicOrderPortal from './components/PublicOrderPortal';
-import { Check, AlertCircle, ShoppingBag, ArrowRight, Printer, RefreshCw, LogOut } from 'lucide-react';
+import { Check, AlertCircle, ShoppingBag, ArrowRight, Printer, RefreshCw, LogOut, Store } from 'lucide-react';
 
 function getThemeStyles(colorHex: string) {
   let primary = colorHex || '#000000';
@@ -246,6 +246,14 @@ export default function App() {
   });
 
   const [activePublicPortal, setActivePublicPortal] = useState<OrderPortal | null>(null);
+  const [urlPortalToken, setUrlPortalToken] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('portal');
+  });
+  const [isResolvingPortal, setIsResolvingPortal] = useState<boolean>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return !!params.get('portal');
+  });
 
   const [appsScriptConfig, setAppsScriptConfig] = useState<AppsScriptConfig>(() => {
     const cached = localStorage.getItem('rp_apps_script_config');
@@ -336,18 +344,44 @@ export default function App() {
 
   // Sync shareable link ?portal=...
   useEffect(() => {
-    const checkUrlPortal = () => {
-      const params = new URLSearchParams(window.location.search);
-      const portalParam = params.get('portal');
-      if (portalParam) {
-        const match = orderPortals.find(p => p.shareToken === portalParam || p.id === portalParam);
-        if (match) {
-          setActivePublicPortal(match);
+    if (!urlPortalToken) {
+      setIsResolvingPortal(false);
+      return;
+    }
+
+    // 1. Check local state first
+    const match = orderPortals.find(p => p.shareToken === urlPortalToken || p.id === urlPortalToken);
+    if (match) {
+      setActivePublicPortal(match);
+      setIsResolvingPortal(false);
+      return;
+    }
+
+    // 2. If not found locally yet, attempt direct fetch if Google Sheets is connected
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      setIsResolvingPortal(true);
+      sheetsService.fetchPortals(appsScriptConfig.webAppUrl).then(fetchedPortals => {
+        if (fetchedPortals && fetchedPortals.length > 0) {
+          setOrderPortals(prev => {
+            const map = new Map<string, OrderPortal>();
+            prev.forEach(p => map.set(p.id, p));
+            fetchedPortals.forEach(p => map.set(p.id, p));
+            return Array.from(map.values());
+          });
+          const fetchedMatch = fetchedPortals.find(p => p.shareToken === urlPortalToken || p.id === urlPortalToken);
+          if (fetchedMatch) {
+            setActivePublicPortal(fetchedMatch);
+          }
         }
-      }
-    };
-    checkUrlPortal();
-  }, [orderPortals]);
+        setIsResolvingPortal(false);
+      }).catch(err => {
+        console.error('Error fetching portals for share token:', err);
+        setIsResolvingPortal(false);
+      });
+    } else {
+      setIsResolvingPortal(false);
+    }
+  }, [urlPortalToken, orderPortals, appsScriptConfig.isConnected, appsScriptConfig.webAppUrl]);
 
   useEffect(() => {
     if (loggedInUser) {
@@ -1124,14 +1158,61 @@ export default function App() {
           products={companyAvailableProducts}
           systemSettings={systemSettings}
           onSubmitOrder={handlePublicPortalSubmitOrder}
+          isLoggedIn={!!loggedInUser}
           onClosePublicView={() => {
             setActivePublicPortal(null);
+            setUrlPortalToken(null);
             if (window.location.search.includes('portal=')) {
               window.history.replaceState({}, document.title, window.location.pathname);
             }
           }}
         />
       </>
+    );
+  }
+
+  // If URL has ?portal=... parameter and we are currently loading/resolving
+  if (urlPortalToken && isResolvingPortal) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6 font-sans">
+        <style dangerouslySetInnerHTML={{ __html: getThemeStyles(systemSettings.colorTheme || 'classic_noir') }} />
+        <div className="bg-white border border-gray-200 rounded-3xl p-8 max-w-md w-full text-center shadow-xl space-y-4 animate-fade-in">
+          <div className="w-12 h-12 rounded-2xl bg-black text-white flex items-center justify-center mx-auto animate-pulse">
+            <Store className="w-6 h-6" />
+          </div>
+          <h2 className="text-lg font-black text-black uppercase tracking-tight">Loading Company Storefront...</h2>
+          <p className="text-xs text-gray-500 font-mono">Retrieving custom product listings and access rights.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If URL has ?portal=... parameter but no matching portal was found
+  if (urlPortalToken && !activePublicPortal && !isResolvingPortal) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6 font-sans">
+        <style dangerouslySetInnerHTML={{ __html: getThemeStyles(systemSettings.colorTheme || 'classic_noir') }} />
+        <div className="bg-white border border-gray-200 rounded-3xl p-8 max-w-md w-full text-center shadow-xl space-y-5 animate-fade-in">
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto">
+            <AlertCircle className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-black uppercase tracking-tight">Order Portal Unavailable</h2>
+            <p className="text-xs text-gray-500 font-sans mt-2 leading-relaxed">
+              The order portal link you accessed is invalid, closed, or no longer active. Please contact the company representative for an updated storefront link.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setUrlPortalToken(null);
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }}
+            className="w-full bg-black hover:bg-neutral-800 text-white font-extrabold text-xs uppercase tracking-wider py-3 px-6 rounded-2xl border border-black shadow-xs transition-all cursor-pointer"
+          >
+            Go to Portal Sign-In
+          </button>
+        </div>
+      </div>
     );
   }
 

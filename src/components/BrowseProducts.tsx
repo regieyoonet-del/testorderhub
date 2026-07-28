@@ -242,30 +242,31 @@ export default function BrowseProducts({
   return (
     <div className="space-y-8 animate-fade-in pb-12">
       {/* Banner / Header Title */}
-      <div className="border-b-2 border-black pb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <div className="flex items-center space-x-2 text-xs font-mono font-bold uppercase text-gray-500 mb-1">
-            <span>ARH Products</span>
-            <span>/</span>
-            <span className="text-black">Corporate Customization</span>
-          </div>
-          <h2 className="text-3xl font-extrabold uppercase tracking-tight text-black">
+          <h2 className="text-2xl font-black uppercase tracking-tight text-black font-sans">
             ARH Products
           </h2>
-          <p className="text-xs text-gray-600 font-sans mt-1 max-w-2xl">
+          <p className="text-xs text-gray-500 font-sans mt-1 leading-relaxed max-w-2xl">
             Explore our complete promotional merchandise and custom product range. Looking for something new for your next campaign or event? Request a tailored quote below.
           </p>
         </div>
-        <div className="flex items-center space-x-2 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg shrink-0">
-          <Sparkles className="w-4 h-4 text-black" />
-          <span className="text-xs font-mono font-bold text-black uppercase">
-            {activeProducts.length} Products Available
-          </span>
+
+        {/* Stats Badges matching Admin View */}
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 text-center min-w-[110px]">
+            <span className="block text-xl font-extrabold font-mono text-black leading-none">{activeProducts.length}</span>
+            <span className="text-[10px] font-mono uppercase text-gray-500 font-bold">Total Products</span>
+          </div>
+          <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 text-center min-w-[110px]">
+            <span className="block text-xl font-extrabold font-mono text-black leading-none">{categories.length > 0 ? categories.length - 1 : 0}</span>
+            <span className="text-[10px] font-mono uppercase text-gray-500 font-bold">Categories</span>
+          </div>
         </div>
       </div>
 
       {/* FILTER CONTROLS */}
-      <div className="bg-white border-2 border-black p-4 sm:p-5 shadow-xs space-y-4">
+      <div className="bg-white border border-gray-200 rounded-3xl p-4 md:p-5 shadow-xs space-y-4">
         <div className="flex items-center justify-between border-b border-gray-100 pb-3">
           <div className="flex items-center space-x-2">
             <SlidersHorizontal className="w-4 h-4 text-black" />
@@ -276,7 +277,7 @@ export default function BrowseProducts({
           {hasActiveFilters && (
             <button
               onClick={handleResetFilters}
-              className="text-[11px] font-mono font-bold text-gray-600 hover:text-black flex items-center space-x-1 cursor-pointer transition-colors"
+              className="text-[11px] font-mono font-bold text-gray-600 hover:text-black flex items-center space-x-1 cursor-pointer transition-colors px-3 py-1 bg-gray-50 hover:bg-gray-100 rounded-xl border border-gray-200"
               id="clear-catalog-filters-btn"
             >
               <RotateCcw className="w-3 h-3" />
@@ -295,7 +296,7 @@ export default function BrowseProducts({
               placeholder="Search product or keyword..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs font-sans border border-gray-300 focus:border-black focus:outline-none focus:ring-1 focus:ring-black rounded-none bg-white placeholder-gray-400"
+              className="w-full pl-9 pr-3 py-2 text-xs font-sans border border-gray-200 rounded-2xl focus:border-black focus:outline-none bg-gray-50/50 placeholder-gray-400"
               id="catalog-search-input"
             />
           </div>
@@ -305,7 +306,7 @@ export default function BrowseProducts({
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full px-3 py-2 text-xs font-sans border border-gray-300 focus:border-black focus:outline-none focus:ring-1 focus:ring-black rounded-none bg-white"
+              className="w-full px-3 py-2 text-xs font-sans border border-gray-200 rounded-2xl focus:border-black focus:outline-none bg-white cursor-pointer"
               id="catalog-category-select"
             >
               <option value="All">Category: All</option>
@@ -320,7 +321,7 @@ export default function BrowseProducts({
             <select
               value={selectedBranding}
               onChange={(e) => setSelectedBranding(e.target.value)}
-              className="w-full px-3 py-2 text-xs font-sans border border-gray-300 focus:border-black focus:outline-none focus:ring-1 focus:ring-black rounded-none bg-white"
+              className="w-full px-3 py-2 text-xs font-sans border border-gray-200 rounded-2xl focus:border-black focus:outline-none bg-white cursor-pointer"
               id="catalog-branding-select"
             >
               <option value="All">Branding: All Methods</option>
@@ -335,7 +336,7 @@ export default function BrowseProducts({
             <select
               value={selectedColor}
               onChange={(e) => setSelectedColor(e.target.value)}
-              className="w-full px-3 py-2 text-xs font-sans border border-gray-300 focus:border-black focus:outline-none focus:ring-1 focus:ring-black rounded-none bg-white"
+              className="w-full px-3 py-2 text-xs font-sans border border-gray-200 rounded-2xl focus:border-black focus:outline-none bg-white cursor-pointer"
               id="catalog-color-select"
             >
               <option value="All">Colour: All Colours</option>
@@ -350,7 +351,7 @@ export default function BrowseProducts({
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="w-full px-3 py-2 text-xs font-sans border border-gray-300 focus:border-black focus:outline-none focus:ring-1 focus:ring-black rounded-none bg-white font-mono font-bold"
+              className="w-full px-3 py-2 text-xs font-sans border border-gray-200 rounded-2xl focus:border-black focus:outline-none bg-white font-mono font-bold cursor-pointer"
               id="catalog-sort-select"
             >
               <option value="a-z">Sort: Name (A-Z)</option>
@@ -364,15 +365,15 @@ export default function BrowseProducts({
 
       {/* PRODUCT GRID */}
       {filteredProducts.length === 0 ? (
-        <div className="border-2 border-dashed border-gray-300 p-12 text-center bg-gray-50 my-8">
-          <Layers className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-          <h3 className="text-base font-bold uppercase tracking-tight text-black">No Products Found</h3>
-          <p className="text-xs text-gray-500 font-mono mt-1">
+        <div className="border border-dashed border-gray-300 rounded-3xl p-12 text-center bg-white shadow-xs my-8">
+          <Layers className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+          <h3 className="text-sm font-extrabold uppercase tracking-tight text-black">No Products Found</h3>
+          <p className="text-xs text-gray-500 font-sans mt-1">
             No products match your filter criteria. Try adjusting search query or clearing filters.
           </p>
           <button
             onClick={handleResetFilters}
-            className="mt-4 inline-flex items-center space-x-1.5 bg-black text-white px-4 py-2 text-xs font-bold uppercase tracking-wider hover:bg-gray-800 transition-colors cursor-pointer"
+            className="mt-4 inline-flex items-center space-x-1.5 bg-black text-white px-5 py-2.5 text-xs font-extrabold uppercase tracking-wider rounded-2xl hover:bg-neutral-800 transition-colors cursor-pointer shadow-xs"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Reset All Filters</span>
@@ -521,7 +522,7 @@ export default function BrowseProducts({
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
                 {/* Image Gallery */}
                 <div className="lg:col-span-5 space-y-4">
-                  <div className="aspect-square border-2 border-black bg-white rounded-2xl overflow-hidden relative shadow-sm flex items-center justify-center">
+                  <div className="aspect-square border border-gray-200 bg-white rounded-3xl overflow-hidden relative shadow-sm flex items-center justify-center">
                     {productGallery.length > 0 ? (
                       <img
                         src={productGallery[activeImageIdx] || productGallery[0]}
@@ -532,7 +533,7 @@ export default function BrowseProducts({
                     ) : (
                       <div className="text-6xl text-gray-300 select-none">📦</div>
                     )}
-                    <span className="absolute top-4 left-4 bg-black text-white text-[10px] font-mono font-bold uppercase tracking-wider px-3 py-1 rounded-md">
+                    <span className="absolute top-4 left-4 bg-black text-white text-[10px] font-mono font-bold uppercase tracking-wider px-3 py-1 rounded-xl">
                       {selectedProduct.category}
                     </span>
                   </div>
@@ -544,7 +545,7 @@ export default function BrowseProducts({
                         <button
                           key={idx}
                           onClick={() => setActiveImageIdx(idx)}
-                          className={`w-16 h-16 rounded-xl border-2 shrink-0 overflow-hidden cursor-pointer transition-all ${
+                          className={`w-16 h-16 rounded-2xl border-2 shrink-0 overflow-hidden cursor-pointer transition-all ${
                             activeImageIdx === idx ? 'border-black ring-2 ring-black' : 'border-gray-200 opacity-70 hover:opacity-100'
                           }`}
                         >
@@ -558,16 +559,16 @@ export default function BrowseProducts({
                 {/* Details Info */}
                 <div className="lg:col-span-7 space-y-6">
                   <div>
-                    <div className="inline-block bg-gray-100 text-gray-800 border border-gray-300 text-[10px] font-mono font-bold uppercase px-2.5 py-1 mb-2">
+                    <div className="inline-block bg-gray-100 text-gray-800 border border-gray-200 text-[10px] font-mono font-bold uppercase px-3 py-1 rounded-xl mb-2">
                       Category: {selectedProduct.category}
                     </div>
-                    <h1 className="text-3xl sm:text-4xl font-extrabold text-black uppercase tracking-tight leading-tight">
+                    <h1 className="text-3xl sm:text-4xl font-black text-black uppercase tracking-tight leading-tight font-sans">
                       {selectedProduct.name}
                     </h1>
                   </div>
 
                   {/* MOQ Highlight */}
-                  <div className="inline-flex items-center space-x-2 bg-black text-white px-4 py-2 text-xs font-mono font-bold uppercase tracking-wider rounded-lg shadow-xs">
+                  <div className="inline-flex items-center space-x-2 bg-black text-white px-4 py-2 text-xs font-mono font-bold uppercase tracking-wider rounded-xl shadow-xs">
                     <PackageCheck className="w-4 h-4" />
                     <span>Minimum Order Quantity: {selectedProduct.moq} units</span>
                   </div>
@@ -580,7 +581,7 @@ export default function BrowseProducts({
 
                   {/* Technical Specifications */}
                   {selectedProduct.specifications && (
-                    <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-2xs space-y-1">
+                    <div className="bg-white border border-gray-200 p-4 rounded-2xl shadow-2xs space-y-1">
                       <h4 className="font-mono font-bold text-black uppercase text-xs">
                         Technical Specifications
                       </h4>
@@ -598,7 +599,7 @@ export default function BrowseProducts({
                         {selectedProduct.brandingMethods.map((method, idx) => (
                           <span
                             key={idx}
-                            className="bg-black text-white text-[11px] font-mono font-bold uppercase px-3 py-1.5 rounded-md flex items-center space-x-1.5"
+                            className="bg-black text-white text-[11px] font-mono font-bold uppercase px-3 py-1.5 rounded-xl flex items-center space-x-1.5"
                           >
                             <Tag className="w-3.5 h-3.5" />
                             <span>{method}</span>
@@ -616,7 +617,7 @@ export default function BrowseProducts({
                         {selectedProduct.colors.map((col, idx) => (
                           <div
                             key={idx}
-                            className="flex items-center space-x-2 bg-white border border-gray-300 px-2.5 py-1.5 rounded-lg text-xs font-mono shadow-2xs"
+                            className="flex items-center space-x-2 bg-white border border-gray-200 px-3 py-1.5 rounded-xl text-xs font-mono shadow-2xs"
                           >
                             <span
                               className="w-4 h-4 rounded-full border border-gray-300 shrink-0"
@@ -630,10 +631,10 @@ export default function BrowseProducts({
                   )}
 
                   {/* Request a Quote Action */}
-                  <div className="border-t-2 border-black pt-6 space-y-2">
+                  <div className="border-t border-gray-200 pt-6 space-y-2">
                     <button
                       onClick={handleOpenQuoteModal}
-                      className="w-full bg-black text-white py-4 px-6 text-sm font-extrabold uppercase tracking-wider hover:bg-neutral-800 transition-all flex items-center justify-center space-x-2 border border-black cursor-pointer shadow-md rounded-xl"
+                      className="w-full bg-black text-white py-4 px-6 text-xs font-extrabold uppercase tracking-wider hover:bg-neutral-800 transition-all flex items-center justify-center space-x-2 border border-black cursor-pointer shadow-xs rounded-2xl"
                       id="open-quote-request-btn"
                     >
                       <FileText className="w-5 h-5" />
@@ -648,7 +649,7 @@ export default function BrowseProducts({
 
               {/* Related Products Section */}
               {relatedProducts.length > 0 && (
-                <div className="border-t-2 border-black pt-8 space-y-4">
+                <div className="border-t border-gray-200 pt-8 space-y-4">
                   <h3 className="text-sm font-extrabold uppercase tracking-tight text-black font-mono">
                     Related Products You Might Like
                   </h3>
@@ -657,12 +658,12 @@ export default function BrowseProducts({
                       <div
                         key={rel.id}
                         onClick={() => handleOpenProduct(rel)}
-                        className="border border-gray-300 p-4 bg-white rounded-xl hover:border-black hover:shadow-md transition-all cursor-pointer flex items-center space-x-4 group"
+                        className="border border-gray-200 p-4 bg-white rounded-2xl hover:border-black hover:shadow-md transition-all cursor-pointer flex items-center space-x-4 group"
                       >
                         <img
                           src={rel.imageUrl}
                           alt={rel.name}
-                          className="w-16 h-16 object-cover rounded-lg border border-gray-200 shrink-0"
+                          className="w-16 h-16 object-cover rounded-xl border border-gray-200 shrink-0"
                           referrerPolicy="no-referrer"
                         />
                         <div className="overflow-hidden">
@@ -694,10 +695,10 @@ export default function BrowseProducts({
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="bg-white border-2 border-black max-w-xl w-full my-8 overflow-hidden shadow-2xl relative rounded-2xl"
+              className="bg-white border border-gray-200 max-w-xl w-full my-8 overflow-hidden shadow-2xl relative rounded-3xl"
             >
               {/* Header */}
-              <div className="bg-black text-white p-5 flex items-center justify-between border-b-2 border-black">
+              <div className="bg-black text-white p-5 flex items-center justify-between border-b border-black rounded-t-3xl">
                 <div className="flex items-center space-x-2">
                   <FileText className="w-5 h-5" />
                   <h3 className="font-extrabold text-sm uppercase tracking-wider">
@@ -726,7 +727,7 @@ export default function BrowseProducts({
                     Thank you, <span className="font-bold text-black">{contactPerson}</span>. We have logged your quote request for <span className="font-bold text-black">{selectedProduct.name}</span> ({quoteQuantity} units). Our sales team will reach out to <span className="font-bold text-black">{contactEmail}</span> shortly.
                   </p>
 
-                  <div className="bg-gray-50 border border-gray-200 p-4 text-left font-mono text-xs space-y-1.5 my-4 rounded-xl">
+                  <div className="bg-gray-50 border border-gray-200 p-4 text-left font-mono text-xs space-y-1.5 my-4 rounded-2xl">
                     <div className="text-[10px] text-gray-400 font-bold uppercase border-b border-gray-200 pb-1">Quote Ticket Summary</div>
                     <div><span className="text-gray-500">Product:</span> <span className="font-bold text-black">{selectedProduct.name}</span></div>
                     <div><span className="text-gray-500">Quantity:</span> <span className="font-bold text-black">{quoteQuantity} units</span></div>
@@ -744,7 +745,7 @@ export default function BrowseProducts({
                       setShowQuoteModal(false);
                       setSelectedProduct(null);
                     }}
-                    className="bg-black text-white px-6 py-2.5 text-xs font-bold uppercase tracking-wider hover:bg-gray-800 cursor-pointer border border-black rounded-lg"
+                    className="bg-black text-white px-6 py-2.5 text-xs font-bold uppercase tracking-wider hover:bg-gray-800 cursor-pointer border border-black rounded-xl"
                   >
                     Continue Browsing
                   </button>
@@ -753,11 +754,11 @@ export default function BrowseProducts({
                 /* FORM STATE */
                 <form onSubmit={handleSubmitQuote} className="p-6 space-y-5">
                   {/* Selected Product Summary Box */}
-                  <div className="flex items-center space-x-3 bg-gray-50 border border-gray-200 p-3 rounded-xl">
+                  <div className="flex items-center space-x-3 bg-gray-50 border border-gray-200 p-3 rounded-2xl">
                     <img
                       src={selectedProduct.imageUrl}
                       alt={selectedProduct.name}
-                      className="w-12 h-12 object-cover border border-gray-300 rounded-lg shrink-0"
+                      className="w-12 h-12 object-cover border border-gray-200 rounded-xl shrink-0"
                       referrerPolicy="no-referrer"
                     />
                     <div>
@@ -781,7 +782,7 @@ export default function BrowseProducts({
                         min={selectedProduct.moq}
                         value={quoteQuantity}
                         onChange={(e) => setQuoteQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-full p-2.5 border border-gray-300 font-mono text-xs focus:border-black focus:outline-none focus:ring-1 focus:ring-black rounded-lg"
+                        className="w-full p-2.5 border border-gray-200 font-mono text-xs focus:border-black focus:outline-none rounded-xl"
                         required
                         id="quote-quantity-input"
                       />
@@ -797,7 +798,7 @@ export default function BrowseProducts({
                       <select
                         value={quoteBranding}
                         onChange={(e) => setQuoteBranding(e.target.value)}
-                        className="w-full p-2.5 border border-gray-300 text-xs font-sans focus:border-black focus:outline-none focus:ring-1 focus:ring-black bg-white rounded-lg"
+                        className="w-full p-2.5 border border-gray-200 text-xs font-sans focus:border-black focus:outline-none bg-white rounded-xl cursor-pointer"
                         id="quote-branding-select"
                       >
                         <option value="">-- Select Branding --</option>
@@ -817,7 +818,7 @@ export default function BrowseProducts({
                       <select
                         value={quoteColor}
                         onChange={(e) => setQuoteColor(e.target.value)}
-                        className="w-full p-2.5 border border-gray-300 text-xs font-sans focus:border-black focus:outline-none focus:ring-1 focus:ring-black bg-white rounded-lg"
+                        className="w-full p-2.5 border border-gray-200 text-xs font-sans focus:border-black focus:outline-none bg-white rounded-xl cursor-pointer"
                         id="quote-color-select"
                       >
                         <option value="">-- Select Colour --</option>
@@ -838,7 +839,7 @@ export default function BrowseProducts({
                       placeholder="Specify preferred logo positions, target delivery date, event details, packaging preferences, etc."
                       value={quoteNotes}
                       onChange={(e) => setQuoteNotes(e.target.value)}
-                      className="w-full p-2.5 border border-gray-300 text-xs font-sans focus:border-black focus:outline-none focus:ring-1 focus:ring-black rounded-lg"
+                      className="w-full p-2.5 border border-gray-200 text-xs font-sans focus:border-black focus:outline-none rounded-xl"
                       id="quote-notes-textarea"
                     />
                   </div>
@@ -855,7 +856,7 @@ export default function BrowseProducts({
                           type="text"
                           value={companyName}
                           onChange={(e) => setCompanyName(e.target.value)}
-                          className="w-full p-2 border border-gray-300 text-xs focus:border-black focus:outline-none rounded-md"
+                          className="w-full p-2 border border-gray-200 text-xs focus:border-black focus:outline-none rounded-xl"
                           required
                         />
                       </div>
@@ -865,7 +866,7 @@ export default function BrowseProducts({
                           type="text"
                           value={contactPerson}
                           onChange={(e) => setContactPerson(e.target.value)}
-                          className="w-full p-2 border border-gray-300 text-xs focus:border-black focus:outline-none rounded-md"
+                          className="w-full p-2 border border-gray-200 text-xs focus:border-black focus:outline-none rounded-xl"
                           required
                         />
                       </div>
@@ -875,7 +876,7 @@ export default function BrowseProducts({
                           type="email"
                           value={contactEmail}
                           onChange={(e) => setContactEmail(e.target.value)}
-                          className="w-full p-2 border border-gray-300 text-xs focus:border-black focus:outline-none rounded-md"
+                          className="w-full p-2 border border-gray-200 text-xs focus:border-black focus:outline-none rounded-xl"
                           required
                         />
                       </div>
@@ -885,7 +886,7 @@ export default function BrowseProducts({
                           type="text"
                           value={contactPhone}
                           onChange={(e) => setContactPhone(e.target.value)}
-                          className="w-full p-2 border border-gray-300 text-xs focus:border-black focus:outline-none rounded-md"
+                          className="w-full p-2 border border-gray-200 text-xs focus:border-black focus:outline-none rounded-xl"
                         />
                       </div>
                     </div>
@@ -896,13 +897,13 @@ export default function BrowseProducts({
                     <button
                       type="button"
                       onClick={() => setShowQuoteModal(false)}
-                      className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-gray-600 hover:text-black cursor-pointer"
+                      className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-gray-600 hover:text-black cursor-pointer rounded-xl hover:bg-gray-100 transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="bg-black text-white px-6 py-2.5 text-xs font-extrabold uppercase tracking-wider hover:bg-gray-800 transition-colors flex items-center space-x-2 border border-black cursor-pointer rounded-lg"
+                      className="bg-black text-white px-6 py-2.5 text-xs font-extrabold uppercase tracking-wider hover:bg-neutral-800 transition-colors flex items-center space-x-2 border border-black cursor-pointer rounded-2xl shadow-xs"
                       id="submit-quote-request-btn"
                     >
                       <Send className="w-3.5 h-3.5" />

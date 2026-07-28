@@ -44,6 +44,7 @@ interface PublicOrderPortalProps {
     }[];
   }) => Promise<Order>;
   onClosePublicView?: () => void;
+  isLoggedIn?: boolean;
 }
 
 export default function PublicOrderPortal({
@@ -52,10 +53,13 @@ export default function PublicOrderPortal({
   products,
   systemSettings,
   onSubmitOrder,
-  onClosePublicView
+  onClosePublicView,
+  isLoggedIn = false
 }: PublicOrderPortalProps) {
-  // Filter products included in this portal
-  const portalProducts = products.filter(p => portal.productIds.includes(p.id));
+  // Filter products included in this portal; fallback to all company products if portal.productIds is empty
+  const portalProducts = (portal.productIds && portal.productIds.length > 0)
+    ? products.filter(p => portal.productIds.includes(p.id))
+    : products;
 
   // Storefront Order Cart State
   const [cartItems, setCartItems] = useState<{
@@ -336,12 +340,12 @@ export default function PublicOrderPortal({
           </div>
 
           <div className="flex items-center gap-3">
-            {onClosePublicView && (
+            {onClosePublicView && isLoggedIn && (
               <button
                 onClick={onClosePublicView}
                 className="text-xs font-mono text-gray-500 hover:text-black hover:underline transition-colors hidden sm:inline"
               >
-                Back to Dashboard
+                Exit Storefront Preview
               </button>
             )}
 
@@ -399,8 +403,17 @@ export default function PublicOrderPortal({
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {portalProducts.map(product => {
+        {portalProducts.length === 0 ? (
+          <div className="bg-white border border-gray-200 rounded-3xl p-12 text-center max-w-md mx-auto space-y-3 shadow-xs">
+            <Store className="w-10 h-10 text-gray-300 mx-auto" />
+            <h4 className="text-base font-extrabold text-black uppercase tracking-tight">No Products Listed</h4>
+            <p className="text-xs text-gray-500 font-sans leading-relaxed">
+              There are currently no active product listings configured for this storefront portal. Please contact the company to add products.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {portalProducts.map(product => {
             const currentQty = getQty(product);
             const currentSize = getSize(product);
             const currentColor = getColor(product);
@@ -600,6 +613,7 @@ export default function PublicOrderPortal({
             );
           })}
         </div>
+        )}
       </main>
 
       {/* Floating Bottom Bar if cart has items */}

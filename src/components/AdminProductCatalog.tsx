@@ -350,27 +350,27 @@ export default function AdminProductCatalog({
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Top Banner & Stats */}
-      <div className="bg-white border-2 border-black p-5 sm:p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h2 className="text-2xl font-extrabold uppercase tracking-tight text-black">
+          <h2 className="text-2xl font-black uppercase tracking-tight text-black font-sans">
             ARH Products
           </h2>
-          <p className="text-xs text-gray-600 font-sans mt-1">
+          <p className="text-xs text-gray-500 font-sans mt-1 leading-relaxed">
             Manage your full company promotional product range. Add new products, update specifications, and view quote requests submitted by customers.
           </p>
         </div>
 
         {/* Stats Badges */}
         <div className="flex flex-wrap items-center gap-3 shrink-0">
-          <div className="bg-gray-50 border border-gray-300 px-3.5 py-2 text-center">
+          <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 text-center min-w-[110px]">
             <span className="block text-xl font-extrabold font-mono text-black leading-none">{products.length}</span>
             <span className="text-[10px] font-mono uppercase text-gray-500 font-bold">Total Products</span>
           </div>
-          <div className="bg-gray-50 border border-gray-300 px-3.5 py-2 text-center">
+          <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 text-center min-w-[110px]">
             <span className="block text-xl font-extrabold font-mono text-black leading-none">{activeCount}</span>
             <span className="text-[10px] font-mono uppercase text-gray-500 font-bold">Active in Catalog</span>
           </div>
-          <div className="bg-gray-50 border border-gray-300 px-3.5 py-2 text-center">
+          <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 text-center min-w-[110px]">
             <span className="block text-xl font-extrabold font-mono text-black leading-none">{newEnquiriesCount}</span>
             <span className="text-[10px] font-mono uppercase text-gray-500 font-bold">New Quote Requests</span>
           </div>
@@ -378,13 +378,13 @@ export default function AdminProductCatalog({
       </div>
 
       {/* Subtabs Switcher */}
-      <div className="flex border-b-2 border-black space-x-2">
+      <div className="flex bg-gray-100 p-1.5 rounded-2xl gap-2 border border-gray-200 max-w-fit">
         <button
           onClick={() => setActiveSection('catalog')}
-          className={`flex items-center space-x-2 py-3 px-5 font-mono text-xs uppercase font-extrabold tracking-wider border-t-2 border-x-2 cursor-pointer transition-colors ${
+          className={`flex items-center space-x-2 py-2.5 px-4 rounded-xl font-mono text-xs uppercase font-extrabold tracking-wider cursor-pointer transition-all ${
             activeSection === 'catalog'
-              ? 'bg-black text-white border-black'
-              : 'bg-white text-gray-600 border-transparent hover:text-black hover:border-gray-300'
+              ? 'bg-black text-white shadow-xs'
+              : 'text-gray-600 hover:text-black hover:bg-white/60'
           }`}
           id="admin-tab-catalog-btn"
         >
@@ -394,17 +394,17 @@ export default function AdminProductCatalog({
 
         <button
           onClick={() => setActiveSection('enquiries')}
-          className={`flex items-center space-x-2 py-3 px-5 font-mono text-xs uppercase font-extrabold tracking-wider border-t-2 border-x-2 cursor-pointer transition-colors relative ${
+          className={`flex items-center space-x-2 py-2.5 px-4 rounded-xl font-mono text-xs uppercase font-extrabold tracking-wider cursor-pointer transition-all relative ${
             activeSection === 'enquiries'
-              ? 'bg-black text-white border-black'
-              : 'bg-white text-gray-600 border-transparent hover:text-black hover:border-gray-300'
+              ? 'bg-black text-white shadow-xs'
+              : 'text-gray-600 hover:text-black hover:bg-white/60'
           }`}
           id="admin-tab-enquiries-btn"
         >
           <FileText className="w-4 h-4" />
           <span>Quote Requests ({quoteEnquiries.length})</span>
           {newEnquiriesCount > 0 && (
-            <span className="bg-white text-black text-[9px] font-mono font-extrabold px-1.5 py-0.5 rounded-full ml-1">
+            <span className="bg-amber-400 text-black text-[9px] font-mono font-extrabold px-1.5 py-0.5 rounded-full ml-1">
               {newEnquiriesCount} NEW
             </span>
           )}
@@ -416,7 +416,7 @@ export default function AdminProductCatalog({
       {activeSection === 'catalog' && (
         <div className="space-y-4">
           {/* Action & Filter Bar */}
-          <div className="bg-white border-2 border-black p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="bg-white border border-gray-200 rounded-3xl p-4 md:p-5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-3">
               {/* Search */}
               <div className="relative w-full sm:w-64">
@@ -426,7 +426,7 @@ export default function AdminProductCatalog({
                   placeholder="Search catalog products..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-xs font-sans border border-gray-300 focus:border-black focus:outline-none"
+                  className="w-full pl-9 pr-3 py-2 text-xs font-sans border border-gray-200 rounded-2xl focus:border-black focus:outline-none bg-gray-50/50"
                   id="admin-product-search-input"
                 />
               </div>
@@ -435,7 +435,7 @@ export default function AdminProductCatalog({
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                className="px-3 py-2 text-xs font-sans border border-gray-300 focus:border-black focus:outline-none bg-white"
+                className="px-3 py-2 text-xs font-sans border border-gray-200 rounded-2xl focus:border-black focus:outline-none bg-white cursor-pointer"
               >
                 <option value="All">Category: All</option>
                 {Array.from(new Set(products.map(p => p.category))).map(cat => (
@@ -447,7 +447,7 @@ export default function AdminProductCatalog({
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
-                className="px-3 py-2 text-xs font-sans border border-gray-300 focus:border-black focus:outline-none bg-white font-mono font-bold"
+                className="px-3 py-2 text-xs font-sans border border-gray-200 rounded-2xl focus:border-black focus:outline-none bg-white font-mono font-bold cursor-pointer"
               >
                 <option value="All">Status: All</option>
                 <option value="Active">Active Only</option>
@@ -458,7 +458,7 @@ export default function AdminProductCatalog({
             {/* Add Product Button */}
             <button
               onClick={handleOpenAddModal}
-              className="bg-black text-white px-4 py-2.5 text-xs font-extrabold uppercase tracking-wider hover:bg-gray-800 transition-colors flex items-center space-x-2 border border-black cursor-pointer shrink-0"
+              className="bg-black text-white px-5 py-2.5 text-xs font-extrabold uppercase tracking-wider rounded-2xl hover:bg-neutral-800 transition-colors flex items-center space-x-2 border border-black cursor-pointer shrink-0 shadow-xs"
               id="add-catalog-product-btn"
             >
               <Plus className="w-4 h-4" />
@@ -468,16 +468,16 @@ export default function AdminProductCatalog({
 
           {/* Catalog Products Table */}
           {filteredProducts.length === 0 ? (
-            <div className="border-2 border-dashed border-gray-300 p-12 text-center bg-gray-50">
-              <Layers className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-              <h3 className="text-sm font-bold uppercase text-black">No Products Found</h3>
-              <p className="text-xs text-gray-500 font-mono mt-1">Try clearing your search query or add a new catalog item.</p>
+            <div className="border border-dashed border-gray-300 rounded-3xl p-12 text-center bg-white shadow-xs">
+              <Layers className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <h3 className="text-sm font-extrabold uppercase text-black tracking-tight">No Products Found</h3>
+              <p className="text-xs text-gray-500 font-sans mt-1">Try clearing your search query or add a new catalog item.</p>
             </div>
           ) : (
-            <div className="bg-white border-2 border-black overflow-x-auto shadow-xs">
+            <div className="bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-xs">
               <table className="w-full text-left text-xs font-sans border-collapse">
                 <thead>
-                  <tr className="bg-black text-white font-mono text-[11px] uppercase tracking-wider border-b border-black">
+                  <tr className="bg-gray-50 text-gray-700 font-mono text-[11px] uppercase tracking-wider border-b border-gray-200">
                     <th className="p-3">Product</th>
                     <th className="p-3">Category</th>
                     <th className="p-3">MOQ</th>
@@ -497,11 +497,11 @@ export default function AdminProductCatalog({
                             <img
                               src={p.imageUrl}
                               alt={p.name}
-                              className="w-12 h-12 object-cover border border-gray-300 shrink-0 bg-gray-100"
+                              className="w-12 h-12 object-cover border border-gray-200 rounded-xl shrink-0 bg-gray-100"
                               referrerPolicy="no-referrer"
                             />
                           ) : (
-                            <div className="w-12 h-12 border border-gray-300 bg-gray-100 flex items-center justify-center shrink-0 text-lg">
+                            <div className="w-12 h-12 border border-gray-200 rounded-xl bg-gray-100 flex items-center justify-center shrink-0 text-lg">
                               📦
                             </div>
                           )}
@@ -514,7 +514,7 @@ export default function AdminProductCatalog({
 
                       {/* Category */}
                       <td className="p-3">
-                        <span className="bg-gray-100 text-black border border-gray-300 text-[10px] font-mono font-bold uppercase px-2 py-0.5">
+                        <span className="bg-gray-100 text-black border border-gray-200 rounded-lg text-[10px] font-mono font-bold uppercase px-2 py-0.5">
                           {p.category}
                         </span>
                       </td>
@@ -532,7 +532,7 @@ export default function AdminProductCatalog({
                           return (
                             <div className="flex flex-wrap gap-1 max-w-xs">
                               {methods.slice(0, 3).map((b, idx) => (
-                                <span key={idx} className="bg-gray-100 text-gray-800 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 border border-gray-200">
+                                <span key={idx} className="bg-gray-100 text-gray-800 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 border border-gray-200 rounded-md">
                                   {b}
                                 </span>
                               ))}
@@ -575,10 +575,10 @@ export default function AdminProductCatalog({
                       <td className="p-3 text-center">
                         <button
                           onClick={() => handleToggleStatus(p)}
-                          className={`inline-flex items-center space-x-1 px-2.5 py-1 text-[10px] font-mono font-bold uppercase border cursor-pointer transition-colors ${
+                          className={`inline-flex items-center space-x-1 px-2.5 py-1 text-[10px] font-mono font-bold uppercase border rounded-xl cursor-pointer transition-colors ${
                             p.status === 'Active'
                               ? 'bg-black text-white border-black'
-                              : 'bg-gray-100 text-gray-500 border-gray-300 hover:text-black'
+                              : 'bg-gray-100 text-gray-500 border-gray-200 hover:text-black'
                           }`}
                           title="Click to toggle Active / Hidden in customer catalog"
                         >
@@ -592,14 +592,14 @@ export default function AdminProductCatalog({
                         <div className="flex items-center justify-end space-x-2">
                           <button
                             onClick={() => handleOpenEditModal(p)}
-                            className="p-1.5 border border-gray-300 text-gray-700 hover:text-black hover:border-black transition-colors cursor-pointer"
+                            className="p-1.5 border border-gray-200 rounded-lg text-gray-700 hover:text-black hover:border-black transition-colors cursor-pointer"
                             title="Edit product details"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => setItemToDelete({ type: 'product', id: p.id, name: p.name })}
-                            className="p-1.5 border border-gray-300 text-gray-400 hover:text-red-600 hover:border-red-600 transition-colors cursor-pointer"
+                            className="p-1.5 border border-gray-200 rounded-lg text-gray-400 hover:text-red-600 hover:border-red-600 transition-colors cursor-pointer"
                             title="Delete product"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -620,7 +620,7 @@ export default function AdminProductCatalog({
       {activeSection === 'enquiries' && (
         <div className="space-y-4">
           {/* Filter Bar */}
-          <div className="bg-white border-2 border-black p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="bg-white border border-gray-200 rounded-3xl p-4 md:p-5 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="relative w-full sm:w-80">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -628,7 +628,7 @@ export default function AdminProductCatalog({
                 placeholder="Search by company, product, or enquiry #..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs font-sans border border-gray-300 focus:border-black focus:outline-none"
+                className="w-full pl-9 pr-3 py-2 text-xs font-sans border border-gray-200 rounded-2xl focus:border-black focus:outline-none bg-gray-50/50"
               />
             </div>
 
@@ -637,7 +637,7 @@ export default function AdminProductCatalog({
               <select
                 value={enquiryStatusFilter}
                 onChange={(e) => setEnquiryStatusFilter(e.target.value)}
-                className="px-3 py-2 text-xs font-sans border border-gray-300 focus:border-black focus:outline-none bg-white font-mono font-bold"
+                className="px-3 py-2 text-xs font-sans border border-gray-200 rounded-2xl focus:border-black focus:outline-none bg-white font-mono font-bold cursor-pointer"
               >
                 <option value="All">All Statuses</option>
                 <option value="New">New</option>
@@ -653,10 +653,10 @@ export default function AdminProductCatalog({
 
           {/* Quote Requests List */}
           {filteredEnquiries.length === 0 ? (
-            <div className="border-2 border-dashed border-gray-300 p-12 text-center bg-gray-50">
-              <FileText className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-              <h3 className="text-sm font-bold uppercase text-black">No Quote Requests Found</h3>
-              <p className="text-xs text-gray-500 font-mono mt-1">
+            <div className="border border-dashed border-gray-300 rounded-3xl p-12 text-center bg-white shadow-xs">
+              <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <h3 className="text-sm font-extrabold uppercase text-black tracking-tight">No Quote Requests Found</h3>
+              <p className="text-xs text-gray-500 font-sans mt-1">
                 Customer quote requests submitted from the ARH Products catalog will appear here for follow-up.
               </p>
             </div>
@@ -665,11 +665,11 @@ export default function AdminProductCatalog({
               {filteredEnquiries.map((enquiry) => (
                 <div
                   key={enquiry.id}
-                  className="bg-white border-2 border-black p-5 shadow-xs space-y-4"
+                  className="bg-white border border-gray-200 rounded-3xl p-6 shadow-xs space-y-4"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-200 pb-3">
                     <div className="flex items-center space-x-3">
-                      <span className="font-mono font-extrabold text-sm text-black bg-gray-100 border border-black px-2.5 py-1">
+                      <span className="font-mono font-extrabold text-sm text-black bg-gray-100 border border-gray-200 rounded-xl px-3 py-1">
                         {enquiry.enquiryNumber}
                       </span>
                       <div>
@@ -688,13 +688,13 @@ export default function AdminProductCatalog({
                       <select
                         value={enquiry.status}
                         onChange={(e) => onUpdateQuoteEnquiryStatus(enquiry.id, e.target.value as any)}
-                        className={`px-3 py-1.5 text-xs font-mono font-bold uppercase border cursor-pointer focus:outline-none ${
+                        className={`px-3 py-1.5 text-xs font-mono font-bold uppercase border rounded-xl cursor-pointer focus:outline-none ${
                           enquiry.status === 'New' ? 'bg-black text-white border-black' :
                           enquiry.status === 'In Review' ? 'bg-amber-100 text-amber-900 border-amber-300' :
                           enquiry.status === 'Quoted' ? 'bg-emerald-100 text-emerald-900 border-emerald-300' :
                           enquiry.status === 'Product Requested' ? 'bg-purple-100 text-purple-900 border-purple-300 font-bold' :
                           enquiry.status === 'Product Added' ? 'bg-emerald-700 text-white border-emerald-800 font-bold' :
-                          'bg-gray-100 text-gray-700 border-gray-300'
+                          'bg-gray-100 text-gray-700 border-gray-200'
                         }`}
                       >
                         <option value="New">New</option>
@@ -709,7 +709,7 @@ export default function AdminProductCatalog({
                       {onDeleteQuoteEnquiry && (
                         <button
                           onClick={() => setItemToDelete({ type: 'quote', id: enquiry.id, name: `${enquiry.enquiryNumber} - ${enquiry.companyName}` })}
-                          className="p-1.5 border border-gray-200 text-gray-400 hover:text-red-600 hover:border-red-600 cursor-pointer"
+                          className="p-1.5 border border-gray-200 rounded-lg text-gray-400 hover:text-red-600 hover:border-red-600 cursor-pointer transition-colors"
                           title="Delete enquiry"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -721,7 +721,7 @@ export default function AdminProductCatalog({
                   {/* Enquiry Details */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
                     {/* Product & Spec Requested */}
-                    <div className="bg-gray-50 border border-gray-200 p-3.5 space-y-2">
+                    <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-2">
                       <div className="font-mono text-[10px] font-bold uppercase text-gray-400">
                         Product Specification Requested
                       </div>
@@ -740,14 +740,14 @@ export default function AdminProductCatalog({
                       </div>
                       <div className="border-t border-gray-200 pt-2">
                         <span className="text-gray-500 font-mono text-[10px] font-bold uppercase block mb-0.5">Notes & Customization Instructions:</span>
-                        <div className="text-gray-800 font-sans text-xs italic bg-white p-2 border border-gray-200 rounded-md">
+                        <div className="text-gray-800 font-sans text-xs italic bg-white p-2.5 border border-gray-200 rounded-xl">
                           {enquiry.notes && enquiry.notes.trim() !== '' ? `"${enquiry.notes}"` : <span className="text-gray-400 not-italic font-mono text-[11px]">None specified</span>}
                         </div>
                       </div>
                     </div>
 
                     {/* Customer Contact */}
-                    <div className="bg-gray-50 border border-gray-200 p-3.5 space-y-2">
+                    <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-2">
                       <div className="font-mono text-[10px] font-bold uppercase text-gray-400">
                         Client Contact Information
                       </div>
@@ -904,10 +904,10 @@ export default function AdminProductCatalog({
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border-2 border-black max-w-3xl w-full my-8 overflow-hidden shadow-2xl relative"
+              className="bg-white border border-gray-200 rounded-3xl max-w-3xl w-full my-8 overflow-hidden shadow-2xl relative"
             >
               {/* Header */}
-              <div className="bg-black text-white p-5 flex items-center justify-between border-b-2 border-black">
+              <div className="bg-black text-white p-5 flex items-center justify-between border-b border-black rounded-t-3xl">
                 <div className="flex items-center space-x-2">
                   <Layers className="w-5 h-5" />
                   <h3 className="font-extrabold text-sm uppercase tracking-wider">
@@ -936,7 +936,7 @@ export default function AdminProductCatalog({
                       placeholder="e.g. Moso Bamboo Pen"
                       value={formName}
                       onChange={(e) => setFormName(e.target.value)}
-                      className="w-full p-2.5 border border-gray-300 font-sans text-xs focus:border-black focus:outline-none"
+                      className="w-full p-2.5 border border-gray-200 rounded-xl font-sans text-xs focus:border-black focus:outline-none"
                       required
                     />
                   </div>
@@ -949,7 +949,7 @@ export default function AdminProductCatalog({
                     <select
                       value={formCategory}
                       onChange={(e) => setFormCategory(e.target.value)}
-                      className="w-full p-2.5 border border-gray-300 text-xs font-sans focus:border-black focus:outline-none bg-white"
+                      className="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-sans focus:border-black focus:outline-none bg-white cursor-pointer"
                     >
                       {DEFAULT_CATEGORIES.map(cat => (
                         <option key={cat} value={cat}>{cat}</option>
@@ -963,7 +963,7 @@ export default function AdminProductCatalog({
                         placeholder="Enter custom category name..."
                         value={formCustomCategory}
                         onChange={(e) => setFormCustomCategory(e.target.value)}
-                        className="w-full p-2 border border-gray-300 text-xs font-sans focus:border-black focus:outline-none mt-2"
+                        className="w-full p-2 border border-gray-200 rounded-xl text-xs font-sans focus:border-black focus:outline-none mt-2"
                         required
                       />
                     )}
@@ -979,7 +979,7 @@ export default function AdminProductCatalog({
                       min={1}
                       value={formMoq}
                       onChange={(e) => setFormMoq(parseInt(e.target.value) || 1)}
-                      className="w-full p-2.5 border border-gray-300 font-mono text-xs focus:border-black focus:outline-none"
+                      className="w-full p-2.5 border border-gray-200 rounded-xl font-mono text-xs focus:border-black focus:outline-none"
                       required
                     />
                   </div>
@@ -992,7 +992,7 @@ export default function AdminProductCatalog({
                     <select
                       value={formStatus}
                       onChange={(e) => setFormStatus(e.target.value as any)}
-                      className="w-full p-2.5 border border-gray-300 text-xs font-mono font-bold focus:border-black focus:outline-none bg-white"
+                      className="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-mono font-bold focus:border-black focus:outline-none bg-white cursor-pointer"
                     >
                       <option value="Active">Active (Visible in Customer Catalog)</option>
                       <option value="Hidden">Hidden (Hidden from Customers)</option>
@@ -1009,7 +1009,7 @@ export default function AdminProductCatalog({
                       placeholder="https://... (Leave empty if no image)"
                       value={formImageUrl}
                       onChange={(e) => setFormImageUrl(e.target.value)}
-                      className="w-full p-2.5 border border-gray-300 text-xs font-mono focus:border-black focus:outline-none"
+                      className="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-mono focus:border-black focus:outline-none"
                     />
                   </div>
                 </div>
@@ -1024,7 +1024,7 @@ export default function AdminProductCatalog({
                     placeholder="https://image2.jpg&#10;https://image3.jpg"
                     value={formAdditionalImages}
                     onChange={(e) => setFormAdditionalImages(e.target.value)}
-                    className="w-full p-2.5 border border-gray-300 text-xs font-mono focus:border-black focus:outline-none"
+                    className="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-mono focus:border-black focus:outline-none"
                   />
                 </div>
 
@@ -1039,7 +1039,7 @@ export default function AdminProductCatalog({
                       placeholder="Write customer-facing promotional description..."
                       value={formDescription}
                       onChange={(e) => setFormDescription(e.target.value)}
-                      className="w-full p-2.5 border border-gray-300 text-xs font-sans focus:border-black focus:outline-none"
+                      className="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-sans focus:border-black focus:outline-none"
                     />
                   </div>
 
@@ -1052,7 +1052,7 @@ export default function AdminProductCatalog({
                       placeholder="Material, dimensions, mechanism, packaging..."
                       value={formSpecifications}
                       onChange={(e) => setFormSpecifications(e.target.value)}
-                      className="w-full p-2.5 border border-gray-300 text-xs font-sans focus:border-black focus:outline-none"
+                      className="w-full p-2.5 border border-gray-200 rounded-xl text-xs font-sans focus:border-black focus:outline-none"
                     />
                   </div>
                 </div>
@@ -1065,7 +1065,7 @@ export default function AdminProductCatalog({
 
                   {/* Active Selected Branding Methods List */}
                   {formBranding.length > 0 ? (
-                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-2xl">
                       <span className="block text-[10px] font-mono font-bold uppercase text-gray-500 mb-2">
                         Attached Decoration Methods:
                       </span>
@@ -1073,7 +1073,7 @@ export default function AdminProductCatalog({
                         {formBranding.map((method) => (
                           <span
                             key={method}
-                            className="bg-black text-white text-[11px] font-mono font-bold uppercase px-2.5 py-1 rounded-md flex items-center space-x-1.5"
+                            className="bg-black text-white text-[11px] font-mono font-bold uppercase px-2.5 py-1 rounded-lg flex items-center space-x-1.5"
                           >
                             <span>{method}</span>
                             <button
@@ -1089,7 +1089,7 @@ export default function AdminProductCatalog({
                       </div>
                     </div>
                   ) : (
-                    <div className="p-2.5 bg-amber-50 border border-amber-200 text-[11px] font-mono text-amber-800 rounded-md">
+                    <div className="p-2.5 bg-amber-50 border border-amber-200 text-[11px] font-mono text-amber-800 rounded-xl">
                       No decoration methods attached yet. Pick from quick presets below or add custom methods.
                     </div>
                   )}
@@ -1107,8 +1107,8 @@ export default function AdminProductCatalog({
                             key={method}
                             type="button"
                             onClick={() => handleToggleCommonBranding(method)}
-                            className={`text-[10px] font-mono font-bold uppercase px-2.5 py-1 border cursor-pointer transition-colors rounded-md ${
-                              isSelected ? 'bg-black text-white border-black' : 'bg-gray-100 text-gray-700 border-gray-300 hover:border-black'
+                            className={`text-[10px] font-mono font-bold uppercase px-2.5 py-1 border cursor-pointer transition-colors rounded-lg ${
+                              isSelected ? 'bg-black text-white border-black' : 'bg-gray-100 text-gray-700 border-gray-200 hover:border-black'
                             }`}
                           >
                             {isSelected ? '✓ ' : '+ '} {method}
@@ -1131,7 +1131,7 @@ export default function AdminProductCatalog({
                           handleAddBrandingTag();
                         }
                       }}
-                      className="p-2 border border-gray-300 text-xs font-mono focus:border-black focus:outline-none flex-1 rounded-md"
+                      className="p-2 border border-gray-200 text-xs font-mono focus:border-black focus:outline-none flex-1 rounded-xl"
                     />
                     <button
                       type="button"
@@ -1139,7 +1139,7 @@ export default function AdminProductCatalog({
                         e.preventDefault();
                         handleAddBrandingTag();
                       }}
-                      className="bg-black text-white px-3.5 py-2 text-xs font-bold uppercase tracking-wider hover:bg-gray-800 cursor-pointer rounded-md shrink-0"
+                      className="bg-black text-white px-3.5 py-2 text-xs font-bold uppercase tracking-wider hover:bg-gray-800 cursor-pointer rounded-xl shrink-0"
                     >
                       Add Tag
                     </button>
@@ -1155,8 +1155,8 @@ export default function AdminProductCatalog({
                   {/* Color Swatches Grid */}
                   <div className="flex flex-wrap gap-2">
                     {formColors.map((col, idx) => (
-                      <div key={idx} className="flex items-center space-x-1.5 bg-gray-50 border border-gray-300 px-2 py-1 text-xs font-mono">
-                        <span className="w-3.5 h-3.5 rounded-full border border-gray-400" style={{ backgroundColor: col.hex }} />
+                      <div key={idx} className="flex items-center space-x-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1 text-xs font-mono">
+                        <span className="w-3.5 h-3.5 rounded-full border border-gray-300" style={{ backgroundColor: col.hex }} />
                         <span>{col.name}</span>
                         <button
                           type="button"
@@ -1170,25 +1170,25 @@ export default function AdminProductCatalog({
                   </div>
 
                   {/* Add Colour Inputs */}
-                  <div className="flex items-center space-x-2 bg-gray-50 p-3 border border-gray-200">
+                  <div className="flex items-center space-x-2 bg-gray-50 p-3 border border-gray-200 rounded-2xl">
                     <input
                       type="text"
                       placeholder="Colour Name (e.g. Navy Blue)"
                       value={newColorName}
                       onChange={(e) => setNewColorName(e.target.value)}
-                      className="p-2 border border-gray-300 text-xs font-sans focus:border-black focus:outline-none flex-1"
+                      className="p-2 border border-gray-200 rounded-xl text-xs font-sans focus:border-black focus:outline-none flex-1 bg-white"
                     />
                     <input
                       type="color"
                       value={newColorHex}
                       onChange={(e) => setNewColorHex(e.target.value)}
-                      className="w-9 h-9 p-0.5 border border-gray-300 cursor-pointer shrink-0"
+                      className="w-9 h-9 p-0.5 border border-gray-200 rounded-lg cursor-pointer shrink-0 bg-white"
                       title="Choose Color Hex"
                     />
                     <button
                       type="button"
                       onClick={handleAddColorOption}
-                      className="bg-black text-white px-3 py-2 text-xs font-bold uppercase tracking-wider hover:bg-gray-800 cursor-pointer"
+                      className="bg-black text-white px-3.5 py-2 text-xs font-bold uppercase tracking-wider hover:bg-gray-800 cursor-pointer rounded-xl"
                     >
                       Add Colour
                     </button>
@@ -1200,13 +1200,13 @@ export default function AdminProductCatalog({
                   <button
                     type="button"
                     onClick={() => setShowProductModal(false)}
-                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-600 hover:text-black cursor-pointer"
+                    className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-600 hover:text-black cursor-pointer rounded-xl hover:bg-gray-100 transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="bg-black text-white px-6 py-2.5 text-xs font-extrabold uppercase tracking-wider hover:bg-gray-800 transition-colors border border-black cursor-pointer"
+                    className="bg-black text-white px-6 py-2.5 text-xs font-extrabold uppercase tracking-wider hover:bg-gray-800 transition-colors border border-black cursor-pointer rounded-2xl shadow-xs"
                   >
                     {editingProduct ? 'Update Product' : 'Save New Product'}
                   </button>
