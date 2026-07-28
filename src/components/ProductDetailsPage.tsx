@@ -60,10 +60,6 @@ export default function ProductDetailsPage({ product, onClose, onEdit, editLabel
           <span>Back to Products</span>
         </button>
 
-        <span className="text-[10px] font-mono uppercase tracking-widest text-gray-400 font-extrabold hidden sm:inline">
-          Secure B2B Spec Sheet
-        </span>
-
         <div className="flex items-center gap-2.5">
           {onEdit && (
             <button

@@ -334,3 +334,31 @@ export const INITIAL_ORDERS: Order[] = [
     poNumber: 'PO-99554'
   }
 ];
+
+export const INITIAL_PORTALS = [
+  {
+    id: 'portal-101',
+    companyId: 'co-1',
+    companyName: 'Acme Corporate Solutions',
+    name: 'Staff Uniforms Q3/Q4',
+    description: 'Select your preferred polo shirt size and embroidery position for the upcoming corporate team onboarding.',
+    status: 'Active' as const,
+    productIds: ['prod-polo', 'prod-id', 'prod-lanyard'],
+    createdAt: '2026-07-15T10:00:00.000Z',
+    updatedAt: '2026-07-20T11:30:00.000Z',
+    shareToken: 'portal-acme-staff-2026'
+  },
+  {
+    id: 'portal-102',
+    companyId: 'co-1',
+    companyName: 'Acme Corporate Solutions',
+    name: 'Executive & Resale Merchandise',
+    description: 'B2B order link for sales executives ordering client welcome kits and engraved pens.',
+    status: 'Active' as const,
+    productIds: ['prod-tumbler', 'prod-pen', 'prod-mug'],
+    createdAt: '2026-07-18T14:20:00.000Z',
+    updatedAt: '2026-07-22T09:15:00.000Z',
+    shareToken: 'portal-acme-exec-2026'
+  }
+];
+

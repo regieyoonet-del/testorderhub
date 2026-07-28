@@ -15,7 +15,10 @@ import {
   Building2,
   LogOut,
   ShieldAlert,
-  Sliders
+  Sliders,
+  Layers,
+  FileText,
+  Globe
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -29,6 +32,9 @@ interface HeaderProps {
   userRole: 'admin' | 'client';
   onLogout: () => void;
   systemSettings: SystemSettings;
+  isSheetsConnected?: boolean;
+  isSyncingSheets?: boolean;
+  onSyncSheets?: () => void;
 }
 
 export default function Header({
@@ -41,125 +47,140 @@ export default function Header({
   onCartToggle,
   userRole,
   onLogout,
-  systemSettings
+  systemSettings,
+  isSheetsConnected,
+  isSyncingSheets,
+  onSyncSheets
 }: HeaderProps) {
   return (
     <header className="bg-white border-b-2 border-black sticky top-0 z-40">
       {/* Main Branding Bar */}
-      <div className="max-w-7xl mx-auto px-4 py-4 sm:py-5 sm:px-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-4 py-4 sm:py-5 sm:px-8 flex items-center justify-between gap-4">
         {/* Brand Typography */}
-        <div className="flex items-center space-x-3 select-none">
-          {systemSettings?.logoUrl ? (
-            <img
-              src={systemSettings.logoUrl}
-              alt={systemSettings.hubName}
-              className="w-12 h-12 rounded-xl object-cover border border-black shadow-xs shrink-0"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <div className="bg-black text-white p-2 border border-black flex items-center justify-center font-bold font-mono text-xl tracking-tight leading-none rounded-xl shrink-0">
-              {systemSettings?.shortHubName || 'ARH'}
-            </div>
-          )}
-          <div>
-            <h1 className="text-2xl font-extrabold tracking-tighter uppercase text-black leading-none">
-              {systemSettings?.hubName || 'ARH Print Hub'}
-            </h1>
-          </div>
-        </div>
-
-        {/* Company Logo & Cart Action */}
-        <div className="flex items-center gap-3 w-full md:w-auto justify-end">
-          {userRole === 'admin' ? null : (
+        <div className="flex items-center space-x-3 select-none min-w-0">
+          {userRole === 'client' && selectedCompany ? (
             <>
-              {/* Company Logo beside Cart */}
               {selectedCompany.logoUrl ? (
-                <div
-                  className="w-10 h-10 rounded-xl border border-gray-300 overflow-hidden bg-white shrink-0 flex items-center justify-center shadow-xs"
-                  title={selectedCompany.name}
-                  id="client-header-logo"
-                >
-                  <img
-                    src={selectedCompany.logoUrl}
-                    alt={selectedCompany.name}
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
+                <img
+                  src={selectedCompany.logoUrl}
+                  alt={selectedCompany.name}
+                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl object-cover border border-black shadow-xs shrink-0"
+                  referrerPolicy="no-referrer"
+                />
               ) : (
-                <div
-                  className="w-10 h-10 rounded-xl bg-black text-white font-mono font-extrabold flex items-center justify-center shrink-0 text-xs uppercase shadow-xs border border-black"
-                  title={selectedCompany.name}
-                  id="client-header-logo-initials"
-                >
+                <div className="bg-black text-white w-10 h-10 sm:w-12 sm:h-12 border border-black flex items-center justify-center font-bold font-mono text-base sm:text-lg tracking-tight leading-none rounded-xl shrink-0 uppercase">
                   {selectedCompany.name ? selectedCompany.name.slice(0, 2) : 'CO'}
                 </div>
               )}
-
-              <button
-                onClick={onCartToggle}
-                className="relative border border-black bg-white p-2.5 text-black hover:bg-black hover:text-white transition-all cursor-pointer flex items-center justify-center shrink-0 rounded-xl"
-                aria-label="Toggle Shopping Cart"
-                id="cart-toggle-btn"
-              >
-                <ShoppingCart className="w-5 h-5" />
-                {cartCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 bg-black text-white text-[9px] font-mono border border-white font-extrabold w-5 h-5 flex items-center justify-center rounded-full shadow-md">
-                    {cartCount}
-                  </span>
-                )}
-              </button>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-extrabold tracking-tighter uppercase text-black leading-none truncate">
+                  {selectedCompany.name}
+                </h1>
+              </div>
             </>
+          ) : (
+            <>
+              {systemSettings?.logoUrl ? (
+                <img
+                  src={systemSettings.logoUrl}
+                  alt={systemSettings.hubName}
+                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl object-cover border border-black shadow-xs shrink-0"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="bg-black text-white p-2 w-10 h-10 sm:w-12 sm:h-12 border border-black flex items-center justify-center font-bold font-mono text-lg sm:text-xl tracking-tight leading-none rounded-xl shrink-0">
+                  {systemSettings?.shortHubName || 'ARH'}
+                </div>
+              )}
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-extrabold tracking-tighter uppercase text-black leading-none truncate">
+                  {systemSettings?.hubName || 'ARH Print Hub'}
+                </h1>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {userRole === 'admin' && isSheetsConnected && onSyncSheets && (
+            <button
+              onClick={onSyncSheets}
+              disabled={isSyncingSheets}
+              className="border border-black bg-emerald-50 text-emerald-900 hover:bg-emerald-100 px-3 py-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 rounded-xl shrink-0 disabled:opacity-50"
+              title="Fetch fresh data from Google Sheets"
+              id="sync-sheets-btn"
+            >
+              <Repeat className={`w-3.5 h-3.5 ${isSyncingSheets ? 'animate-spin text-emerald-700' : ''}`} />
+              <span className="hidden sm:inline">{isSyncingSheets ? 'Syncing...' : 'Sync Sheets'}</span>
+            </button>
+          )}
+          {userRole === 'admin' ? null : (
+            <button
+              onClick={onCartToggle}
+              className="relative border border-black bg-white p-2.5 text-black hover:bg-black hover:text-white transition-all cursor-pointer flex items-center justify-center shrink-0 rounded-xl"
+              aria-label="Toggle Shopping Cart"
+              id="cart-toggle-btn"
+            >
+              <ShoppingCart className="w-5 h-5" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-black text-white text-[9px] font-mono border border-white font-extrabold w-5 h-5 flex items-center justify-center rounded-full shadow-md">
+                  {cartCount}
+                </span>
+              )}
+            </button>
           )}
         </div>
       </div>
 
       {/* Tabs Navigation */}
-      <div className="border-t border-gray-100 max-w-7xl mx-auto px-4 sm:px-8">
-        <nav className="flex overflow-x-auto space-x-1 custom-scrollbar pb-1.5 pt-1">
-          {/* Admin Tab is injected first for admin users */}
-          {userRole === 'admin' && (
-            <button
-              onClick={() => setActiveTab('admin')}
-              className={`flex items-center space-x-2 py-3 px-4 font-sans text-xs uppercase tracking-wider font-extrabold transition-all border-b-2 whitespace-nowrap focus:outline-none cursor-pointer ${
-                activeTab === 'admin'
-                  ? 'border-black text-black'
-                  : 'border-transparent text-gray-400 hover:text-black hover:border-gray-200'
-              }`}
-              id="tab-btn-admin"
-            >
-              <Sliders className="w-3.5 h-3.5 text-black" />
-              <span>Admin Center</span>
-            </button>
-          )}
-
-          {[
-            ...(userRole !== 'admin' ? [
-              { id: 'catalog', label: 'Order Catalog', icon: LayoutGrid },
-              { id: 'history', label: 'Order History', icon: History }
-            ] : []),
-            ...(userRole === 'admin' ? [{ id: 'sync', label: 'Google Sheets Sync', icon: Settings }] : [])
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
+      {(userRole === 'client' || (userRole === 'admin' && activeTab !== 'admin' && activeTab !== 'sync')) && (
+        <div className="border-t border-gray-100 max-w-7xl mx-auto px-4 sm:px-8">
+          <nav className="flex overflow-x-auto space-x-1 custom-scrollbar pb-1.5 pt-1">
+            {userRole === 'admin' && (
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center space-x-2 py-3 px-4 font-sans text-xs uppercase tracking-wider font-bold transition-all border-b-2 whitespace-nowrap focus:outline-none cursor-pointer ${
-                  isActive
+                onClick={() => setActiveTab('admin')}
+                className={`flex items-center space-x-2 py-3 px-4 font-sans text-xs uppercase tracking-wider font-extrabold transition-all border-b-2 whitespace-nowrap focus:outline-none cursor-pointer ${
+                  activeTab === 'admin'
                     ? 'border-black text-black'
                     : 'border-transparent text-gray-400 hover:text-black hover:border-gray-200'
                 }`}
-                id={`tab-btn-${tab.id}`}
+                id="tab-btn-admin"
               >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{tab.label}</span>
+                <Sliders className="w-3.5 h-3.5 text-black" />
+                <span>Admin Dashboard</span>
               </button>
-            );
-          })}
-        </nav>
-      </div>
+            )}
+
+            {[
+              { id: 'catalog', label: 'My Catalog', icon: LayoutGrid },
+              { id: 'browse', label: 'ARH Products', icon: Layers },
+              { id: 'portals', label: 'Order Portals', icon: Globe },
+              { id: 'history', label: 'Order History', icon: History },
+              { id: 'quote-history', label: 'Quote Requests', icon: FileText },
+              { id: 'settings', label: 'Settings', icon: Settings }
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center space-x-2 py-3 px-4 font-sans text-xs uppercase tracking-wider font-bold transition-all border-b-2 whitespace-nowrap focus:outline-none cursor-pointer ${
+                    isActive
+                      ? 'border-black text-black'
+                      : 'border-transparent text-gray-400 hover:text-black hover:border-gray-200'
+                  }`}
+                  id={`tab-btn-${tab.id}`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+      )}
     </header>
   );
 }

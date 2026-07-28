@@ -3,14 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Order, CartItem } from '../types';
-import { Calendar, RefreshCw, ChevronDown, ChevronUp, Clock, Package, CheckCircle2, Truck } from 'lucide-react';
+import { Calendar, RefreshCw, ChevronDown, ChevronUp, Clock, Package, CheckCircle2, Truck, ArrowRight, Store, Layers } from 'lucide-react';
 
 interface OrderHistoryProps {
   orders: Order[];
   selectedCompanyName: string;
   onReorderPastOrder: (order: Order) => void;
+  onUpdateOrderStatus?: (orderId: string, status: Order['status']) => void;
   appsScriptUrl?: string;
 }
 
@@ -18,15 +19,37 @@ export default function OrderHistory({
   orders,
   selectedCompanyName,
   onReorderPastOrder,
+  onUpdateOrderStatus,
   appsScriptUrl
 }: OrderHistoryProps) {
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [reorderedId, setReorderedId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'all' | 'portal' | 'direct'>('all');
 
   // Filter orders to only show the ones matching the selected active company
-  const companyOrders = orders.filter(
-    o => o.companyName.toLowerCase() === selectedCompanyName.toLowerCase()
-  );
+  const companyOrders = useMemo(() => {
+    return orders.filter(
+      o => o.companyName.toLowerCase() === selectedCompanyName.toLowerCase()
+    );
+  }, [orders, selectedCompanyName]);
+
+  const portalOrders = useMemo(() => {
+    return companyOrders.filter(
+      o => o.id.startsWith('ord-portal-') || o.status === 'Pending Approval' || Boolean(o.portalId) || Boolean(o.portalName)
+    );
+  }, [companyOrders]);
+
+  const directOrders = useMemo(() => {
+    return companyOrders.filter(
+      o => !(o.id.startsWith('ord-portal-') || o.status === 'Pending Approval' || Boolean(o.portalId) || Boolean(o.portalName))
+    );
+  }, [companyOrders]);
+
+  const displayedOrders = useMemo(() => {
+    if (activeTab === 'portal') return portalOrders;
+    if (activeTab === 'direct') return directOrders;
+    return companyOrders;
+  }, [activeTab, companyOrders, portalOrders, directOrders]);
 
   const toggleExpand = (id: string) => {
     setExpandedOrderId(prev => (prev === id ? null : id));
@@ -43,10 +66,16 @@ export default function OrderHistory({
   const getStatusBadge = (status: Order['status']) => {
     const commonStyle = "text-[10px] font-mono uppercase px-2 py-0.5 border font-bold flex items-center gap-1 shrink-0";
     switch (status) {
+      case 'Pending Approval':
+        return (
+          <span className={`${commonStyle} bg-amber-100 text-amber-900 border-amber-300 animate-pulse`}>
+            <Clock className="w-3 h-3 text-amber-600" /> Pending Review (Portal Order)
+          </span>
+        );
       case 'Pending':
         return (
-          <span className={`${commonStyle} bg-white text-gray-500 border-gray-300`}>
-            <Clock className="w-3 h-3 text-gray-400" /> Pending Approval
+          <span className={`${commonStyle} bg-gray-100 text-gray-800 border-gray-300`}>
+            <Clock className="w-3 h-3 text-gray-500" /> Submitted to Admin
           </span>
         );
       case 'Approved':
@@ -80,31 +109,75 @@ export default function OrderHistory({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-black pb-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b border-black pb-4">
         <div>
           <h2 className="text-xl font-bold uppercase tracking-tight text-black">Order History</h2>
-          <p className="text-xs text-gray-500 font-mono">
-            Past repeating transactions for <span className="font-bold underline">{selectedCompanyName}</span>
-          </p>
+          <p className="text-xs text-gray-500 font-mono mt-0.5">{selectedCompanyName} Records</p>
         </div>
-        {appsScriptUrl && (
-          <span className="text-[10px] font-mono text-gray-500 self-start sm:self-auto bg-gray-100 px-2 py-1 border border-gray-200">
-            Synced with Google Sheets API
-          </span>
-        )}
+
+        {/* Source Filter Tabs Switcher */}
+        <div className="flex flex-wrap items-center gap-1.5 bg-gray-100 p-1 border border-gray-200 rounded-xl shrink-0">
+          <button
+            type="button"
+            onClick={() => setActiveTab('all')}
+            className={`px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === 'all'
+                ? 'bg-black text-white shadow-xs'
+                : 'text-gray-600 hover:text-black'
+            }`}
+            id="history-tab-all"
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>All ({companyOrders.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('portal')}
+            className={`px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === 'portal'
+                ? 'bg-black text-white shadow-xs'
+                : 'text-gray-600 hover:text-black'
+            }`}
+            id="history-tab-portal"
+          >
+            <Store className="w-3.5 h-3.5" />
+            <span>Order Portals ({portalOrders.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('direct')}
+            className={`px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === 'direct'
+                ? 'bg-black text-white shadow-xs'
+                : 'text-gray-600 hover:text-black'
+            }`}
+            id="history-tab-direct"
+          >
+            <Package className="w-3.5 h-3.5" />
+            <span>Direct Catalog ({directOrders.length})</span>
+          </button>
+        </div>
       </div>
 
-      {companyOrders.length === 0 ? (
-        <div className="border border-dashed border-gray-300 p-12 text-center space-y-3">
+      {displayedOrders.length === 0 ? (
+        <div className="border border-dashed border-gray-300 p-12 text-center space-y-3 bg-gray-50/50 rounded-2xl">
           <Package className="w-8 h-8 text-gray-300 mx-auto" />
-          <h3 className="font-bold text-sm text-black uppercase tracking-tight">No Order Records Found</h3>
-          <p className="text-xs text-gray-500 max-w-sm mx-auto">
-            There are no past orders logged under {selectedCompanyName} yet. Try placing a new order from the catalog!
+          <h3 className="font-bold text-sm text-black uppercase tracking-tight">
+            {activeTab === 'portal' ? 'No Order Portal Requests' : activeTab === 'direct' ? 'No Direct Catalog Orders' : 'No Order Records Found'}
+          </h3>
+          <p className="text-xs text-gray-500 max-w-sm mx-auto font-sans">
+            {activeTab === 'portal'
+              ? `There are no order requests submitted via public storefront portal links for ${selectedCompanyName} yet.`
+              : activeTab === 'direct'
+              ? `No direct catalog orders have been placed under ${selectedCompanyName}.`
+              : `There are no past orders logged under ${selectedCompanyName} yet.`}
           </p>
         </div>
       ) : (
         <div className="space-y-4">
-          {companyOrders.map((order) => {
+          {displayedOrders.map((order) => {
             const isExpanded = expandedOrderId === order.id;
             const formattedDate = new Date(order.createdAt).toLocaleDateString('en-US', {
               year: 'numeric',
@@ -113,6 +186,8 @@ export default function OrderHistory({
               hour: '2-digit',
               minute: '2-digit'
             });
+
+            const isPortal = order.id.startsWith('ord-portal-') || order.status === 'Pending Approval' || Boolean(order.portalId) || Boolean(order.portalName);
 
             return (
               <div
@@ -132,6 +207,17 @@ export default function OrderHistory({
                           PO: {order.poNumber}
                         </span>
                       )}
+                      {order.portalName ? (
+                        <span className="text-[9px] font-mono bg-amber-50 text-amber-900 border border-amber-200 px-2 py-0.5 font-bold uppercase flex items-center gap-1">
+                          <Store className="w-3 h-3 text-amber-600" />
+                          Portal: {order.portalName}
+                        </span>
+                      ) : isPortal ? (
+                        <span className="text-[9px] font-mono bg-amber-50 text-amber-900 border border-amber-200 px-2 py-0.5 font-bold uppercase flex items-center gap-1">
+                          <Store className="w-3 h-3 text-amber-600" />
+                          Order Portal Link
+                        </span>
+                      ) : null}
                       {getStatusBadge(order.status)}
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
@@ -153,15 +239,6 @@ export default function OrderHistory({
 
                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                       <button
-                        onClick={() => handleReorderClick(order)}
-                        className="bg-black text-white px-3.5 py-2 text-[10px] uppercase font-bold tracking-wider hover:bg-white hover:text-black border border-black transition-colors flex items-center gap-1.5 cursor-pointer"
-                        id={`reorder-past-btn-${order.id}`}
-                      >
-                        <RefreshCw className={`w-3 h-3 ${reorderedId === order.id ? 'animate-spin' : ''}`} />
-                        <span>{reorderedId === order.id ? 'Loading...' : 'Fast Reorder'}</span>
-                      </button>
-
-                      <button
                         onClick={() => toggleExpand(order.id)}
                         className="border border-gray-200 p-2 text-gray-500 hover:text-black hover:border-black transition-colors"
                         aria-label="Expand details"
@@ -182,7 +259,18 @@ export default function OrderHistory({
                         {order.items.map((item, idx) => (
                           <div key={idx} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div className="flex items-start space-x-3">
-                              <span className="text-xl p-1 bg-white border border-gray-200 w-8 h-8 flex items-center justify-center select-none">{item.imageUrl || '📦'}</span>
+                              {item.imageUrl && item.imageUrl.startsWith('http') ? (
+                                <img
+                                  src={item.imageUrl}
+                                  alt={item.productName}
+                                  className="w-10 h-10 object-cover bg-white border border-gray-200 shrink-0"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <span className="text-xl p-1 bg-white border border-gray-200 w-10 h-10 flex items-center justify-center select-none shrink-0">
+                                  {item.imageUrl && item.imageUrl.length <= 4 ? item.imageUrl : '📦'}
+                                </span>
+                              )}
                               <div>
                                 <span className="font-bold text-xs text-black block uppercase tracking-tight">{item.productName}</span>
                                 <div className="flex flex-wrap gap-x-2.5 gap-y-0.5 text-[10px] text-gray-500 font-mono mt-0.5">
@@ -202,6 +290,27 @@ export default function OrderHistory({
                         ))}
                       </div>
                     </div>
+
+                    {order.status === 'Pending Approval' && onUpdateOrderStatus && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 font-sans">
+                        <div className="space-y-0.5">
+                          <span className="font-extrabold text-xs text-amber-900 uppercase block">
+                            ⏳ Portal Request Pending Company Review
+                          </span>
+                          <p className="text-xs text-amber-800">
+                            This order was submitted via portal link. Review items and submit to admin for official ordering.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => onUpdateOrderStatus(order.id, 'Pending')}
+                          className="bg-black text-white hover:bg-neutral-800 font-extrabold text-xs uppercase px-4 py-2.5 rounded-lg border border-black shadow-xs flex items-center gap-2 cursor-pointer shrink-0"
+                          id={`history-submit-admin-${order.id}`}
+                        >
+                          <span>Submit Order to Admin</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 text-xs text-gray-600">
                       <div>

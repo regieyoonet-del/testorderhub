@@ -5,17 +5,23 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Product, CompanyProfile, Order, CartItem, AppsScriptConfig, SystemSettings } from './types';
-import { INITIAL_PRODUCTS, INITIAL_COMPANIES, INITIAL_ORDERS } from './data/mockData';
+import { Product, CompanyProfile, Order, CartItem, AppsScriptConfig, SystemSettings, CatalogProduct, QuoteEnquiry, OrderPortal } from './types';
+import { INITIAL_PRODUCTS, INITIAL_COMPANIES, INITIAL_ORDERS, INITIAL_PORTALS } from './data/mockData';
+import { INITIAL_CATALOG_PRODUCTS, INITIAL_QUOTE_ENQUIRIES, sanitizeCatalogProduct } from './data/initialCatalog';
+import { DEFAULT_QUOTE_NOTES } from './constants/quoteDefaults';
 import { sheetsService } from './lib/sheetsService';
-import { emailService } from './lib/emailService';
 import Header from './components/Header';
 import ProductCatalog from './components/ProductCatalog';
+import BrowseProducts from './components/BrowseProducts';
 import OrderHistory from './components/OrderHistory';
+import QuoteRequestHistory from './components/QuoteRequestHistory';
+import CustomerSettings from './components/CustomerSettings';
 import SettingsPanel from './components/SettingsPanel';
 import Cart from './components/Cart';
 import LoginScreen from './components/LoginScreen';
 import AdminDashboard from './components/AdminDashboard';
+import OrderPortals from './components/OrderPortals';
+import PublicOrderPortal from './components/PublicOrderPortal';
 import { Check, AlertCircle, ShoppingBag, ArrowRight, Printer, RefreshCw, LogOut } from 'lucide-react';
 
 function getThemeStyles(colorHex: string) {
@@ -166,10 +172,39 @@ export const sanitizeCompany = (co: CompanyProfile): CompanyProfile => {
     contactPhone,
     deliveryAddress,
     logoUrl,
-    enabledProductIds: co.enabledProductIds && co.enabledProductIds.length > 0
+    enabledProductIds: co.enabledProductIds !== undefined
       ? co.enabledProductIds
       : (initMatch?.enabledProductIds || [])
   };
+};
+
+export const sanitizeMasterProducts = (prods: Product[], comps: CompanyProfile[]): Product[] => {
+  const customProductIds = new Set<string>();
+  comps.forEach(c => {
+    if (Array.isArray(c.customProducts)) {
+      c.customProducts.forEach(cp => {
+        if (cp && cp.id) customProductIds.add(cp.id);
+      });
+    }
+  });
+
+  const map = new Map<string, Product>();
+  prods.forEach(p => {
+    if (p && p.id && !customProductIds.has(p.id)) {
+      map.set(p.id, p);
+    }
+  });
+  return Array.from(map.values());
+};
+
+export const sanitizeProducts = (prods: Product[]): Product[] => {
+  const map = new Map<string, Product>();
+  prods.forEach(p => {
+    if (p && p.id) {
+      map.set(p.id, p);
+    }
+  });
+  return Array.from(map.values());
 };
 
 export default function App() {
@@ -177,21 +212,40 @@ export default function App() {
   // Persistent States with LocalStorage Cache
   // ----------------------------------------------------
   
-  const [products, setProducts] = useState<Product[]>(() => {
-    const cached = localStorage.getItem('rp_master_products');
-    return cached ? JSON.parse(cached) : INITIAL_PRODUCTS;
-  });
-  
   const [companies, setCompanies] = useState<CompanyProfile[]>(() => {
     const cached = localStorage.getItem('rp_companies');
     const loaded: CompanyProfile[] = cached ? JSON.parse(cached) : INITIAL_COMPANIES;
     return loaded.map(sanitizeCompany);
   });
 
+  const [products, setProducts] = useState<Product[]>(() => {
+    const cached = localStorage.getItem('rp_master_products');
+    const loaded: Product[] = cached ? JSON.parse(cached) : INITIAL_PRODUCTS;
+    return sanitizeMasterProducts(loaded, companies);
+  });
+
   const [orders, setOrders] = useState<Order[]>(() => {
     const cached = localStorage.getItem('rp_orders');
     return cached ? JSON.parse(cached) : INITIAL_ORDERS;
   });
+
+  const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>(() => {
+    const cached = localStorage.getItem('rp_catalog_products');
+    const loaded: CatalogProduct[] = cached ? JSON.parse(cached) : INITIAL_CATALOG_PRODUCTS;
+    return loaded.map(sanitizeCatalogProduct);
+  });
+
+  const [quoteEnquiries, setQuoteEnquiries] = useState<QuoteEnquiry[]>(() => {
+    const cached = localStorage.getItem('rp_quote_enquiries');
+    return cached ? JSON.parse(cached) : INITIAL_QUOTE_ENQUIRIES;
+  });
+
+  const [orderPortals, setOrderPortals] = useState<OrderPortal[]>(() => {
+    const cached = localStorage.getItem('rp_order_portals');
+    return cached ? JSON.parse(cached) : INITIAL_PORTALS;
+  });
+
+  const [activePublicPortal, setActivePublicPortal] = useState<OrderPortal | null>(null);
 
   const [appsScriptConfig, setAppsScriptConfig] = useState<AppsScriptConfig>(() => {
     const cached = localStorage.getItem('rp_apps_script_config');
@@ -208,7 +262,9 @@ export default function App() {
       currencySymbol: parsed.currencySymbol || 'Php',
       colorTheme: parsed.colorTheme || 'classic_noir',
       adminEmail: (parsed.adminEmail && parsed.adminEmail.trim() !== '') ? parsed.adminEmail : 'regie.yoonet@gmail.com',
-      logoUrl: parsed.logoUrl || ''
+      logoUrl: parsed.logoUrl || '',
+      adminUsername: parsed.adminUsername || localStorage.getItem('rp_admin_username') || 'admin',
+      adminPasscode: parsed.adminPasscode || localStorage.getItem('rp_admin_passcode') || 'admin123'
     };
   });
 
@@ -235,7 +291,7 @@ export default function App() {
 
   // UI Flow States
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('catalog');
+  const [activeTab, setActiveTab] = useState('browse');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Custom Modals
@@ -267,6 +323,33 @@ export default function App() {
   }, [orders]);
 
   useEffect(() => {
+    localStorage.setItem('rp_catalog_products', JSON.stringify(catalogProducts));
+  }, [catalogProducts]);
+
+  useEffect(() => {
+    localStorage.setItem('rp_quote_enquiries', JSON.stringify(quoteEnquiries));
+  }, [quoteEnquiries]);
+
+  useEffect(() => {
+    localStorage.setItem('rp_order_portals', JSON.stringify(orderPortals));
+  }, [orderPortals]);
+
+  // Sync shareable link ?portal=...
+  useEffect(() => {
+    const checkUrlPortal = () => {
+      const params = new URLSearchParams(window.location.search);
+      const portalParam = params.get('portal');
+      if (portalParam) {
+        const match = orderPortals.find(p => p.shareToken === portalParam || p.id === portalParam);
+        if (match) {
+          setActivePublicPortal(match);
+        }
+      }
+    };
+    checkUrlPortal();
+  }, [orderPortals]);
+
+  useEffect(() => {
     if (loggedInUser) {
       localStorage.setItem('rp_logged_in_user', JSON.stringify(loggedInUser));
     } else {
@@ -293,12 +376,15 @@ export default function App() {
     localStorage.setItem('rp_apps_script_config', JSON.stringify(appsScriptConfig));
   }, [appsScriptConfig]);
 
-  // Pull live data from Sheets on load if connected
-  useEffect(() => {
-    const syncWithSheets = async () => {
-      if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
-        const url = appsScriptConfig.webAppUrl;
-        
+  const [isSyncingSheets, setIsSyncingSheets] = useState(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
+
+  const syncWithSheets = async () => {
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      const url = appsScriptConfig.webAppUrl;
+      setIsSyncingSheets(true);
+      
+      try {
         // 1. Fetch products
         const fetchedProducts = await sheetsService.fetchProducts(url);
         if (fetchedProducts !== null) {
@@ -307,37 +393,39 @@ export default function App() {
 
         // 2. Fetch companies
         const fetchedCompanies = await sheetsService.fetchCompanies(url);
-        if (fetchedCompanies !== null && fetchedCompanies.length > 0) {
+        if (fetchedCompanies !== null) {
           setCompanies(prevCompanies => {
-            const merged = [...prevCompanies];
-            fetchedCompanies.forEach(rawCo => {
-              const co = sanitizeCompany(rawCo);
-              const idx = merged.findIndex(c => c.id === co.id);
-              if (idx !== -1) {
-                const existing = merged[idx];
-                merged[idx] = sanitizeCompany({
-                  ...existing,
-                  ...co,
-                  name: (co.name && co.name.trim() !== '') ? co.name : existing.name,
-                  username: (co.username && co.username.trim() !== '') ? co.username : existing.username,
-                  passcode: (co.passcode && co.passcode.trim() !== '') ? co.passcode : existing.passcode,
-                  contactPerson: (co.contactPerson && co.contactPerson.trim() !== '') ? co.contactPerson : existing.contactPerson,
-                  contactEmail: (co.contactEmail && co.contactEmail.trim() !== '') ? co.contactEmail : existing.contactEmail,
-                  contactPhone: (co.contactPhone && co.contactPhone.trim() !== '') ? co.contactPhone : existing.contactPhone,
-                  deliveryAddress: (co.deliveryAddress && co.deliveryAddress.trim() !== '') ? co.deliveryAddress : existing.deliveryAddress,
-                  logoUrl: (co.logoUrl && co.logoUrl.trim() !== '') ? co.logoUrl : existing.logoUrl,
-                  customProducts: co.customProducts && co.customProducts.length > 0
-                    ? co.customProducts
-                    : existing.customProducts,
-                  enabledProductIds: co.enabledProductIds !== undefined && co.enabledProductIds.length > 0
-                    ? co.enabledProductIds
-                    : existing.enabledProductIds
-                });
+            const map = new Map<string, CompanyProfile>();
+            prevCompanies.forEach(co => map.set(co.id, co));
+
+            fetchedCompanies.forEach(fetchedCo => {
+              const existingLocal = map.get(fetchedCo.id);
+              if (existingLocal) {
+                const mergedCo: CompanyProfile = {
+                  ...existingLocal,
+                  name: (fetchedCo.name && fetchedCo.name.trim() !== '') ? fetchedCo.name : existingLocal.name,
+                  username: (fetchedCo.username && fetchedCo.username.trim() !== '') ? fetchedCo.username.trim().toLowerCase() : existingLocal.username,
+                  passcode: (fetchedCo.passcode && fetchedCo.passcode.trim() !== '') ? fetchedCo.passcode : existingLocal.passcode,
+                  contactPerson: (fetchedCo.contactPerson && fetchedCo.contactPerson.trim() !== '') ? fetchedCo.contactPerson : existingLocal.contactPerson,
+                  contactEmail: (fetchedCo.contactEmail && fetchedCo.contactEmail.trim() !== '') ? fetchedCo.contactEmail : existingLocal.contactEmail,
+                  contactPhone: (fetchedCo.contactPhone && fetchedCo.contactPhone.trim() !== '') ? fetchedCo.contactPhone : existingLocal.contactPhone,
+                  deliveryAddress: (fetchedCo.deliveryAddress && fetchedCo.deliveryAddress.trim() !== '') ? fetchedCo.deliveryAddress : existingLocal.deliveryAddress,
+                  logoUrl: (fetchedCo.logoUrl !== undefined && fetchedCo.logoUrl !== null && fetchedCo.logoUrl.trim() !== '') ? fetchedCo.logoUrl : existingLocal.logoUrl,
+                  poRequired: fetchedCo.poRequired !== undefined ? fetchedCo.poRequired : existingLocal.poRequired,
+                  enabledProductIds: (fetchedCo.enabledProductIds && fetchedCo.enabledProductIds.length > 0)
+                    ? fetchedCo.enabledProductIds
+                    : existingLocal.enabledProductIds,
+                  customProducts: (fetchedCo.customProducts && fetchedCo.customProducts.length > 0)
+                    ? fetchedCo.customProducts
+                    : existingLocal.customProducts
+                };
+                map.set(fetchedCo.id, sanitizeCompany(mergedCo));
               } else {
-                merged.push(co);
+                map.set(fetchedCo.id, sanitizeCompany(fetchedCo));
               }
             });
-            return merged.map(sanitizeCompany);
+
+            return Array.from(map.values()).map(sanitizeCompany);
           });
         }
 
@@ -350,6 +438,9 @@ export default function App() {
         // 4. Fetch admin settings
         const fetchedSettings = await sheetsService.fetchAdminSettings(url);
         if (fetchedSettings) {
+          const currentAdminUser = fetchedSettings.adminUsername || localStorage.getItem('rp_admin_username') || systemSettings.adminUsername || 'admin';
+          const currentAdminPass = fetchedSettings.adminPasscode || localStorage.getItem('rp_admin_passcode') || systemSettings.adminPasscode || 'admin123';
+
           setSystemSettings({
             hubName: fetchedSettings.hubName,
             shortHubName: fetchedSettings.shortHubName,
@@ -357,17 +448,51 @@ export default function App() {
             currencySymbol: fetchedSettings.currencySymbol,
             colorTheme: fetchedSettings.colorTheme || 'classic_noir',
             adminEmail: fetchedSettings.adminEmail || '',
-            logoUrl: fetchedSettings.logoUrl || ''
+            logoUrl: fetchedSettings.logoUrl || '',
+            adminUsername: currentAdminUser,
+            adminPasscode: currentAdminPass
           });
-          if (fetchedSettings.adminUsername) {
-            localStorage.setItem('rp_admin_username', fetchedSettings.adminUsername);
-          }
-          if (fetchedSettings.adminPasscode) {
-            localStorage.setItem('rp_admin_passcode', fetchedSettings.adminPasscode);
-          }
+          localStorage.setItem('rp_admin_username', currentAdminUser);
+          localStorage.setItem('rp_admin_passcode', currentAdminPass);
         }
+
+        // 5. Fetch quote enquiries
+        const fetchedQuotes = await sheetsService.fetchQuoteEnquiries(url);
+        if (fetchedQuotes !== null) {
+          setQuoteEnquiries(fetchedQuotes.map(q => ({
+            ...q,
+            quoteNotes: (q.quoteNotes && q.quoteNotes.trim() !== '') ? q.quoteNotes : DEFAULT_QUOTE_NOTES
+          })));
+        }
+
+        // 6. Fetch catalog products
+        const fetchedCatalogProducts = await sheetsService.fetchCatalogProducts(url);
+        if (fetchedCatalogProducts !== null) {
+          setCatalogProducts(fetchedCatalogProducts.map(sanitizeCatalogProduct));
+        }
+
+        // 7. Fetch order portals
+        const fetchedPortals = await sheetsService.fetchPortals(url);
+        if (fetchedPortals !== null) {
+          setOrderPortals(prevPortals => {
+            const map = new Map<string, OrderPortal>();
+            prevPortals.forEach(p => map.set(p.id, p));
+            fetchedPortals.forEach(p => map.set(p.id, p));
+            return Array.from(map.values());
+          });
+        }
+
+        setLastSyncedTime(new Date().toLocaleTimeString());
+      } catch (err) {
+        console.error('Error syncing with Google Sheets:', err);
+      } finally {
+        setIsSyncingSheets(false);
       }
-    };
+    }
+  };
+
+  // Pull live data from Sheets on load or config change
+  useEffect(() => {
     syncWithSheets();
   }, [appsScriptConfig.isConnected, appsScriptConfig.webAppUrl]);
 
@@ -471,55 +596,22 @@ export default function App() {
   };
 
   const handleUpdateOrders = async (newOrders: Order[]) => {
-    const appsScriptUrl = appsScriptConfig.webAppUrl?.trim() || undefined;
-
-    // 1. Sync deletions & trigger automated cancellation email (works for both online/offline)
+    // 1. Sync deletions (works for both online/offline)
     for (const oldOrd of orders) {
       const stillExists = newOrders.some(newOrd => newOrd.id === oldOrd.id);
       if (!stillExists) {
         if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
           await sheetsService.deleteOrder(appsScriptConfig.webAppUrl, oldOrd.id);
         }
-
-        // Trigger automated cancel/delete email to admin
-        const company = companies.find(c => c.name === oldOrd.companyName) || {
-          id: 'co-unknown',
-          name: oldOrd.companyName,
-          contactPerson: oldOrd.contactPerson || 'Representative',
-          contactEmail: oldOrd.contactEmail || '',
-          contactPhone: '',
-          deliveryAddress: oldOrd.deliveryAddress,
-          poRequired: false
-        };
-        await emailService.sendOrderCancelAdminEmail(oldOrd, company, systemSettings, appsScriptUrl);
       }
     }
 
-    // 2. Sync status changes & trigger automated emails (works for both online/offline)
+    // 2. Sync status changes (works for both online/offline)
     for (const newOrd of newOrders) {
       const oldOrd = orders.find(o => o.id === newOrd.id);
       if (oldOrd && oldOrd.status !== newOrd.status) {
         if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
           await sheetsService.updateOrderStatus(appsScriptConfig.webAppUrl, newOrd.id, newOrd.status);
-        }
-
-        // Trigger automated email notifications
-        const company = companies.find(c => c.name === newOrd.companyName) || {
-          id: 'co-unknown',
-          name: newOrd.companyName,
-          contactPerson: newOrd.contactPerson || 'Representative',
-          contactEmail: newOrd.contactEmail || '',
-          contactPhone: '',
-          deliveryAddress: newOrd.deliveryAddress,
-          poRequired: false
-        };
-
-        // Email to company about status change
-        await emailService.sendOrderStatusChangedEmail(newOrd, company, oldOrd.status, newOrd.status, systemSettings, appsScriptUrl);
-
-        // Email to admin if canceled
-        if (newOrd.status === 'Canceled') {
-          await emailService.sendOrderCancelAdminEmail(newOrd, company, systemSettings, appsScriptUrl);
         }
       }
     }
@@ -528,11 +620,27 @@ export default function App() {
   };
 
   const handleUpdateSystemSettings = (newSettings: SystemSettings) => {
-    setSystemSettings(newSettings);
+    const updatedSettings: SystemSettings = {
+      ...newSettings,
+      adminUsername: newSettings.adminUsername || localStorage.getItem('rp_admin_username') || 'admin',
+      adminPasscode: newSettings.adminPasscode || localStorage.getItem('rp_admin_passcode') || 'admin123'
+    };
+
+    setSystemSettings(updatedSettings);
+    if (updatedSettings.adminUsername) {
+      localStorage.setItem('rp_admin_username', updatedSettings.adminUsername);
+    }
+    if (updatedSettings.adminPasscode) {
+      localStorage.setItem('rp_admin_passcode', updatedSettings.adminPasscode);
+    }
+
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
-      const adminUsername = localStorage.getItem('rp_admin_username') || 'admin';
-      const adminPasscode = localStorage.getItem('rp_admin_passcode') || '1234';
-      sheetsService.saveAdminSettings(appsScriptConfig.webAppUrl, newSettings, adminUsername, adminPasscode);
+      sheetsService.saveAdminSettings(
+        appsScriptConfig.webAppUrl,
+        updatedSettings,
+        updatedSettings.adminUsername || 'admin',
+        updatedSettings.adminPasscode || 'admin123'
+      );
     }
   };
 
@@ -555,9 +663,21 @@ export default function App() {
         await sheetsService.saveOrder(url, ord);
       }
       // 4. Sync admin settings
-      const adminUsername = localStorage.getItem('rp_admin_username') || 'admin';
-      const adminPasscode = localStorage.getItem('rp_admin_passcode') || '1234';
+      const adminUsername = systemSettings.adminUsername || localStorage.getItem('rp_admin_username') || 'admin';
+      const adminPasscode = systemSettings.adminPasscode || localStorage.getItem('rp_admin_passcode') || 'admin123';
       await sheetsService.saveAdminSettings(url, systemSettings, adminUsername, adminPasscode);
+      // 5. Sync catalog products
+      for (const cp of catalogProducts) {
+        await sheetsService.saveCatalogProduct(url, cp);
+      }
+      // 6. Sync quote enquiries
+      for (const q of quoteEnquiries) {
+        await sheetsService.saveQuoteEnquiry(url, q);
+      }
+      // 7. Sync order portals
+      for (const portal of orderPortals) {
+        await sheetsService.savePortal(url, portal);
+      }
       return true;
     } catch (e) {
       console.error('Force sync failed:', e);
@@ -565,16 +685,114 @@ export default function App() {
     }
   };
 
+  // Catalog Product Management Handlers
+  const handleAddProductToCompanyCatalog = (newProduct: Product, companyIdentifier: string) => {
+    // 1. Update master products list
+    setProducts(prev => {
+      const exists = prev.some(p => p.id === newProduct.id);
+      if (exists) return prev;
+      return [newProduct, ...prev];
+    });
+
+    // 2. Find matching company by ID or name and add product to company catalog
+    setCompanies(prevCompanies => {
+      const targetIdx = prevCompanies.findIndex(
+        c => c.id === companyIdentifier || c.name.toLowerCase() === companyIdentifier.toLowerCase()
+      );
+
+      if (targetIdx > -1) {
+        const updated = [...prevCompanies];
+        const targetCo = updated[targetIdx];
+        const currentCustoms = targetCo.customProducts || [];
+        const updatedCustoms = [newProduct, ...currentCustoms.filter(p => p.id !== newProduct.id)];
+        const updatedCo = {
+          ...targetCo,
+          customProducts: updatedCustoms
+        };
+        updated[targetIdx] = updatedCo;
+
+        if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+          sheetsService.saveCompany(appsScriptConfig.webAppUrl, updatedCo);
+        }
+
+        return updated;
+      } else if (prevCompanies.length > 0) {
+        const updated = [...prevCompanies];
+        const targetCo = updated[0];
+        const currentCustoms = targetCo.customProducts || [];
+        const updatedCo = {
+          ...targetCo,
+          customProducts: [newProduct, ...currentCustoms.filter(p => p.id !== newProduct.id)]
+        };
+        updated[0] = updatedCo;
+
+        if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+          sheetsService.saveCompany(appsScriptConfig.webAppUrl, updatedCo);
+        }
+
+        return updated;
+      }
+      return prevCompanies;
+    });
+
+    // 3. Save new product to Google Sheets
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.saveProduct(appsScriptConfig.webAppUrl, newProduct);
+    }
+  };
+
+  const handleAddCatalogProduct = (product: CatalogProduct) => {
+    setCatalogProducts(prev => [product, ...prev]);
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.saveCatalogProduct(appsScriptConfig.webAppUrl, product);
+    }
+  };
+
+  const handleUpdateCatalogProduct = (product: CatalogProduct) => {
+    setCatalogProducts(prev => prev.map(p => p.id === product.id ? product : p));
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.saveCatalogProduct(appsScriptConfig.webAppUrl, product);
+    }
+  };
+
+  const handleDeleteCatalogProduct = (productId: string) => {
+    setCatalogProducts(prev => prev.filter(p => p.id !== productId));
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.deleteCatalogProduct(appsScriptConfig.webAppUrl, productId);
+    }
+  };
+
+  // Quote Enquiry Handlers
+  const handleAddQuoteEnquiry = (enquiry: QuoteEnquiry) => {
+    setQuoteEnquiries(prev => [enquiry, ...prev]);
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.saveQuoteEnquiry(appsScriptConfig.webAppUrl, enquiry);
+    }
+  };
+
+  const handleSaveQuoteEnquiry = (enquiry: QuoteEnquiry) => {
+    setQuoteEnquiries(prev => prev.map(q => q.id === enquiry.id ? enquiry : q));
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.saveQuoteEnquiry(appsScriptConfig.webAppUrl, enquiry);
+    }
+  };
+
+  const handleUpdateQuoteEnquiryStatus = (enquiryId: string, status: QuoteEnquiry['status']) => {
+    setQuoteEnquiries(prev => prev.map(q => q.id === enquiryId ? { ...q, status } : q));
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.updateQuoteEnquiryStatus(appsScriptConfig.webAppUrl, enquiryId, status);
+    }
+  };
+
+  const handleDeleteQuoteEnquiry = (enquiryId: string) => {
+    setQuoteEnquiries(prev => prev.filter(q => q.id !== enquiryId));
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.deleteQuoteEnquiry(appsScriptConfig.webAppUrl, enquiryId);
+    }
+  };
+
   const handleLogin = (role: 'admin' | 'client', companyId?: string) => {
     setLoggedInUser({ role, companyId });
-
-    if (role === 'client' && companyId) {
-      const company = companies.find(c => c.id === companyId);
-      if (company) {
-        const appsScriptUrl = appsScriptConfig.webAppUrl?.trim() || undefined;
-        emailService.sendNewDeviceLoginEmail(company, systemSettings, appsScriptUrl);
-      }
-    }
   };
 
   const handleLogout = () => {
@@ -756,13 +974,6 @@ export default function App() {
       await sheetsService.saveOrder(appsScriptConfig.webAppUrl, newOrder);
     }
 
-    // Send automated email notifications on successful order placement (to client and admin)
-    const appsScriptUrl = appsScriptConfig.webAppUrl?.trim() || undefined;
-    await Promise.all([
-      emailService.sendOrderPlacementClientEmail(newOrder, activeCompany, systemSettings, appsScriptUrl),
-      emailService.sendOrderPlacementAdminEmail(newOrder, activeCompany, systemSettings, appsScriptUrl)
-    ]);
-
     setOrders(prev => [newOrder, ...prev]);
     // Clear only checked items from cart, keep unchecked items
     setCart(prev => prev.filter(item => !itemsToProcess.some(processed => processed.id === item.id)));
@@ -772,12 +983,157 @@ export default function App() {
   };
 
   // ----------------------------------------------------
+  // Order Portals Handlers
+  // ----------------------------------------------------
+  const handleCreatePortal = (newPortalData: Omit<OrderPortal, 'id' | 'createdAt' | 'updatedAt' | 'shareToken'>) => {
+    const now = new Date().toISOString();
+    const token = `portal-${newPortalData.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now().toString().slice(-4)}`;
+    const newPortal: OrderPortal = {
+      ...newPortalData,
+      id: `portal-${Date.now()}`,
+      createdAt: now,
+      updatedAt: now,
+      shareToken: token
+    };
+    setOrderPortals(prev => [newPortal, ...prev]);
+
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.savePortal(appsScriptConfig.webAppUrl, newPortal);
+    }
+  };
+
+  const handleUpdatePortal = (updatedPortal: OrderPortal) => {
+    setOrderPortals(prev => prev.map(p => p.id === updatedPortal.id ? updatedPortal : p));
+    if (activePublicPortal?.id === updatedPortal.id) {
+      setActivePublicPortal(updatedPortal);
+    }
+
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.savePortal(appsScriptConfig.webAppUrl, updatedPortal);
+    }
+  };
+
+  const handleDeletePortal = (portalId: string) => {
+    setOrderPortals(prev => prev.filter(p => p.id !== portalId));
+    if (activePublicPortal?.id === portalId) {
+      setActivePublicPortal(null);
+    }
+
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.deletePortal(appsScriptConfig.webAppUrl, portalId);
+    }
+  };
+
+  const handlePublicPortalSubmitOrder = async (orderData: {
+    contactPerson: string;
+    contactEmail: string;
+    deliveryAddress: string;
+    poNumber?: string;
+    notes?: string;
+    items: {
+      product: Product;
+      quantity: number;
+      selectedSize?: string;
+      selectedColor?: string;
+      customDetails?: Record<string, string>;
+    }[];
+  }): Promise<Order> => {
+    if (!activePublicPortal) throw new Error('No active portal selected');
+
+    const portalCompany = companies.find(c => c.id === activePublicPortal.companyId) || activeCompany;
+    const subtotal = orderData.items.reduce((acc, it) => acc + (it.product.basePrice * it.quantity), 0);
+    const serial = 1000 + orders.length + 1;
+    const orderNo = `${systemSettings.orderPrefix || 'ARH-2026'}-${serial}`;
+
+    const newOrder: Order = {
+      id: `ord-portal-${Date.now()}`,
+      orderNumber: orderNo,
+      companyName: portalCompany.name,
+      contactEmail: orderData.contactEmail,
+      contactPerson: orderData.contactPerson,
+      deliveryAddress: orderData.deliveryAddress,
+      poNumber: orderData.poNumber,
+      notes: orderData.notes,
+      portalId: activePublicPortal?.id,
+      portalName: activePublicPortal?.name,
+      items: orderData.items.map(it => ({
+        productId: it.product.id,
+        productName: it.product.name,
+        imageUrl: it.product.imageUrl,
+        quantity: it.quantity,
+        price: it.product.basePrice,
+        selectedSize: it.selectedSize,
+        selectedColor: it.selectedColor,
+        customDetails: it.customDetails
+      })),
+      status: 'Pending Approval',
+      totalAmount: subtotal,
+      createdAt: new Date().toISOString()
+    };
+
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      await sheetsService.saveOrder(appsScriptConfig.webAppUrl, newOrder);
+    }
+
+    setOrders(prev => [newOrder, ...prev]);
+    return newOrder;
+  };
+
+  // ----------------------------------------------------
   // Scope and Filter master products/orders to active client
   // ----------------------------------------------------
-  const scopedProducts = activeCompany?.customProducts?.filter(p => {
-    const enabledIds = activeCompany.enabledProductIds || [];
-    return enabledIds.includes(p.id);
-  }) || [];
+  const getCompanyProducts = (company: CompanyProfile | null, masterList: Product[]): Product[] => {
+    if (!company) return masterList;
+
+    const productMap = new Map<string, Product>();
+    const enabledIds = company.enabledProductIds;
+    const hasExplicitEnabledList = Array.isArray(enabledIds);
+
+    // First pass: add master products filtered by enabledProductIds if specified
+    masterList.forEach(p => {
+      if (!hasExplicitEnabledList || enabledIds.includes(p.id)) {
+        productMap.set(p.id, p);
+      }
+    });
+
+    // Second pass: add/override with company custom products
+    if (Array.isArray(company.customProducts) && company.customProducts.length > 0) {
+      company.customProducts.forEach(cp => {
+        if (!hasExplicitEnabledList || enabledIds.includes(cp.id) || company.customProducts?.some(c => c.id === cp.id)) {
+          productMap.set(cp.id, cp);
+        }
+      });
+    }
+
+    return Array.from(productMap.values());
+  };
+
+  const scopedProducts = getCompanyProducts(activeCompany, products);
+
+  // Render public order portal if active or opened via share link
+  if (activePublicPortal) {
+    const portalCompany = companies.find(c => c.id === activePublicPortal.companyId) || activeCompany;
+    const companyAvailableProducts = getCompanyProducts(portalCompany, products);
+
+    return (
+      <>
+        <style dangerouslySetInnerHTML={{ __html: getThemeStyles(systemSettings.colorTheme || 'classic_noir') }} />
+        <PublicOrderPortal
+          portal={activePublicPortal}
+          company={portalCompany}
+          products={companyAvailableProducts}
+          systemSettings={systemSettings}
+          onSubmitOrder={handlePublicPortalSubmitOrder}
+          onClosePublicView={() => {
+            setActivePublicPortal(null);
+            if (window.location.search.includes('portal=')) {
+              window.history.replaceState({}, document.title, window.location.pathname);
+            }
+          }}
+        />
+      </>
+    );
+  }
 
   // If no user is authenticated, serve the portal gate screen
   if (!loggedInUser) {
@@ -808,6 +1164,9 @@ export default function App() {
         userRole={loggedInUser.role}
         onLogout={handleLogout}
         systemSettings={systemSettings}
+        isSheetsConnected={appsScriptConfig.isConnected}
+        isSyncingSheets={isSyncingSheets}
+        onSyncSheets={syncWithSheets}
       />
 
       {/* Main App Workspace Stage */}
@@ -820,11 +1179,20 @@ export default function App() {
             exit={{ opacity: 0, y: -5 }}
             transition={{ duration: 0.2 }}
           >
-            {activeTab === 'admin' && loggedInUser.role === 'admin' && (
+            {(activeTab === 'admin' || activeTab === 'sync') && loggedInUser?.role === 'admin' && (
               <AdminDashboard
                 products={products}
                 companies={companies}
                 orders={orders}
+                catalogProducts={catalogProducts}
+                quoteEnquiries={quoteEnquiries}
+                onAddCatalogProduct={handleAddCatalogProduct}
+                onUpdateCatalogProduct={handleUpdateCatalogProduct}
+                onDeleteCatalogProduct={handleDeleteCatalogProduct}
+                onUpdateQuoteEnquiryStatus={handleUpdateQuoteEnquiryStatus}
+                onDeleteQuoteEnquiry={handleDeleteQuoteEnquiry}
+                onSaveQuoteEnquiry={handleSaveQuoteEnquiry}
+                onAddProductToCompanyCatalog={handleAddProductToCompanyCatalog}
                 onAddCompany={handleAddCompany}
                 onUpdateCompany={handleUpdateCompany}
                 onDeleteCompany={handleDeleteCompany}
@@ -832,10 +1200,24 @@ export default function App() {
                 onUpdateOrders={handleUpdateOrders}
                 onSimulateClient={(coId) => {
                   setSelectedCompanyId(coId);
-                  setActiveTab('catalog');
+                  setActiveTab('browse');
                 }}
                 systemSettings={systemSettings}
                 onUpdateSystemSettings={handleUpdateSystemSettings}
+                appsScriptConfig={appsScriptConfig}
+                onUpdateAppsScriptConfig={handleUpdateConfig}
+                onForceSyncAll={handleForceSyncAll}
+                onPullFromSheets={syncWithSheets}
+                isSyncingSheets={isSyncingSheets}
+                initialTab={activeTab === 'sync' ? 'sync' : undefined}
+              />
+            )}
+
+            {activeTab === 'browse' && (
+              <BrowseProducts
+                products={catalogProducts}
+                onAddQuoteEnquiry={handleAddQuoteEnquiry}
+                activeCompany={activeCompany}
               />
             )}
 
@@ -849,25 +1231,42 @@ export default function App() {
               />
             )}
             
+            {activeTab === 'portals' && (
+              <OrderPortals
+                portals={orderPortals}
+                activeCompany={activeCompany}
+                availableProducts={scopedProducts}
+                systemSettings={systemSettings}
+                onCreatePortal={handleCreatePortal}
+                onUpdatePortal={handleUpdatePortal}
+                onDeletePortal={handleDeletePortal}
+                onViewPortal={(portal) => setActivePublicPortal(portal)}
+              />
+            )}
+
             {activeTab === 'history' && (
               <OrderHistory
                 orders={orders}
                 selectedCompanyName={activeCompany.name}
                 onReorderPastOrder={handleReorderPastOrder}
+                onUpdateOrderStatus={(orderId, status) => handleUpdateOrders(orders.map(o => o.id === orderId ? { ...o, status } : o))}
                 appsScriptUrl={appsScriptConfig.isConnected ? appsScriptConfig.webAppUrl : undefined}
               />
             )}
-            
-            {activeTab === 'sync' && loggedInUser.role === 'admin' && (
-              <SettingsPanel
-                config={appsScriptConfig}
-                onUpdateConfig={handleUpdateConfig}
-                companies={companies}
-                onAddCompany={handleAddCompany}
+
+            {activeTab === 'quote-history' && (
+              <QuoteRequestHistory
+                quoteEnquiries={quoteEnquiries}
+                activeCompany={activeCompany}
+                onSaveQuoteEnquiry={handleSaveQuoteEnquiry}
+              />
+            )}
+
+            {activeTab === 'settings' && (
+              <CustomerSettings
+                activeCompany={activeCompany}
                 onUpdateCompany={handleUpdateCompany}
-                totalOrders={orders.length}
-                productsCount={products.length}
-                onForceSyncAll={handleForceSyncAll}
+                appsScriptUrl={appsScriptConfig.isConnected ? appsScriptConfig.webAppUrl : undefined}
               />
             )}
           </motion.div>

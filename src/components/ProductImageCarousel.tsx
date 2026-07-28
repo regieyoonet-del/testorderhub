@@ -1,9 +1,16 @@
 import React, { useState } from 'react';
-import { Product } from '../types';
+import { Product, CatalogProduct } from '../types';
 import { ChevronLeft, ChevronRight, Heart } from 'lucide-react';
 
 interface ProductImageCarouselProps {
-  product: Product;
+  product: Product | CatalogProduct | {
+    id: string;
+    name: string;
+    imageUrl: string;
+    imageUrls?: string[];
+    frequentlyOrdered?: boolean;
+    [key: string]: any;
+  };
   onImageClick?: () => void;
   favorites?: Record<string, boolean>;
   onToggleFavorite?: (productId: string, e: React.MouseEvent) => void;
@@ -53,7 +60,7 @@ export default function ProductImageCarousel({
       )}
 
       {/* Popular / Best-Seller Badge */}
-      {product.frequentlyOrdered && (
+      {(product as any).frequentlyOrdered && (
         <span className="absolute top-3 left-3 bg-black text-white text-[9px] font-mono font-bold tracking-widest px-2.5 py-0.5 rounded-full uppercase z-10 shadow-sm">
           B2B Best-Seller
         </span>

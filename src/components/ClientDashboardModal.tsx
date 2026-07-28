@@ -33,6 +33,7 @@ import {
   ChevronUp,
   Tag,
   Plus,
+  Check,
   Edit2,
   Trash2,
   Paperclip
@@ -286,43 +287,42 @@ export default function ClientDashboardModal({
       return;
     }
 
-    let updatedProducts = [...products];
     const updatedCompany = { ...company };
 
     if (editingProduct) {
-      updatedProducts = products.map(p =>
-        p.id === editingProduct.id
-          ? { ...editingProduct, ...productForm }
-          : p
-      );
-      // Update master products list as well
-      const updatedMaster = masterProducts.map(p =>
-        p.id === editingProduct.id
-          ? { ...p, ...productForm }
-          : p
-      );
-      onUpdateProducts(updatedMaster);
+      // Check if editing a custom product of this company
+      const isCustom = (company.customProducts || []).some(cp => cp.id === editingProduct.id);
+      if (isCustom) {
+        updatedCompany.customProducts = (company.customProducts || []).map(p =>
+          p.id === editingProduct.id ? { ...editingProduct, ...productForm } : p
+        );
+      } else {
+        // If it's a master product, update in master products
+        const isMaster = masterProducts.some(p => p.id === editingProduct.id);
+        if (isMaster) {
+          const updatedMaster = masterProducts.map(p =>
+            p.id === editingProduct.id ? { ...editingProduct, ...productForm } : p
+          );
+          onUpdateProducts(updatedMaster);
+        }
+      }
     } else {
       const newProd: Product = {
         ...productForm,
         id: `prod-${Date.now()}`
       };
-      updatedProducts.push(newProd);
 
-      // Automatically enable this new product for the current company
+      // Add to company.customProducts ONLY so it does not leak to other companies
+      const currentCustoms = updatedCompany.customProducts || [];
+      updatedCompany.customProducts = [...currentCustoms, newProd];
+
+      // Enable this product for the current company
       const currentList = company.enabledProductIds
         ? [...company.enabledProductIds, newProd.id]
-        : [...products.map(p => p.id), newProd.id];
+        : [...masterProducts.map(p => p.id), newProd.id];
 
       updatedCompany.enabledProductIds = currentList;
-
-      // Update master products list as well
-      const updatedMaster = [...masterProducts, newProd];
-      onUpdateProducts(updatedMaster);
     }
-
-    // Set customProducts directly on the company profile to isolate it
-    updatedCompany.customProducts = updatedProducts;
 
     onUpdateCompany(updatedCompany);
     setShowProductForm(false);
@@ -340,19 +340,23 @@ export default function ClientDashboardModal({
 
   const confirmDeleteProduct = () => {
     if (productToDelete) {
-      const updatedProducts = products.filter(p => p.id !== productToDelete.id);
+      const updatedCustoms = (company.customProducts || []).filter(p => p.id !== productToDelete.id);
+      const updatedEnabled = (company.enabledProductIds || []).filter(id => id !== productToDelete.id);
       
       const updatedCompany = {
         ...company,
-        customProducts: updatedProducts,
-        enabledProductIds: (company.enabledProductIds || []).filter(id => id !== productToDelete.id)
+        customProducts: updatedCustoms,
+        enabledProductIds: updatedEnabled
       };
 
       onUpdateCompany(updatedCompany);
 
-      // Update master products list as well to permanently delete the spec
-      const updatedMaster = masterProducts.filter(p => p.id !== productToDelete.id);
-      onUpdateProducts(updatedMaster);
+      // Only delete from master products list if it was a master product
+      const isMaster = masterProducts.some(p => p.id === productToDelete.id);
+      if (isMaster) {
+        const updatedMaster = masterProducts.filter(p => p.id !== productToDelete.id);
+        onUpdateProducts(updatedMaster);
+      }
 
       if (selectedProductForDetails?.id === productToDelete.id) {
         setSelectedProductForDetails(null);
@@ -394,17 +398,37 @@ export default function ClientDashboardModal({
     };
   }, [companyOrders]);
 
-  // Product Listings - check which are enabled vs disabled
+  // Products assigned/added to this company
   const clientProducts = useMemo(() => {
-    const enabledIds = company.enabledProductIds ?? products.map(p => p.id);
-    return products.map(p => ({
+    const enabledIds = company.enabledProductIds;
+    const hasExplicitEnabledList = Array.isArray(enabledIds);
+
+    const productMap = new Map<string, Product>();
+
+    // First pass: master products enabled for this company
+    masterProducts.forEach(p => {
+      if (!hasExplicitEnabledList || enabledIds.includes(p.id)) {
+        productMap.set(p.id, p);
+      }
+    });
+
+    // Second pass: company custom products
+    if (company.customProducts && company.customProducts.length > 0) {
+      company.customProducts.forEach(cp => {
+        if (!hasExplicitEnabledList || enabledIds.includes(cp.id) || company.customProducts?.some(c => c.id === cp.id)) {
+          productMap.set(cp.id, cp);
+        }
+      });
+    }
+
+    return Array.from(productMap.values()).map(p => ({
       ...p,
-      isEnabled: enabledIds.includes(p.id)
+      isEnabled: true
     }));
-  }, [products, company.enabledProductIds]);
+  }, [masterProducts, company.customProducts, company.enabledProductIds]);
 
   const enabledProductsCount = useMemo(() => {
-    return clientProducts.filter(p => p.isEnabled).length;
+    return clientProducts.length;
   }, [clientProducts]);
 
   const filteredClientProducts = useMemo(() => {
@@ -425,7 +449,7 @@ export default function ClientDashboardModal({
 
   // Toggle single allocation directly within the dashboard
   const handleToggleAllocation = (productId: string) => {
-    let currentList = company.enabledProductIds || products.map(p => p.id);
+    let currentList = company.enabledProductIds || masterProducts.map(p => p.id);
     if (currentList.includes(productId)) {
       currentList = currentList.filter(id => id !== productId);
     } else {
@@ -464,9 +488,6 @@ export default function ClientDashboardModal({
               </div>
             )}
             <div>
-              <span className="text-[10px] uppercase font-mono tracking-widest text-gray-500 font-bold block">
-                B2B Client Overview Dashboard
-              </span>
               <h3 className="text-xl md:text-2xl font-black uppercase text-black tracking-tight leading-none">
                 {company.name}
               </h3>
@@ -1238,14 +1259,14 @@ export default function ClientDashboardModal({
                         <Search className="absolute left-3 w-4 h-4 text-gray-400" />
                         <input
                           type="text"
-                          placeholder="Search master list catalog..."
+                          placeholder="Search products..."
                           value={productSearch}
                           onChange={(e) => setProductSearch(e.target.value)}
                           className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-4 py-2 text-xs text-black focus:border-black focus:outline-none"
                           id="client-dash-product-search"
                         />
                       </div>
-                      
+
                       {/* View Mode Toggle Switcher */}
                       <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl border border-gray-200 shrink-0">
                         <button
@@ -1550,13 +1571,14 @@ export default function ClientDashboardModal({
                                   {ord.orderNumber}
                                 </span>
                                 <span className={`px-2 py-0.5 text-[9px] font-mono font-bold uppercase rounded-md border ${
+                                  ord.status === 'Pending Approval' ? 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse' :
                                   ord.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-100' :
                                   ord.status === 'Shipped' ? 'bg-blue-50 text-blue-700 border-blue-100' :
                                   ord.status === 'In Production' ? 'bg-amber-50 text-amber-700 border-amber-100' :
                                   ord.status === 'Approved' ? 'bg-purple-50 text-purple-700 border-purple-100' :
                                   'bg-gray-50 text-gray-500 border-gray-100'
                                 }`}>
-                                  {ord.status}
+                                  {ord.status === 'Pending Approval' ? '⏳ Pending Review' : ord.status}
                                 </span>
                               </div>
                               <span className="text-[10px] text-gray-400 block font-mono mt-0.5">
@@ -1642,6 +1664,29 @@ export default function ClientDashboardModal({
                               </div>
                             )}
 
+                            {/* Portal Approval Banner for Company Review */}
+                            {ord.status === 'Pending Approval' && (
+                              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 font-sans">
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-900 uppercase">
+                                    <Clock className="w-4 h-4 text-amber-600" />
+                                    <span>Portal Request Pending Company Review</span>
+                                  </div>
+                                  <p className="text-[11px] text-amber-800 leading-snug">
+                                    This order was submitted via public portal. Review the items and click below to send it to the admin for official ordering &amp; production.
+                                  </p>
+                                </div>
+                                <button
+                                  onClick={() => onUpdateOrderStatus(ord.id, 'Pending')}
+                                  className="bg-black hover:bg-neutral-800 text-white text-xs font-extrabold uppercase tracking-wider px-4 py-2.5 rounded-xl border border-black shadow-md transition-all cursor-pointer shrink-0 flex items-center gap-2"
+                                  id={`submit-to-admin-btn-${ord.id}`}
+                                >
+                                  <span>Submit to Admin for Ordering</span>
+                                  <ArrowRight className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+
                             {/* Direct status advance buttons from dashboard */}
                             <div className="pt-3 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
                               <span className="text-[9px] uppercase tracking-wider text-gray-400 font-bold">
@@ -1650,7 +1695,8 @@ export default function ClientDashboardModal({
                               
                               <div className="flex gap-1">
                                 {[
-                                  { label: 'Pending', val: 'Pending' },
+                                  { label: 'Portal Review', val: 'Pending Approval' },
+                                  { label: 'Sent to Admin', val: 'Pending' },
                                   { label: 'Approve', val: 'Approved' },
                                   { label: 'Production', val: 'In Production' },
                                   { label: 'Ship', val: 'Shipped' },
@@ -1679,14 +1725,6 @@ export default function ClientDashboardModal({
               </div>
             </div>
           )}
-        </div>
-
-        {/* Minimal Footer */}
-        <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between shrink-0 text-[10px] uppercase font-mono tracking-wider text-gray-400">
-          <span>Target Client: {company.name}</span>
-          <span className="flex items-center gap-1 font-bold">
-            Portal Authorization Secure Stream Active
-          </span>
         </div>
       </motion.div>
     </div>

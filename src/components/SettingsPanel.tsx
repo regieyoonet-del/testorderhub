@@ -6,29 +6,29 @@
 import React, { useState } from 'react';
 import { CompanyProfile, AppsScriptConfig } from '../types';
 import AppsScriptInstructions from './AppsScriptInstructions';
-import { Link, Check, Wifi, WifiOff, AlertCircle, Plus, Building, Save, FileSpreadsheet, RefreshCw } from 'lucide-react';
+import { Check, Wifi, WifiOff, AlertCircle, FileSpreadsheet, RefreshCw } from 'lucide-react';
 import { sheetsService } from '../lib/sheetsService';
 
 interface SettingsPanelProps {
   config: AppsScriptConfig;
   onUpdateConfig: (config: AppsScriptConfig) => void;
-  companies: CompanyProfile[];
-  onAddCompany: (co: CompanyProfile) => void;
-  onUpdateCompany: (co: CompanyProfile) => void;
+  companies?: CompanyProfile[];
+  onAddCompany?: (co: CompanyProfile) => void;
+  onUpdateCompany?: (co: CompanyProfile) => void;
   totalOrders: number;
   productsCount: number;
   onForceSyncAll: () => Promise<boolean>;
+  onPullFromSheets?: () => Promise<void>;
+  isSyncingSheets?: boolean;
 }
 
 export default function SettingsPanel({
   config,
   onUpdateConfig,
-  companies,
-  onAddCompany,
-  onUpdateCompany,
   totalOrders,
-  productsCount,
-  onForceSyncAll
+  onForceSyncAll,
+  onPullFromSheets,
+  isSyncingSheets
 }: SettingsPanelProps) {
   // Sync States
   const [url, setUrl] = useState(config.webAppUrl);
@@ -36,16 +36,7 @@ export default function SettingsPanel({
   const [testResult, setTestResult] = useState<'idle' | 'success' | 'failed'>('idle');
   const [isSyncingAll, setIsSyncingAll] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'failed'>('idle');
-
-  // Company Editor States
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [name, setName] = useState('');
-  const [contact, setContact] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
-  const [poReq, setPoReq] = useState(false);
-  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [pullStatus, setPullStatus] = useState<'idle' | 'success'>('idle');
 
   const handleTestConnection = async () => {
     if (!url.trim()) {
@@ -90,72 +81,9 @@ export default function SettingsPanel({
     }
   };
 
-  const startEdit = (co: CompanyProfile) => {
-    setEditingId(co.id);
-    setIsAddingNew(false);
-    setName(co.name);
-    setContact(co.contactPerson);
-    setEmail(co.contactEmail);
-    setPhone(co.contactPhone);
-    setAddress(co.deliveryAddress);
-    setPoReq(co.poRequired);
-  };
-
-  const startAddNew = () => {
-    setEditingId(null);
-    setIsAddingNew(true);
-    setName('');
-    setContact('');
-    setEmail('');
-    setPhone('');
-    setAddress('');
-    setPoReq(false);
-  };
-
-  const handleSaveCompany = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !contact.trim() || !email.trim() || !address.trim()) {
-      alert('Please fill out all required fields.');
-      return;
-    }
-
-    if (isAddingNew) {
-      const newCo: CompanyProfile = {
-        id: `co-${Date.now()}`,
-        name: name.trim(),
-        logoUrl: '',
-        contactPerson: contact.trim(),
-        contactEmail: email.trim(),
-        contactPhone: phone.trim(),
-        deliveryAddress: address.trim(),
-        poRequired: poReq,
-        username: name.trim().toLowerCase().replace(/[^a-z0-9]/g, ''),
-        passcode: Math.floor(1000 + Math.random() * 9000).toString(),
-        enabledProductIds: [],
-        customProducts: []
-      };
-      onAddCompany(newCo);
-      setIsAddingNew(false);
-    } else if (editingId) {
-      const existing = companies.find(c => c.id === editingId);
-      const updatedCo: CompanyProfile = {
-        ...existing,
-        id: editingId,
-        name: name.trim(),
-        contactPerson: contact.trim(),
-        contactEmail: email.trim(),
-        contactPhone: phone.trim(),
-        deliveryAddress: address.trim(),
-        poRequired: poReq
-      };
-      onUpdateCompany(updatedCo);
-      setEditingId(null);
-    }
-  };
-
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
-      {/* Left Column: Connections & Company Editors */}
+      {/* Left Column: Connections */}
       <div className="space-y-8">
         
         {/* Google Sheet Connection Card */}
@@ -244,7 +172,29 @@ export default function SettingsPanel({
           </div>
 
           {config.isConnected && (
-            <div className="pt-3 border-t border-gray-100 flex flex-col gap-2">
+            <div className="pt-3 border-t border-gray-100 flex flex-col gap-2.5">
+              <button
+                onClick={async () => {
+                  if (onPullFromSheets) {
+                    await onPullFromSheets();
+                    setPullStatus('success');
+                    setTimeout(() => setPullStatus('idle'), 4000);
+                  }
+                }}
+                disabled={isSyncingSheets}
+                className="w-full bg-emerald-700 hover:bg-emerald-800 text-white disabled:bg-gray-200 disabled:text-gray-400 py-2.5 px-4 text-xs font-bold uppercase tracking-wider border border-black flex items-center justify-center gap-2 cursor-pointer focus:outline-none transition-colors"
+                id="pull-sheets-btn"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncingSheets ? 'animate-spin' : ''}`} />
+                {isSyncingSheets ? 'Fetching Live Data from Sheet...' : 'Fetch & Sync Data from Google Sheet'}
+              </button>
+
+              {pullStatus === 'success' && (
+                <p className="text-[10px] text-emerald-700 font-mono text-center font-bold animate-pulse">
+                  ✓ Successfully updated app data to match Google Sheet!
+                </p>
+              )}
+
               <button
                 onClick={handleTriggerSyncAll}
                 disabled={isSyncingAll}
@@ -252,7 +202,7 @@ export default function SettingsPanel({
                 id="force-sync-sheets-btn"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isSyncingAll ? 'animate-spin' : ''}`} />
-                {isSyncingAll ? 'Pushing All Sandbox Data...' : 'Push All Sandbox Data to Google Sheet'}
+                {isSyncingAll ? 'Pushing All Sandbox Data...' : 'Push All Local App Data to Google Sheet'}
               </button>
 
               {syncStatus === 'success' && (
@@ -266,176 +216,6 @@ export default function SettingsPanel({
                 </p>
               )}
             </div>
-          )}
-        </div>
-
-        {/* Company Profiles Manager */}
-        <div className="bg-white border border-black p-6 space-y-6 rounded-none">
-          <div className="flex items-center justify-between border-b border-gray-150 pb-3">
-            <div className="flex items-center space-x-2">
-              <Building className="w-5 h-5 text-black" />
-              <h3 className="text-sm font-bold uppercase tracking-wider text-black">Client Company Accounts</h3>
-            </div>
-            
-            {!isAddingNew && !editingId && (
-              <button
-                onClick={startAddNew}
-                className="bg-black text-white text-[10px] uppercase font-bold tracking-wider px-2.5 py-1.5 hover:bg-white hover:text-black border border-black transition-colors flex items-center gap-1 cursor-pointer focus:outline-none"
-                id="add-new-company-btn"
-              >
-                <Plus className="w-3 h-3" /> New Account
-              </button>
-            )}
-          </div>
-
-          {/* List of Companies */}
-          {!isAddingNew && !editingId ? (
-            <div className="divide-y divide-gray-100 max-h-72 overflow-y-auto no-scrollbar border border-gray-200 p-2">
-              {companies.map((co) => (
-                <div key={co.id} className="py-3.5 flex justify-between items-start gap-3">
-                  <div>
-                    <h4 className="font-bold text-xs text-black uppercase tracking-tight">{co.name}</h4>
-                    <span className="text-[10px] text-gray-500 font-mono mt-0.5 block">
-                      Rep: {co.contactPerson} · PO Required: {co.poRequired ? 'Yes' : 'No'}
-                    </span>
-                    <span className="text-[9px] text-gray-400 font-mono block overflow-hidden text-ellipsis whitespace-nowrap max-w-[280px]">
-                      {co.deliveryAddress}
-                    </span>
-                  </div>
-                  
-                  <button
-                    onClick={() => startEdit(co)}
-                    className="border border-black text-black hover:bg-black hover:text-white text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-1 transition-all cursor-pointer focus:outline-none"
-                    id={`edit-company-btn-${co.id}`}
-                  >
-                    Edit
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            /* Create / Edit Company Form */
-            <form onSubmit={handleSaveCompany} className="space-y-4 border border-black p-4 bg-gray-50/50 animate-slide-up">
-              <h4 className="font-bold text-xs uppercase text-black font-mono border-b border-gray-200 pb-2">
-                {isAddingNew ? 'Create New Client Account' : `Modify Account: ${name}`}
-              </h4>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[9px] uppercase tracking-wider text-black font-bold font-mono mb-1">
-                    Company Name: <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                    placeholder="e.g. Acme Labs"
-                    className="w-full bg-white border border-gray-300 text-xs px-2 py-1 text-black font-sans focus:border-black focus:outline-none"
-                    id="company-name-input"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[9px] uppercase tracking-wider text-black font-bold font-mono mb-1">
-                    Contact Person (Buyer): <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={contact}
-                    onChange={(e) => setContact(e.target.value)}
-                    required
-                    placeholder="Jane Doe"
-                    className="w-full bg-white border border-gray-300 text-xs px-2 py-1 text-black font-sans focus:border-black focus:outline-none"
-                    id="company-contact-input"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[9px] uppercase tracking-wider text-black font-bold font-mono mb-1">
-                    Authorized Email: <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    placeholder="buyer@acme.com"
-                    className="w-full bg-white border border-gray-300 text-xs px-2 py-1 text-black font-sans focus:border-black focus:outline-none"
-                    id="company-email-input"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[9px] uppercase tracking-wider text-black font-bold font-mono mb-1">
-                    Phone (Billing):
-                  </label>
-                  <input
-                    type="text"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+1 (555) 123-4567"
-                    className="w-full bg-white border border-gray-300 text-xs px-2 py-1 text-black font-sans focus:border-black focus:outline-none"
-                    id="company-phone-input"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-[9px] uppercase tracking-wider text-black font-bold font-mono mb-1">
-                    Primary Delivery Address: <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    required
-                    rows={2}
-                    placeholder="Street, Suite #, City, Zip Code"
-                    className="w-full bg-white border border-gray-300 text-xs p-1.5 text-black font-sans focus:border-black focus:outline-none resize-none leading-normal"
-                    id="company-address-input"
-                  />
-                </div>
-              </div>
-
-              {/* B2B Compliance Rules */}
-              <div className="pt-2 border-t border-gray-200">
-                <label className="relative flex items-center space-x-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={poReq}
-                    onChange={(e) => setPoReq(e.target.checked)}
-                    className="sr-only peer"
-                    id="company-po-required-check"
-                  />
-                  <div className="w-4 h-4 border border-black rounded-none flex items-center justify-center bg-white peer-checked:bg-black peer-checked:border-black transition-colors">
-                    {poReq && <Check className="w-3 h-3 text-white stroke-[3px]" />}
-                  </div>
-                  <span className="text-[10px] font-mono font-bold text-gray-700 uppercase">
-                    Mandatory PO Numbers required at checkout
-                  </span>
-                </label>
-                <p className="text-[9px] text-gray-400 font-mono mt-1 pl-6 leading-normal">
-                  If enabled, checking out on behalf of this company forces authorized buyers to specify a corporate Purchase Order (PO) invoice string before orders are authorized.
-                </p>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAddingNew(false);
-                    setEditingId(null);
-                  }}
-                  className="flex-1 bg-white border border-gray-300 text-gray-500 py-2 text-xs uppercase font-bold tracking-wider hover:text-black hover:border-black transition-colors focus:outline-none cursor-pointer"
-                  id="company-cancel-edit-btn"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 bg-black text-white border border-black py-2 text-xs uppercase font-bold tracking-wider hover:bg-white hover:text-black transition-all focus:outline-none cursor-pointer flex items-center justify-center gap-1.5"
-                  id="company-save-edit-btn"
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  <span>{isAddingNew ? 'Create Account' : 'Save Changes'}</span>
-                </button>
-              </div>
-            </form>
           )}
         </div>
       </div>

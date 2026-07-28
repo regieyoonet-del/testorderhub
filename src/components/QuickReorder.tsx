@@ -171,8 +171,19 @@ export default function QuickReorder({ products, onAddToCart }: QuickReorderProp
 
                 {/* Info */}
                 <div className="col-span-1 md:col-span-4 flex items-center space-x-3.5">
-                  <div className="bg-gray-50 border border-gray-100 p-2 text-2xl w-10 h-10 flex items-center justify-center shrink-0">
-                    {product.imageUrl}
+                  <div className="bg-gray-50 border border-gray-100 p-1 w-10 h-10 flex items-center justify-center shrink-0 overflow-hidden">
+                    {product.imageUrl && product.imageUrl.startsWith('http') ? (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span className="text-xl select-none">
+                        {product.imageUrl && product.imageUrl.length <= 4 ? product.imageUrl : '📦'}
+                      </span>
+                    )}
                   </div>
                   <div>
                     <h4 className="font-bold text-xs text-black uppercase tracking-tight leading-tight">
@@ -282,7 +293,7 @@ export default function QuickReorder({ products, onAddToCart }: QuickReorderProp
         <div>
           <p className="font-bold text-black uppercase tracking-wider mb-1">Standard Personalization Preset Enabled</p>
           <p className="leading-normal">
-            For rapid ordering, the Portal submits quick reorder configurations with pre-arranged corporate design assets, layout files, and sizing templates on file for your company account. To submit specific individual names or custom text instructions for newly hired employees, please use the **Order Catalog** tab and configure each product dynamically.
+            For rapid ordering, the Portal submits quick reorder configurations with pre-arranged corporate design assets, layout files, and sizing templates on file for your company account. To submit specific individual names or custom text instructions for newly hired employees, please use the **My Catalog** tab and configure each product dynamically.
           </p>
         </div>
       </div>

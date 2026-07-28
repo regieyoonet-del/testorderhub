@@ -36,9 +36,21 @@ function doGet(e) {
   if (action === "getProducts") {
     return getJsonOutput(getTableData(sheet, "Products"));
   }
+
+  if (action === "getCatalogProducts") {
+    return getJsonOutput(getTableData(sheet, "CatalogProducts"));
+  }
+
+  if (action === "getQuoteEnquiries") {
+    return getJsonOutput(getTableData(sheet, "Quotes"));
+  }
   
   if (action === "getCompanies") {
     return getJsonOutput(getTableData(sheet, "Companies"));
+  }
+
+  if (action === "getPortals") {
+    return getJsonOutput(getTableData(sheet, "Portals"));
   }
   
   if (action === "getOrders") {
@@ -71,6 +83,26 @@ function doPost(e) {
   if (payload.action === "saveProduct") {
     return getJsonOutput(saveProduct(sheet, payload.product));
   }
+
+  if (payload.action === "saveCatalogProduct") {
+    return getJsonOutput(saveCatalogProduct(sheet, payload.product));
+  }
+
+  if (payload.action === "deleteCatalogProduct") {
+    return getJsonOutput(deleteRowById(sheet, "CatalogProducts", "Product ID", payload.productId));
+  }
+
+  if (payload.action === "saveQuoteEnquiry") {
+    return getJsonOutput(saveQuoteEnquiry(sheet, payload.enquiry));
+  }
+
+  if (payload.action === "deleteQuoteEnquiry") {
+    return getJsonOutput(deleteRowById(sheet, "Quotes", "Enquiry ID", payload.enquiryId));
+  }
+
+  if (payload.action === "updateQuoteEnquiryStatus") {
+    return getJsonOutput(updateQuoteEnquiryStatus(sheet, payload.enquiryId, payload.status));
+  }
   
   if (payload.action === "deleteProduct") {
     return getJsonOutput(deleteRowById(sheet, "Products", "Product ID", payload.productId));
@@ -84,6 +116,14 @@ function doPost(e) {
     return getJsonOutput(deleteRowById(sheet, "Companies", "Company ID", payload.companyId));
   }
 
+  if (payload.action === "savePortal") {
+    return getJsonOutput(savePortal(sheet, payload.portal));
+  }
+
+  if (payload.action === "deletePortal") {
+    return getJsonOutput(deleteRowById(sheet, "Portals", "Portal ID", payload.portalId));
+  }
+
   if (payload.action === "deleteOrder") {
     return getJsonOutput(deleteOrder(sheet, payload.orderId));
   }
@@ -94,10 +134,6 @@ function doPost(e) {
 
   if (payload.action === "saveAdminSettings") {
     return getJsonOutput(saveAdminSettings(sheet, payload.settings, payload.adminUsername, payload.adminPasscode));
-  }
-  
-  if (payload.action === "sendEmail") {
-    return getJsonOutput(sendEmail(payload.to, payload.subject, payload.body, payload.isHtml));
   }
   
   return getJsonOutput({ status: "error", message: "Unknown action" });
@@ -155,6 +191,17 @@ function getMapValueByHeader(map, header) {
     if (map.hasOwnProperty("Logo URL")) return map["Logo URL"];
     if (map.hasOwnProperty("LogoUrl")) return map["LogoUrl"];
   }
+  if (normHeader === "brandingmethods" || normHeader === "brandingmethod" || normHeader === "branding") {
+    if (map.hasOwnProperty("Branding Methods")) return map["Branding Methods"];
+    if (map.hasOwnProperty("Branding Method")) return map["Branding Method"];
+    if (map.hasOwnProperty("Branding")) return map["Branding"];
+  }
+  if (normHeader === "colors" || normHeader === "colours" || normHeader === "color" || normHeader === "colour" || normHeader === "coloroptions" || normHeader === "colouroptions") {
+    if (map.hasOwnProperty("Colors")) return map["Colors"];
+    if (map.hasOwnProperty("Colours")) return map["Colours"];
+    if (map.hasOwnProperty("Color")) return map["Color"];
+    if (map.hasOwnProperty("Colour")) return map["Colour"];
+  }
   
   for (var key in map) {
     if (map.hasOwnProperty(key)) {
@@ -168,15 +215,18 @@ function getMapValueByHeader(map, header) {
 }
 
 function initSheets(ss) {
-  var sheets = ["Orders", "OrderItems", "Products", "Companies", "Admin"];
+  var sheets = ["Orders", "OrderItems", "Products", "CatalogProducts", "Companies", "Portals", "Admin", "Quotes"];
   
   // Headers definitions
   var headers = {
     "Orders": ["Order ID", "Order Number", "Company Name", "Contact Email", "Contact Person", "Delivery Address", "PO Number", "Total Amount", "Status", "Created At", "Notes"],
     "OrderItems": ["Order ID", "Product ID", "Product Name", "Image URL", "Quantity", "Price", "Selected Size", "Selected Color", "Custom Details"],
     "Products": ["Product ID", "Name", "Category", "Description", "Image URL", "Base Price", "Original Price", "Min Quantity", "Unit", "Size Options", "Color Options", "Frequently Ordered", "Shipping Fee", "Image URLs", "Custom Fields"],
+    "CatalogProducts": ["Product ID", "SKU", "Name", "Category", "Description", "Image URL", "Image URLs", "MOQ", "Lead Time", "Branding Methods", "Colors", "Sizes", "Status"],
     "Companies": ["Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Delivery Address", "Username", "Passcode", "PO Required", "Logo URL", "Approved Products", "Custom Products"],
-    "Admin": ["Hub Name", "Short Hub Name", "Order Prefix", "Currency Symbol", "Admin Username", "Admin Passcode", "Color Theme", "Admin Email", "App Logo URL"]
+    "Portals": ["Portal ID", "Company ID", "Company Name", "Portal Name", "Description", "Status", "Product IDs", "Created At", "Updated At", "Share Token"],
+    "Admin": ["Hub Name", "Short Hub Name", "Order Prefix", "Currency Symbol", "Admin Username", "Admin Passcode", "Color Theme", "Admin Email", "App Logo URL"],
+    "Quotes": ["Enquiry ID", "Enquiry Number", "Product ID", "Product Name", "Product Category", "Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Quantity", "Preferred Branding Method", "Preferred Color", "Notes", "Status", "Created At", "Quoted Unit Price", "Quoted Total Price", "Quoted Tax", "Quoted Shipping", "Quote Notes", "Quoted Valid Until", "Quoted At", "Quoted Line Items", "Requested Product Addition", "Requested Product Addition At", "Requested Product Notes"]
   };
   
   for (var i = 0; i < sheets.length; i++) {
@@ -323,37 +373,6 @@ function saveNewOrder(ss, order) {
     itemsSheet.appendRow(itemRow);
   });
   
-  // Send automated email alerts directly in Apps Script as redundant fail-safe
-  try {
-    var adminEmail = "regie.yoonet@gmail.com";
-    var adminSheet = ss.getSheetByName("AdminSettings");
-    if (adminSheet && adminSheet.getLastRow() > 1) {
-      var adminData = adminSheet.getDataRange().getValues();
-      if (adminData.length > 1 && adminData[1][0]) {
-        adminEmail = adminData[1][0].toString();
-      }
-    }
-    var clientEmail = order.contactEmail || "regie.yoonet@gmail.com";
-    
-    // 1. Alert Admin
-    sendEmail(
-      adminEmail,
-      "🚨 [NEW ORDER] " + order.orderNumber + " - " + order.companyName,
-      "A new B2B order (" + order.orderNumber + ") of total Php " + order.totalAmount + " was placed by " + order.companyName + " (" + order.contactPerson + " - " + clientEmail + ").",
-      false
-    );
-    
-    // 2. Receipt to Client
-    sendEmail(
-      clientEmail,
-      "Order Confirmed: " + order.orderNumber,
-      "Dear " + order.contactPerson + ",\\n\\nThank you for your order with " + order.companyName + "!\\nOrder #: " + order.orderNumber + "\\nTotal: Php " + order.totalAmount + "\\nDelivery Address: " + order.deliveryAddress,
-      false
-    );
-  } catch (err) {
-    Logger.log("Apps Script email dispatch notice: " + err.toString());
-  }
-
   return { status: "success", orderId: order.id, orderNumber: order.orderNumber };
 }
 
@@ -476,6 +495,58 @@ function saveCompany(ss, company) {
   return { status: "success", companyId: company.id };
 }
 
+function savePortal(ss, portal) {
+  var sheet = ss.getSheetByName("Portals");
+  var expectedHeaders = ["Portal ID", "Company ID", "Company Name", "Portal Name", "Description", "Status", "Product IDs", "Created At", "Updated At", "Share Token"];
+  var data = ensureHeaders(sheet, expectedHeaders);
+  var headers = data[0];
+  
+  var idIndex = -1;
+  for (var c = 0; c < headers.length; c++) {
+    if (headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "") === "portalid") {
+      idIndex = c;
+      break;
+    }
+  }
+  if (idIndex === -1) idIndex = 0;
+  
+  var rowIndex = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][idIndex] === portal.id) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+  
+  var productIdsStr = portal.productIds ? portal.productIds.join(", ") : "";
+  
+  var portalMap = {
+    "Portal ID": portal.id,
+    "Company ID": portal.companyId || "",
+    "Company Name": portal.companyName || "",
+    "Portal Name": portal.name || "",
+    "Description": portal.description || "",
+    "Status": portal.status || "Active",
+    "Product IDs": productIdsStr,
+    "Created At": portal.createdAt || new Date().toISOString(),
+    "Updated At": portal.updatedAt || new Date().toISOString(),
+    "Share Token": portal.shareToken || ""
+  };
+  
+  var rowData = [];
+  for (var c = 0; c < headers.length; c++) {
+    rowData.push(getMapValueByHeader(portalMap, headers[c]));
+  }
+  
+  if (rowIndex !== -1) {
+    sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    sheet.appendRow(rowData);
+  }
+  
+  return { status: "success", portalId: portal.id };
+}
+
 function deleteRowById(ss, sheetName, colHeader, targetId) {
   var sheet = ss.getSheetByName(sheetName);
   var data = sheet.getDataRange().getValues();
@@ -555,6 +626,160 @@ function updateOrderStatus(ss, orderId, status) {
   return { status: "error", message: "Order not found" };
 }
 
+function saveCatalogProduct(ss, product) {
+  var sheet = ss.getSheetByName("CatalogProducts");
+  var expectedHeaders = ["Product ID", "SKU", "Name", "Category", "Description", "Image URL", "Image URLs", "MOQ", "Lead Time", "Branding Methods", "Colors", "Sizes", "Status"];
+  var data = ensureHeaders(sheet, expectedHeaders);
+  var headers = data[0];
+  
+  var productIdIndex = -1;
+  for (var c = 0; c < headers.length; c++) {
+    if (headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "") === "productid") {
+      productIdIndex = c;
+      break;
+    }
+  }
+  if (productIdIndex === -1) productIdIndex = 0;
+  
+  var rowIndex = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][productIdIndex] === product.id) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+  
+  var brandingStr = product.brandingMethods ? product.brandingMethods.join(", ") : "";
+  var colorsStr = product.colors ? JSON.stringify(product.colors) : "";
+  var sizesStr = product.sizes ? product.sizes.join(", ") : "";
+  var imageUrlsStr = product.imageUrls ? product.imageUrls.join(";||;") : "";
+  
+  var productMap = {
+    "Product ID": product.id,
+    "SKU": product.sku || "",
+    "Name": product.name,
+    "Category": product.category || "",
+    "Description": product.description || "",
+    "Image URL": product.imageUrl || "",
+    "Image URLs": imageUrlsStr,
+    "MOQ": product.moq || 50,
+    "Lead Time": product.leadTime || "7-10 Business Days",
+    "Branding Methods": brandingStr,
+    "Colors": colorsStr,
+    "Sizes": sizesStr,
+    "Status": product.status || "Active"
+  };
+  
+  var rowData = [];
+  for (var c = 0; c < headers.length; c++) {
+    rowData.push(getMapValueByHeader(productMap, headers[c]));
+  }
+  
+  if (rowIndex !== -1) {
+    sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    sheet.appendRow(rowData);
+  }
+  
+  return { status: "success", productId: product.id };
+}
+
+function saveQuoteEnquiry(ss, enquiry) {
+  var sheet = ss.getSheetByName("Quotes");
+  var expectedHeaders = ["Enquiry ID", "Enquiry Number", "Product ID", "Product Name", "Product Category", "Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Quantity", "Preferred Branding Method", "Preferred Color", "Notes", "Status", "Created At", "Quoted Unit Price", "Quoted Total Price", "Quoted Tax", "Quoted Shipping", "Quote Notes", "Quoted Valid Until", "Quoted At", "Quoted Line Items", "Requested Product Addition", "Requested Product Addition At", "Requested Product Notes"];
+  var data = ensureHeaders(sheet, expectedHeaders);
+  var headers = data[0];
+  
+  var enquiryIdIndex = -1;
+  for (var c = 0; c < headers.length; c++) {
+    if (headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "") === "enquiryid") {
+      enquiryIdIndex = c;
+      break;
+    }
+  }
+  if (enquiryIdIndex === -1) enquiryIdIndex = 0;
+  
+  var rowIndex = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][enquiryIdIndex] === enquiry.id) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+  
+  var lineItemsStr = enquiry.quotedLineItems ? JSON.stringify(enquiry.quotedLineItems) : "";
+
+  var quoteMap = {
+    "Enquiry ID": enquiry.id,
+    "Enquiry Number": enquiry.enquiryNumber || "",
+    "Product ID": enquiry.productId || "",
+    "Product Name": enquiry.productName || "",
+    "Product Category": enquiry.productCategory || "",
+    "Company ID": enquiry.companyId || "",
+    "Company Name": enquiry.companyName || "",
+    "Contact Person": enquiry.contactPerson || "",
+    "Contact Email": enquiry.contactEmail || "",
+    "Contact Phone": enquiry.contactPhone || "",
+    "Quantity": enquiry.quantity || 1,
+    "Preferred Branding Method": enquiry.preferredBrandingMethod || "",
+    "Preferred Color": enquiry.preferredColor || "",
+    "Notes": enquiry.notes || "",
+    "Status": enquiry.status || "New",
+    "Created At": enquiry.createdAt || new Date().toISOString(),
+    "Quoted Unit Price": enquiry.quotedUnitPrice !== undefined ? enquiry.quotedUnitPrice : "",
+    "Quoted Total Price": enquiry.quotedTotalPrice !== undefined ? enquiry.quotedTotalPrice : "",
+    "Quoted Tax": enquiry.quotedTax !== undefined ? enquiry.quotedTax : "",
+    "Quoted Shipping": enquiry.quotedShipping !== undefined ? enquiry.quotedShipping : "",
+    "Quote Notes": enquiry.quoteNotes || "",
+    "Quoted Valid Until": enquiry.quotedValidUntil || "",
+    "Quoted At": enquiry.quotedAt || "",
+    "Quoted Line Items": lineItemsStr,
+    "Requested Product Addition": enquiry.requestedProductAddition ? "TRUE" : "FALSE",
+    "Requested Product Addition At": enquiry.requestedProductAdditionAt || "",
+    "Requested Product Notes": enquiry.requestedProductNotes || ""
+  };
+  
+  var rowData = [];
+  for (var c = 0; c < headers.length; c++) {
+    rowData.push(getMapValueByHeader(quoteMap, headers[c]));
+  }
+  
+  if (rowIndex !== -1) {
+    sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    sheet.appendRow(rowData);
+  }
+  
+  return { status: "success", enquiryId: enquiry.id };
+}
+
+function updateQuoteEnquiryStatus(ss, enquiryId, status) {
+  var sheet = ss.getSheetByName("Quotes");
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  
+  var idIndex = -1;
+  var statusIndex = -1;
+  for (var c = 0; c < headers.length; c++) {
+    var normH = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (normH === "enquiryid") {
+      idIndex = c;
+    } else if (normH === "status") {
+      statusIndex = c;
+    }
+  }
+  if (idIndex === -1) idIndex = 0;
+  if (statusIndex === -1) statusIndex = 14;
+  
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][idIndex] === enquiryId) {
+      sheet.getRange(i + 1, statusIndex + 1).setValue(status);
+      return { status: "success", enquiryId: enquiryId, updated: true };
+    }
+  }
+  return { status: "error", message: "Quote enquiry not found" };
+}
+
 function saveAdminSettings(ss, settings, adminUser, adminPass) {
   var sheet = ss.getSheetByName("Admin");
   var expectedHeaders = ["Hub Name", "Short Hub Name", "Order Prefix", "Currency Symbol", "Admin Username", "Admin Passcode", "Color Theme", "Admin Email", "App Logo URL"];
@@ -589,22 +814,6 @@ function saveAdminSettings(ss, settings, adminUser, adminPass) {
   
   sheet.appendRow(rowData);
   return { status: "success" };
-}
-
-function sendEmail(to, subject, body, isHtml) {
-  try {
-    var options = {};
-    var plainText = body || "";
-    if (isHtml) {
-      options.htmlBody = body;
-      plainText = body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-      if (!plainText) plainText = "Please view this notification email in an HTML-compatible email client.";
-    }
-    MailApp.sendEmail(to, subject, plainText, options);
-    return { status: "success", sent: true };
-  } catch (e) {
-    return { status: "error", message: e.toString() };
-  }
 }
 
 function getJsonOutput(obj) {
@@ -770,6 +979,26 @@ function getJsonOutput(obj) {
                 <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
                 <div className="flex flex-wrap gap-1">
                   {["Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Delivery Address", "Passcode", "PO Required", "Logo URL", "Approved Products"].map(col => (
+                    <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
+                      {col}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sheet 5: Portals */}
+            <div className="border border-gray-200 bg-gray-50 p-3 space-y-2 rounded-xl">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                <span className="font-mono text-[11px] font-bold text-black bg-white px-2 py-0.5 border border-black rounded-md">
+                  🚪 Tab 5: Portals
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono">Order Portal details and access links</span>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
+                <div className="flex flex-wrap gap-1">
+                  {["Portal ID", "Company ID", "Company Name", "Portal Name", "Description", "Status", "Product IDs", "Created At", "Updated At", "Share Token"].map(col => (
                     <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
                       {col}
                     </span>

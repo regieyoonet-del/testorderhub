@@ -32,8 +32,8 @@ export default function LoginScreen({ companies, onLogin, systemSettings }: Logi
     }
 
     // Check Admin Credentials
-    const savedAdminUser = localStorage.getItem('rp_admin_username') || 'admin';
-    const savedAdminPass = localStorage.getItem('rp_admin_passcode') || 'admin123';
+    const savedAdminUser = systemSettings?.adminUsername || localStorage.getItem('rp_admin_username') || 'admin';
+    const savedAdminPass = systemSettings?.adminPasscode || localStorage.getItem('rp_admin_passcode') || 'admin123';
 
     if (trimmedUser === savedAdminUser.toLowerCase() && trimmedPass === savedAdminPass) {
       onLogin('admin');

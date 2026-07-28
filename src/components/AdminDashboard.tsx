@@ -4,8 +4,10 @@
  */
 
 import React, { useState } from 'react';
-import { Product, CompanyProfile, Order, SystemSettings } from '../types';
+import { Product, CompanyProfile, Order, SystemSettings, AppsScriptConfig, CatalogProduct, QuoteEnquiry } from '../types';
 import AppsScriptInstructions from './AppsScriptInstructions';
+import SettingsPanel from './SettingsPanel';
+import AdminProductCatalog from './AdminProductCatalog';
 import {
   ResponsiveContainer,
   BarChart as RechartsBarChart,
@@ -52,16 +54,25 @@ import {
   Send,
   Eye,
   RefreshCw,
-  Inbox
+  Inbox,
+  FileSpreadsheet
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ClientDashboardModal from './ClientDashboardModal';
-import { emailService, EmailLog } from '../lib/emailService';
 
 interface AdminDashboardProps {
   products: Product[];
   companies: CompanyProfile[];
   orders: Order[];
+  catalogProducts?: CatalogProduct[];
+  quoteEnquiries?: QuoteEnquiry[];
+  onAddCatalogProduct?: (product: CatalogProduct) => void;
+  onUpdateCatalogProduct?: (product: CatalogProduct) => void;
+  onDeleteCatalogProduct?: (productId: string) => void;
+  onUpdateQuoteEnquiryStatus?: (enquiryId: string, status: QuoteEnquiry['status']) => void;
+  onDeleteQuoteEnquiry?: (enquiryId: string) => void;
+  onSaveQuoteEnquiry?: (updatedEnquiry: QuoteEnquiry) => void;
+  onAddProductToCompanyCatalog?: (product: Product, companyIdentifier: string) => void;
   onAddCompany: (co: CompanyProfile) => void;
   onUpdateCompany: (co: CompanyProfile) => void;
   onDeleteCompany: (companyId: string) => void;
@@ -70,12 +81,27 @@ interface AdminDashboardProps {
   onSimulateClient: (companyId: string) => void;
   systemSettings: SystemSettings;
   onUpdateSystemSettings: (settings: SystemSettings) => void;
+  appsScriptConfig: AppsScriptConfig;
+  onUpdateAppsScriptConfig: (config: AppsScriptConfig) => void;
+  onForceSyncAll: () => Promise<boolean>;
+  onPullFromSheets?: () => Promise<void>;
+  isSyncingSheets?: boolean;
+  initialTab?: 'clients' | 'catalog' | 'orders' | 'analytics' | 'settings' | 'sync';
 }
 
 export default function AdminDashboard({
   products,
   companies,
   orders,
+  catalogProducts = [],
+  quoteEnquiries = [],
+  onAddCatalogProduct = () => {},
+  onUpdateCatalogProduct = () => {},
+  onDeleteCatalogProduct = () => {},
+  onUpdateQuoteEnquiryStatus = () => {},
+  onDeleteQuoteEnquiry,
+  onSaveQuoteEnquiry,
+  onAddProductToCompanyCatalog,
   onAddCompany,
   onUpdateCompany,
   onDeleteCompany,
@@ -83,46 +109,25 @@ export default function AdminDashboard({
   onUpdateOrders,
   onSimulateClient,
   systemSettings,
-  onUpdateSystemSettings
+  onUpdateSystemSettings,
+  appsScriptConfig,
+  onUpdateAppsScriptConfig,
+  onForceSyncAll,
+  onPullFromSheets,
+  isSyncingSheets,
+  initialTab
 }: AdminDashboardProps) {
-  const [adminTab, setAdminTab] = useState<'clients' | 'orders' | 'analytics' | 'emails' | 'settings'>('clients');
-
-  // Email logs state
-  const [emailLogs, setEmailLogs] = useState<EmailLog[]>(() => emailService.getEmailLogs());
-  const [selectedEmail, setSelectedEmail] = useState<EmailLog | null>(null);
-  const [testEmailStatus, setTestEmailStatus] = useState('');
-  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
+  const [adminTab, setAdminTab] = useState<'clients' | 'catalog' | 'orders' | 'analytics' | 'settings' | 'sync'>(initialTab || 'clients');
 
   React.useEffect(() => {
-    const handleEmailUpdate = () => {
-      setEmailLogs(emailService.getEmailLogs());
-    };
-    window.addEventListener('rp_emails_updated', handleEmailUpdate);
-    return () => window.removeEventListener('rp_emails_updated', handleEmailUpdate);
-  }, []);
-
-  const handleSendTestEmail = async () => {
-    const target = adminEmail.trim() || systemSettings.adminEmail || 'regie.yoonet@gmail.com';
-    setIsSendingTestEmail(true);
-    setTestEmailStatus('');
-    try {
-      const cachedConfig = localStorage.getItem('rp_apps_script_config');
-      const parsedConfig = cachedConfig ? JSON.parse(cachedConfig) : {};
-      const appsScriptUrl = parsedConfig?.webAppUrl?.trim() || undefined;
-      
-      await emailService.sendTestEmail(target, systemSettings, appsScriptUrl);
-      setTestEmailStatus(`✅ Test email dispatched to ${target}!`);
-    } catch (err: any) {
-      setTestEmailStatus(`❌ Failed to send test email: ${err.message || err}`);
-    } finally {
-      setIsSendingTestEmail(false);
-      setTimeout(() => setTestEmailStatus(''), 6000);
+    if (initialTab) {
+      setAdminTab(initialTab);
     }
-  };
+  }, [initialTab]);
 
   // Admin Settings Tab state
-  const [adminUser, setAdminUser] = useState(() => localStorage.getItem('rp_admin_username') || 'admin');
-  const [adminPass, setAdminPass] = useState(() => localStorage.getItem('rp_admin_passcode') || 'admin123');
+  const [adminUser, setAdminUser] = useState(() => systemSettings.adminUsername || localStorage.getItem('rp_admin_username') || 'admin');
+  const [adminPass, setAdminPass] = useState(() => systemSettings.adminPasscode || localStorage.getItem('rp_admin_passcode') || 'admin123');
   const [hubName, setHubName] = useState(systemSettings.hubName);
   const [shortHubName, setShortHubName] = useState(systemSettings.shortHubName);
   const [orderPrefix, setOrderPrefix] = useState(systemSettings.orderPrefix);
@@ -146,7 +151,9 @@ export default function AdminDashboard({
       currencySymbol: currencySymbol.trim(),
       colorTheme: colorTheme,
       adminEmail: adminEmail.trim(),
-      logoUrl: appLogoUrl.trim()
+      logoUrl: appLogoUrl.trim(),
+      adminUsername: adminUser.trim(),
+      adminPasscode: adminPass.trim()
     });
 
     setSettingsSuccessMsg('Settings updated successfully!');
@@ -163,6 +170,12 @@ export default function AdminDashboard({
     }
     setAdminEmail(systemSettings.adminEmail || '');
     setAppLogoUrl(systemSettings.logoUrl || '');
+    if (systemSettings.adminUsername) {
+      setAdminUser(systemSettings.adminUsername);
+    }
+    if (systemSettings.adminPasscode) {
+      setAdminPass(systemSettings.adminPasscode);
+    }
   }, [systemSettings]);
   
   // Search & Filters
@@ -410,18 +423,16 @@ export default function AdminDashboard({
   };
 
   const handleDeleteProduct = (productId: string) => {
-    if (confirm('Are you sure you want to remove this product from the master catalog?')) {
-      const updated = products.filter(p => p.id !== productId);
-      onUpdateProducts(updated);
+    const updated = products.filter(p => p.id !== productId);
+    onUpdateProducts(updated);
 
-      // Clean up company lists
-      companies.forEach(co => {
-        if (co.enabledProductIds) {
-          const filtered = co.enabledProductIds.filter(id => id !== productId);
-          onUpdateCompany({ ...co, enabledProductIds: filtered });
-        }
-      });
-    }
+    // Clean up company lists
+    companies.forEach(co => {
+      if (co.enabledProductIds) {
+        const filtered = co.enabledProductIds.filter(id => id !== productId);
+        onUpdateCompany({ ...co, enabledProductIds: filtered });
+      }
+    });
   };
 
   // ----------------------------------------------------
@@ -536,28 +547,15 @@ export default function AdminDashboard({
 
   return (
     <div className="space-y-8 animate-fade-in">
-      {/* Page Header */}
-      {adminTab === 'clients' && !showClientForm && (
-        <div className="flex justify-end border-b border-black pb-5">
-          <button
-            onClick={handleOpenNewClient}
-            className="bg-black text-white px-4 py-2.5 rounded-xl text-xs uppercase font-extrabold tracking-wider border border-black hover:bg-white hover:text-black transition-all flex items-center gap-2 cursor-pointer shadow-sm"
-            id="admin-new-client-btn"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Create Client Account</span>
-          </button>
-        </div>
-      )}
-
       {/* Admin Subtabs */}
-      <div className="flex border-b border-gray-200 overflow-x-auto no-scrollbar pt-1">
+      <div className="flex border-b border-gray-200 overflow-x-auto custom-scrollbar pb-2 pt-1">
         {[
           { id: 'clients', label: 'Client Accounts', icon: Users, count: companies.length },
+          { id: 'catalog', label: 'ARH Products', icon: Layers, count: catalogProducts.length },
           { id: 'orders', label: 'Orders', icon: ClipboardList, count: orders.length },
           { id: 'analytics', label: 'Analytics', icon: BarChart3, count: null },
-          { id: 'emails', label: 'Email Logs', icon: Mail, count: emailLogs.length },
-          { id: 'settings', label: 'Admin Settings', icon: Settings, count: null }
+          { id: 'settings', label: 'Admin Settings', icon: Settings, count: null },
+          { id: 'sync', label: 'Google Sheet Sync', icon: FileSpreadsheet, count: null }
         ].map((subtab) => {
           const Icon = subtab.icon;
           const isActive = adminTab === subtab.id;
@@ -587,6 +585,24 @@ export default function AdminDashboard({
           );
         })}
       </div>
+
+      {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
+      {/* PRODUCT CATALOG PANEL */}
+      {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
+      {adminTab === 'catalog' && (
+        <AdminProductCatalog
+          products={catalogProducts}
+          quoteEnquiries={quoteEnquiries}
+          onAddProduct={onAddCatalogProduct}
+          onUpdateProduct={onUpdateCatalogProduct}
+          onDeleteProduct={onDeleteCatalogProduct}
+          onUpdateQuoteEnquiryStatus={onUpdateQuoteEnquiryStatus}
+          onDeleteQuoteEnquiry={onDeleteQuoteEnquiry}
+          onSaveQuoteEnquiry={onSaveQuoteEnquiry}
+          onAddProductToCompanyCatalog={onAddProductToCompanyCatalog}
+          currencySymbol={currencySymbol}
+        />
+      )}
 
       {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
       {/* CLIENTS ACCOUNTS PANEL */}
@@ -764,17 +780,28 @@ export default function AdminDashboard({
             </form>
           ) : (
             <div className="space-y-4">
-              {/* Filter */}
-              <div className="relative flex items-center max-w-sm">
-                <Search className="absolute left-3.5 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search client accounts..."
-                  value={clientSearch}
-                  onChange={(e) => setClientSearch(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-xl pl-11 pr-4 py-2 text-xs text-black focus:border-black focus:outline-none"
-                  id="admin-client-search"
-                />
+              {/* Toolbar: Search & Create Client Account */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="relative flex items-center w-full sm:max-w-sm">
+                  <Search className="absolute left-3.5 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search client accounts..."
+                    value={clientSearch}
+                    onChange={(e) => setClientSearch(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl pl-11 pr-4 py-2.5 text-xs text-black focus:border-black focus:outline-none"
+                    id="admin-client-search"
+                  />
+                </div>
+
+                <button
+                  onClick={handleOpenNewClient}
+                  className="bg-black text-white px-4 py-2.5 rounded-xl text-xs uppercase font-extrabold tracking-wider border border-black hover:bg-white hover:text-black transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm shrink-0"
+                  id="admin-new-client-btn"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Create Client Account</span>
+                </button>
               </div>
 
               {/* Profiles Grid */}
@@ -1025,7 +1052,8 @@ export default function AdminDashboard({
                     className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-2.5 py-1.5 text-xs font-semibold text-black focus:outline-none"
                   >
                     <option value="all">All Statuses</option>
-                    <option value="Pending">Pending</option>
+                    <option value="Pending Approval">Portal Review (Pending)</option>
+                    <option value="Pending">Pending (Admin)</option>
                     <option value="Approved">Approved</option>
                     <option value="In Production">In Production</option>
                     <option value="Shipped">Shipped</option>
@@ -1040,7 +1068,8 @@ export default function AdminDashboard({
           {/* Kanban boards wrapper */}
           <div className="flex flex-col xl:flex-row gap-4 overflow-x-auto pb-6 scrollbar-thin scrollbar-thumb-gray-200 select-none items-start">
             {[
-              { id: 'Pending', label: 'Pending', bg: 'bg-neutral-50', text: 'text-gray-500', border: 'border-gray-200', badge: 'bg-gray-100 text-gray-700' },
+              { id: 'Pending Approval', label: 'Portal Review', bg: 'bg-amber-50/40', text: 'text-amber-800', border: 'border-amber-200', badge: 'bg-amber-200 text-amber-900 font-extrabold' },
+              { id: 'Pending', label: 'Pending (Admin)', bg: 'bg-neutral-50', text: 'text-gray-500', border: 'border-gray-200', badge: 'bg-gray-100 text-gray-700' },
               { id: 'Approved', label: 'Approved', bg: 'bg-purple-50/40', text: 'text-purple-700', border: 'border-purple-200', badge: 'bg-purple-100 text-purple-700' },
               { id: 'In Production', label: 'In Production', bg: 'bg-amber-50/40', text: 'text-amber-700', border: 'border-amber-200', badge: 'bg-amber-100 text-amber-700' },
               { id: 'Shipped', label: 'Shipped', bg: 'bg-blue-50/40', text: 'text-blue-700', border: 'border-blue-200', badge: 'bg-blue-100 text-blue-700' },
@@ -1450,451 +1479,282 @@ export default function AdminDashboard({
         );
       })()}
 
-      {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
-      {/* AUTOMATED EMAIL DISPATCH LOGS & INSPECTOR */}
-      {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
-      {adminTab === 'emails' && (
-        <div className="space-y-6 animate-fade-in" id="admin-email-logs-tab">
-          <div className="bg-white border border-gray-200 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">
-              <div>
-                <h3 className="text-base uppercase font-extrabold text-black tracking-tight flex items-center gap-2">
-                  <Mail className="w-5 h-5 text-black" />
-                  Automated Email Dispatch Logs
-                </h3>
-                <p className="text-[11px] text-gray-400 font-mono mt-0.5">
-                  Real-time history of automated emails sent to Administrators and Client accounts.
-                </p>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={handleSendTestEmail}
-                  disabled={isSendingTestEmail}
-                  className="px-3.5 py-2 bg-black hover:bg-gray-800 text-white rounded-xl text-xs font-bold font-mono transition-all flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>{isSendingTestEmail ? 'Sending...' : 'Send Test Email'}</span>
-                </button>
-                {emailLogs.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (confirm('Clear all local email dispatch logs?')) {
-                        emailService.clearLogs();
-                        setEmailLogs([]);
-                      }
-                    }}
-                    className="px-3 py-2 bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-600 rounded-xl text-xs font-bold font-mono transition-all flex items-center space-x-1 cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Clear Logs</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {testEmailStatus && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-mono font-bold rounded-xl flex items-center justify-between">
-                <span>{testEmailStatus}</span>
-              </div>
-            )}
-
-            {emailLogs.length === 0 ? (
-              <div className="text-center py-12 border-2 border-dashed border-gray-200 rounded-2xl bg-neutral-50/50">
-                <Inbox className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-600 font-mono">No Email Logs Recorded</h4>
-                <p className="text-[11px] text-gray-400 max-w-sm mx-auto mt-1 font-sans">
-                  Automated emails will appear here when orders are placed, updated, or canceled. Click "Send Test Email" to test email delivery now.
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse font-sans text-xs">
-                  <thead>
-                    <tr className="bg-black text-white font-mono uppercase tracking-wider text-[9px] border-b border-black">
-                      <th className="p-3.5 rounded-l-2xl">Date &amp; Time</th>
-                      <th className="p-3.5">Recipient</th>
-                      <th className="p-3.5">Notification Type</th>
-                      <th className="p-3.5">Subject Line</th>
-                      <th className="p-3.5 text-center">Status</th>
-                      <th className="p-3.5 text-right rounded-r-2xl">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {emailLogs.map((log) => (
-                      <tr key={log.id} className="hover:bg-neutral-50 transition-colors">
-                        <td className="p-3.5 font-mono text-[10px] text-gray-500 whitespace-nowrap">
-                          {new Date(log.sentAt).toLocaleString()}
-                        </td>
-                        <td className="p-3.5 font-bold font-mono text-black text-xs">
-                          {log.to}
-                        </td>
-                        <td className="p-3.5">
-                          <span className="inline-block px-2 py-0.5 rounded font-mono text-[9px] font-bold uppercase bg-gray-100 text-gray-700 border border-gray-200">
-                            {log.type.replace(/_/g, ' ')}
-                          </span>
-                        </td>
-                        <td className="p-3.5 text-gray-800 font-medium max-w-xs truncate">
-                          {log.subject}
-                        </td>
-                        <td className="p-3.5 text-center">
-                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
-                            <CheckCircle className="w-3 h-3 text-emerald-600" />
-                            <span>Dispatched</span>
-                          </span>
-                        </td>
-                        <td className="p-3.5 text-right">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedEmail(log)}
-                            className="inline-flex items-center space-x-1 px-2.5 py-1 bg-black hover:bg-gray-800 text-white rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer"
-                          >
-                            <Eye className="w-3 h-3" />
-                            <span>Preview HTML</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* HTML Email Preview Modal */}
-      {selectedEmail && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-black shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-fade-in">
-            <div className="bg-black text-white px-6 py-4 flex items-center justify-between border-b border-black">
-              <div>
-                <span className="text-[9px] font-mono uppercase tracking-widest text-emerald-400 font-bold block">
-                  Automated Email Inspector
-                </span>
-                <h3 className="text-sm font-extrabold uppercase font-sans truncate max-w-md">
-                  {selectedEmail.subject}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedEmail(null)}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-4 bg-gray-50 border-b border-gray-200 font-mono text-xs space-y-1">
-              <div><strong className="text-gray-500">TO:</strong> {selectedEmail.to}</div>
-              <div><strong className="text-gray-500">DISPATCHED AT:</strong> {new Date(selectedEmail.sentAt).toLocaleString()}</div>
-            </div>
-
-            <div className="p-6 overflow-y-auto flex-1 bg-white">
-              <div 
-                className="prose max-w-none text-xs"
-                dangerouslySetInnerHTML={{ __html: selectedEmail.body }}
-              />
-            </div>
-
-            <div className="p-4 bg-gray-50 border-t border-gray-200 text-right">
-              <button
-                type="button"
-                onClick={() => setSelectedEmail(null)}
-                className="px-5 py-2 bg-black hover:bg-gray-800 text-white font-mono text-xs font-bold rounded-xl transition-all cursor-pointer"
-              >
-                Close Preview
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {adminTab === 'settings' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fade-in" id="admin-settings-tab">
-          {/* Left Column: Form Settings */}
-          <div className="space-y-6">
-            <form onSubmit={handleSaveSettings} className="bg-white border border-gray-200 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
-              <div className="border-b border-gray-100 pb-4">
-                <h3 className="text-base uppercase font-extrabold text-black tracking-tight flex items-center gap-2">
-                  <Settings className="w-5 h-5 text-black animate-spin-slow" />
-                  System Configuration &amp; Credentials
-                </h3>
-                <p className="text-[11px] text-gray-400 font-mono mt-1">
-                  Configure your portal identity, ordering rules, and administrator authentication.
+        <div className="max-w-4xl mx-auto animate-fade-in" id="admin-settings-tab">
+          <form onSubmit={handleSaveSettings} className="bg-white border border-gray-200 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
+            <div className="border-b border-gray-100 pb-4">
+              <h3 className="text-base uppercase font-extrabold text-black tracking-tight flex items-center gap-2">
+                <Settings className="w-5 h-5 text-black animate-spin-slow" />
+                System Configuration &amp; Credentials
+              </h3>
+              <p className="text-[11px] text-gray-400 font-mono mt-1">
+                Configure your portal identity, ordering rules, and administrator authentication.
+              </p>
+            </div>
+
+            {settingsSuccessMsg && (
+              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-xs font-mono flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
+                <span>{settingsSuccessMsg}</span>
+              </div>
+            )}
+
+            {/* Identity Section */}
+            <div className="space-y-4">
+              <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-400 font-mono border-b border-gray-50 pb-1">
+                Portal Identity Settings
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Hub Display Name</label>
+                  <input
+                    type="text"
+                    value={hubName}
+                    onChange={(e) => setHubName(e.target.value)}
+                    required
+                    placeholder="e.g. ARH Print Hub"
+                    className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-semibold text-black focus:outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Short Initials (Logo)</label>
+                  <input
+                    type="text"
+                    value={shortHubName}
+                    onChange={(e) => setShortHubName(e.target.value)}
+                    required
+                    placeholder="e.g. ARH"
+                    maxLength={5}
+                    className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-semibold text-black focus:outline-none"
+                  />
+                </div>
+                 <div className="space-y-1 md:col-span-2">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Portal Main Logo URL (URL, base64, or attach below)</label>
+                  <input
+                    type="text"
+                    value={appLogoUrl}
+                    onChange={(e) => setAppLogoUrl(e.target.value)}
+                    placeholder="https://images.unsplash.com/... or a direct image web link"
+                    className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-mono font-semibold text-black focus:outline-none"
+                  />
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <label className="cursor-pointer bg-neutral-900 text-white hover:bg-neutral-800 rounded-lg px-2.5 py-1.5 text-[10px] font-mono uppercase font-bold tracking-wider inline-flex items-center gap-1.5 transition-colors shrink-0">
+                      <Paperclip className="w-3 h-3" />
+                      <span>Attach Logo File</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              const base64String = reader.result as string;
+                              setAppLogoUrl(base64String);
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                    <span className="text-[9px] text-gray-500 font-mono truncate">
+                      Convert local image file to offline logo.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Order Settings Section */}
+            <div className="space-y-4 pt-2">
+              <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-400 font-mono border-b border-gray-50 pb-1">
+                Ordering &amp; Invoice Settings
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Order Number Prefix</label>
+                  <input
+                    type="text"
+                    value={orderPrefix}
+                    onChange={(e) => setOrderPrefix(e.target.value)}
+                    required
+                    placeholder="e.g. ARH-2026"
+                    className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-semibold text-black focus:outline-none"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Currency Symbol</label>
+                  <input
+                    type="text"
+                    value={currencySymbol}
+                    onChange={(e) => setCurrencySymbol(e.target.value)}
+                    required
+                    placeholder="e.g. Php"
+                    className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-semibold text-black focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Theme Settings Section */}
+            <div className="space-y-4 pt-2">
+              <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-400 font-mono border-b border-gray-50 pb-1">
+                Portal Theme Accent Color
+              </h4>
+              <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 space-y-4">
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                  {/* Visual Color Picker Input */}
+                  <div className="flex items-center gap-3">
+                    <div className="relative w-12 h-12 rounded-xl border border-gray-200 overflow-hidden shadow-xs hover:shadow-md transition-all shrink-0">
+                      <input
+                        type="color"
+                        value={colorTheme.startsWith('#') ? colorTheme : '#000000'}
+                        onChange={(e) => setColorTheme(e.target.value)}
+                        className="absolute inset-0 w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 cursor-pointer"
+                        title="Click to choose a color"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[9px] uppercase font-mono font-bold text-gray-400">Custom Accent HEX</label>
+                      <input
+                        type="text"
+                        value={colorTheme}
+                        onChange={(e) => setColorTheme(e.target.value)}
+                        placeholder="#000000"
+                        required
+                        className="w-32 bg-white border border-gray-200 focus:border-black rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-black uppercase focus:outline-none"
+                        maxLength={7}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col justify-center">
+                    <span className="text-[9px] uppercase font-mono font-bold text-gray-400 mb-1">Live Theme Preview</span>
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block w-4 h-4 rounded-full border border-black/10" style={{ backgroundColor: colorTheme }} />
+                      <span className="text-xs text-gray-600 font-medium font-mono uppercase">{colorTheme}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Standard presets that write HEX values */}
+                <div className="space-y-2">
+                  <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Standard Presets</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    {[
+                      { id: '#000000', name: 'Classic Noir', bg: 'bg-black' },
+                      { id: '#064e3b', name: 'Royal Emerald', bg: 'bg-emerald-900' },
+                      { id: '#1e3a8a', name: 'Deep Ocean', bg: 'bg-blue-900' },
+                      { id: '#881337', name: 'Sunset Crimson', bg: 'bg-rose-900' },
+                      { id: '#78350f', name: 'Warm Amber', bg: 'bg-amber-900' }
+                    ].map((themeOpt) => (
+                      <button
+                        key={themeOpt.id}
+                        type="button"
+                        onClick={() => setColorTheme(themeOpt.id)}
+                        className={`flex items-center gap-2 p-2 border rounded-xl text-left cursor-pointer transition-all ${
+                          colorTheme.toLowerCase() === themeOpt.id.toLowerCase()
+                            ? 'border-black ring-1 ring-black bg-white font-extrabold'
+                            : 'border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50/50'
+                        }`}
+                        id={`theme-btn-${themeOpt.id}`}
+                      >
+                        <span className={`w-3.5 h-3.5 rounded-full shrink-0 border border-black/10 ${themeOpt.bg}`} />
+                        <span className="text-[10px] text-gray-700 leading-none truncate font-medium">{themeOpt.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Contact Information Section */}
+            <div className="space-y-4 pt-2">
+              <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-400 font-mono border-b border-gray-50 pb-1">
+                Administrator Contact
+              </h4>
+              <div className="space-y-1">
+                <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Admin Email Address</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-400" />
+                  <input
+                    type="email"
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    placeholder="e.g. admin@yourdomain.com"
+                    className="w-full bg-white border border-gray-200 focus:border-black rounded-lg pl-9 pr-3 py-2 text-xs font-semibold text-black focus:outline-none font-mono"
+                  />
+                </div>
+                <p className="text-[9px] text-gray-400 font-mono">
+                  Primary contact email for system records and support inquiries.
                 </p>
               </div>
+            </div>
 
-              {settingsSuccessMsg && (
-                <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl text-xs font-mono flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
-                  <span>{settingsSuccessMsg}</span>
-                </div>
-              )}
-
-              {/* Identity Section */}
-              <div className="space-y-4">
-                <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-400 font-mono border-b border-gray-50 pb-1">
-                  Portal Identity Settings
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Hub Display Name</label>
+            {/* Credentials Section */}
+            <div className="space-y-4 pt-2">
+              <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-400 font-mono border-b border-gray-50 pb-1">
+                Admin Login Credentials
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Admin Username</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-400" />
                     <input
                       type="text"
-                      value={hubName}
-                      onChange={(e) => setHubName(e.target.value)}
+                      value={adminUser}
+                      onChange={(e) => setAdminUser(e.target.value)}
                       required
-                      placeholder="e.g. ARH Print Hub"
-                      className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-semibold text-black focus:outline-none"
+                      className="w-full bg-white border border-gray-200 focus:border-black rounded-lg pl-9 pr-3 py-2 text-xs font-semibold text-black focus:outline-none font-mono"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Short Initials (Logo)</label>
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Admin Passcode</label>
+                  <div className="relative">
+                    <Key className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-400" />
                     <input
                       type="text"
-                      value={shortHubName}
-                      onChange={(e) => setShortHubName(e.target.value)}
+                      value={adminPass}
+                      onChange={(e) => setAdminPass(e.target.value)}
                       required
-                      placeholder="e.g. ARH"
-                      maxLength={5}
-                      className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-semibold text-black focus:outline-none"
-                    />
-                  </div>
-                   <div className="space-y-1 md:col-span-2">
-                    <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Portal Main Logo URL (URL, base64, or attach below)</label>
-                    <input
-                      type="text"
-                      value={appLogoUrl}
-                      onChange={(e) => setAppLogoUrl(e.target.value)}
-                      placeholder="https://images.unsplash.com/... or a direct image web link"
-                      className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-mono font-semibold text-black focus:outline-none"
-                    />
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <label className="cursor-pointer bg-neutral-900 text-white hover:bg-neutral-800 rounded-lg px-2.5 py-1.5 text-[10px] font-mono uppercase font-bold tracking-wider inline-flex items-center gap-1.5 transition-colors shrink-0">
-                        <Paperclip className="w-3 h-3" />
-                        <span>Attach Logo File</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onloadend = () => {
-                                const base64String = reader.result as string;
-                                setAppLogoUrl(base64String);
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          }}
-                        />
-                      </label>
-                      <span className="text-[9px] text-gray-500 font-mono truncate">
-                        Convert local image file to offline logo.
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Order Settings Section */}
-              <div className="space-y-4 pt-2">
-                <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-400 font-mono border-b border-gray-50 pb-1">
-                  Ordering &amp; Invoice Settings
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Order Number Prefix</label>
-                    <input
-                      type="text"
-                      value={orderPrefix}
-                      onChange={(e) => setOrderPrefix(e.target.value)}
-                      required
-                      placeholder="e.g. ARH-2026"
-                      className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-semibold text-black focus:outline-none"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Currency Symbol</label>
-                    <input
-                      type="text"
-                      value={currencySymbol}
-                      onChange={(e) => setCurrencySymbol(e.target.value)}
-                      required
-                      placeholder="e.g. Php"
-                      className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-semibold text-black focus:outline-none"
+                      className="w-full bg-white border border-gray-200 focus:border-black rounded-lg pl-9 pr-3 py-2 text-xs font-semibold text-black focus:outline-none font-mono"
                     />
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* Theme Settings Section */}
-              <div className="space-y-4 pt-2">
-                <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-400 font-mono border-b border-gray-50 pb-1">
-                  Portal Theme Accent Color
-                </h4>
-                <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 space-y-4">
-                  <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                    {/* Visual Color Picker Input */}
-                    <div className="flex items-center gap-3">
-                      <div className="relative w-12 h-12 rounded-xl border border-gray-200 overflow-hidden shadow-xs hover:shadow-md transition-all shrink-0">
-                        <input
-                          type="color"
-                          value={colorTheme.startsWith('#') ? colorTheme : '#000000'}
-                          onChange={(e) => setColorTheme(e.target.value)}
-                          className="absolute inset-0 w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 cursor-pointer"
-                          title="Click to choose a color"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-[9px] uppercase font-mono font-bold text-gray-400">Custom Accent HEX</label>
-                        <input
-                          type="text"
-                          value={colorTheme}
-                          onChange={(e) => setColorTheme(e.target.value)}
-                          placeholder="#000000"
-                          required
-                          className="w-32 bg-white border border-gray-200 focus:border-black rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-black uppercase focus:outline-none"
-                          maxLength={7}
-                        />
-                      </div>
-                    </div>
+            {/* Submit Button */}
+            <div className="pt-4 border-t border-gray-100 flex justify-end">
+              <button
+                type="submit"
+                className="bg-black hover:bg-neutral-800 text-white font-extrabold text-xs uppercase tracking-wider py-2.5 px-6 rounded-xl border border-black transition-all cursor-pointer shadow-md"
+              >
+                Save Admin Settings
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
-                    <div className="flex flex-col justify-center">
-                      <span className="text-[9px] uppercase font-mono font-bold text-gray-400 mb-1">Live Theme Preview</span>
-                      <div className="flex items-center gap-2">
-                        <span className="inline-block w-4 h-4 rounded-full border border-black/10" style={{ backgroundColor: colorTheme }} />
-                        <span className="text-xs text-gray-600 font-medium font-mono uppercase">{colorTheme}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Standard presets that write HEX values */}
-                  <div className="space-y-2">
-                    <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Standard Presets</span>
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                      {[
-                        { id: '#000000', name: 'Classic Noir', bg: 'bg-black' },
-                        { id: '#064e3b', name: 'Royal Emerald', bg: 'bg-emerald-900' },
-                        { id: '#1e3a8a', name: 'Deep Ocean', bg: 'bg-blue-900' },
-                        { id: '#881337', name: 'Sunset Crimson', bg: 'bg-rose-900' },
-                        { id: '#78350f', name: 'Warm Amber', bg: 'bg-amber-900' }
-                      ].map((themeOpt) => (
-                        <button
-                          key={themeOpt.id}
-                          type="button"
-                          onClick={() => setColorTheme(themeOpt.id)}
-                          className={`flex items-center gap-2 p-2 border rounded-xl text-left cursor-pointer transition-all ${
-                            colorTheme.toLowerCase() === themeOpt.id.toLowerCase()
-                              ? 'border-black ring-1 ring-black bg-white font-extrabold'
-                              : 'border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50/50'
-                          }`}
-                          id={`theme-btn-${themeOpt.id}`}
-                        >
-                          <span className={`w-3.5 h-3.5 rounded-full shrink-0 border border-black/10 ${themeOpt.bg}`} />
-                          <span className="text-[10px] text-gray-700 leading-none truncate font-medium">{themeOpt.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Email Notification Section */}
-              <div className="space-y-4 pt-2">
-                <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-400 font-mono border-b border-gray-50 pb-1 flex items-center justify-between">
-                  <span>Automated Email Notifications</span>
-                  <span className="text-emerald-600 font-bold font-mono text-[9px] uppercase tracking-normal">● Active Dispatch Pipeline</span>
-                </h4>
-                <div className="space-y-2">
-                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Admin Notification Email</label>
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
-                    <div className="relative flex-1">
-                      <Mail className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-400" />
-                      <input
-                        type="email"
-                        value={adminEmail}
-                        onChange={(e) => setAdminEmail(e.target.value)}
-                        placeholder="e.g. regie.yoonet@gmail.com"
-                        className="w-full bg-white border border-gray-200 focus:border-black rounded-lg pl-9 pr-3 py-2 text-xs font-semibold text-black focus:outline-none font-mono"
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleSendTestEmail}
-                      disabled={isSendingTestEmail}
-                      className="inline-flex items-center justify-center space-x-1.5 px-3 py-2 bg-black hover:bg-gray-800 text-white rounded-lg text-xs font-bold transition-all cursor-pointer disabled:opacity-50 whitespace-nowrap"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>{isSendingTestEmail ? 'Sending Test...' : 'Send Test Email'}</span>
-                    </button>
-                  </div>
-                  {testEmailStatus && (
-                    <div className="p-2.5 bg-gray-900 text-white font-mono text-xs rounded-lg border border-black flex items-center space-x-2">
-                      <span>{testEmailStatus}</span>
-                    </div>
-                  )}
-                  <p className="text-[9px] text-gray-400 font-mono">
-                    Receives real-time email alerts when B2B orders are placed, updated, or canceled.
-                  </p>
-                </div>
-              </div>
-
-              {/* Credentials Section */}
-              <div className="space-y-4 pt-2">
-                <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-400 font-mono border-b border-gray-50 pb-1">
-                  Admin Login Credentials
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Admin Username</label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-400" />
-                      <input
-                        type="text"
-                        value={adminUser}
-                        onChange={(e) => setAdminUser(e.target.value)}
-                        required
-                        className="w-full bg-white border border-gray-200 focus:border-black rounded-lg pl-9 pr-3 py-2 text-xs font-semibold text-black focus:outline-none font-mono"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Admin Passcode</label>
-                    <div className="relative">
-                      <Key className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-400" />
-                      <input
-                        type="text"
-                        value={adminPass}
-                        onChange={(e) => setAdminPass(e.target.value)}
-                        required
-                        className="w-full bg-white border border-gray-200 focus:border-black rounded-lg pl-9 pr-3 py-2 text-xs font-semibold text-black focus:outline-none font-mono"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <div className="pt-4 border-t border-gray-100 flex justify-end">
-                <button
-                  type="submit"
-                  className="bg-black hover:bg-neutral-800 text-white font-extrabold text-xs uppercase tracking-wider py-2.5 px-6 rounded-xl border border-black transition-all cursor-pointer shadow-md"
-                >
-                  Save Admin Settings
-                </button>
-              </div>
-            </form>
-          </div>
-
-          {/* Right Column: Google Sheets Setup instructions */}
-          <div className="space-y-6">
-            <AppsScriptInstructions />
-          </div>
+      {/* Google Sheet Sync Tab */}
+      {adminTab === 'sync' && (
+        <div className="animate-fade-in" id="admin-sync-tab">
+          <SettingsPanel
+            config={appsScriptConfig}
+            onUpdateConfig={onUpdateAppsScriptConfig}
+            companies={companies}
+            onAddCompany={onAddCompany}
+            onUpdateCompany={onUpdateCompany}
+            totalOrders={orders.length}
+            productsCount={products.length}
+            onForceSyncAll={onForceSyncAll}
+            onPullFromSheets={onPullFromSheets}
+            isSyncingSheets={isSyncingSheets}
+          />
         </div>
       )}
 

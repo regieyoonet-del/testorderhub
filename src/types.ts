@@ -50,13 +50,15 @@ export interface Order {
   companyName: string;
   contactEmail: string;
   items: OrderItem[];
-  status: 'Pending' | 'Approved' | 'In Production' | 'Shipped' | 'Completed' | 'Canceled';
+  status: 'Pending Approval' | 'Pending' | 'Approved' | 'In Production' | 'Shipped' | 'Completed' | 'Canceled';
   totalAmount: number;
   createdAt: string;
   deliveryAddress: string;
   contactPerson: string;
   poNumber?: string;
   notes?: string;
+  portalId?: string;
+  portalName?: string;
 }
 
 export interface CompanyProfile {
@@ -89,6 +91,69 @@ export interface AppsScriptConfig {
   lastSyncTime?: string;
 }
 
+export interface ColorOption {
+  name: string;
+  hex: string;
+}
+
+export interface CatalogProduct {
+  id: string;
+  sku?: string;
+  name: string;
+  category: string;
+  description: string;
+  specifications?: string;
+  imageUrl: string;
+  imageUrls?: string[];
+  moq: number;
+  leadTime?: string;
+  brandingMethods: string[];
+  colors: ColorOption[];
+  sizes?: string[];
+  status: 'Active' | 'Hidden';
+  createdAt?: string;
+}
+
+export interface QuoteLineItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
+export interface QuoteEnquiry {
+  id: string;
+  enquiryNumber: string;
+  productId: string;
+  productName: string;
+  productCategory: string;
+  companyId?: string;
+  companyName: string;
+  contactPerson: string;
+  contactEmail: string;
+  contactPhone: string;
+  quantity: number;
+  preferredBrandingMethod?: string;
+  preferredColor?: string;
+  notes?: string;
+  status: 'New' | 'In Review' | 'Quoted' | 'Declined' | 'Closed' | 'Product Requested' | 'Product Added';
+  createdAt: string;
+  // Quote Builder generated fields
+  quotedUnitPrice?: number;
+  quotedTotalPrice?: number;
+  quotedTax?: number;
+  quotedShipping?: number;
+  quoteNotes?: string;
+  quotedValidUntil?: string;
+  quotedAt?: string;
+  quotedLineItems?: QuoteLineItem[];
+  // Client confirmation to proceed & add product
+  requestedProductAddition?: boolean;
+  requestedProductAdditionAt?: string;
+  requestedProductNotes?: string;
+}
+
 export interface SystemSettings {
   hubName: string;
   shortHubName: string;
@@ -97,5 +162,20 @@ export interface SystemSettings {
   colorTheme?: string;
   adminEmail?: string;
   logoUrl?: string;
+  adminUsername?: string;
+  adminPasscode?: string;
+}
+
+export interface OrderPortal {
+  id: string;
+  companyId: string;
+  companyName: string;
+  name: string;
+  description?: string;
+  status: 'Active' | 'Paused' | 'Closed';
+  productIds: string[];
+  createdAt: string;
+  updatedAt: string;
+  shareToken: string;
 }
 

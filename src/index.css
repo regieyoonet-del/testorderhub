@@ -87,3 +87,70 @@
 .animate-slide-down {
   animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* Print Media Styles */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Hide header, navigation, and non-printable elements */
+  header, nav, main, footer, .no-print {
+    display: none !important;
+  }
+
+  /* Reset fixed modal overlay wrappers so content flows in normal document order */
+  div[class*="fixed"],
+  div[class*="backdrop"],
+  div[class*="z-"] {
+    position: static !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    inset: auto !important;
+    display: block !important;
+    overflow: visible !important;
+    max-height: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Hide buttons during print */
+  button {
+    display: none !important;
+  }
+
+  /* Hide everything on the page by default */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Show only the printable area */
+  .printable-area,
+  .printable-area * {
+    visibility: visible !important;
+  }
+
+  .printable-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 20px !important;
+    border: 1px solid #000000 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    page-break-inside: avoid;
+  }
+}
+
