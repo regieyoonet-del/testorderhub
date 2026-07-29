@@ -436,20 +436,21 @@ export const sheetsService = {
       if (!response.ok) return null;
       const item = await response.json();
       if (item) {
-        const hubName = getProp(item, 'HubName') || getProp(item, 'Hub Name');
-        if (hubName) {
-          return {
-            hubName: String(hubName),
-            shortHubName: String(getProp(item, 'ShortHubName') || getProp(item, 'Short Hub Name') || ''),
-            orderPrefix: String(getProp(item, 'OrderPrefix') || getProp(item, 'Order Prefix') || ''),
-            currencySymbol: String(getProp(item, 'CurrencySymbol') || getProp(item, 'Currency Symbol') || ''),
-            colorTheme: String(getProp(item, 'ColorTheme') || getProp(item, 'Color Theme') || 'classic_noir'),
-            adminUsername: String(getProp(item, 'AdminUsername') || getProp(item, 'Admin Username') || ''),
-            adminPasscode: String(getProp(item, 'AdminPasscode') || getProp(item, 'Admin Passcode') || ''),
-            adminEmail: String(getProp(item, 'AdminEmail') || getProp(item, 'Admin Email') || ''),
-            logoUrl: String(getProp(item, 'AppLogoURL') || getProp(item, 'App Logo URL') || getProp(item, 'LogoURL') || getProp(item, 'Logo URL') || '')
-          };
-        }
+        const hubName = getProp(item, ['HubName', 'Hub Name', 'hubName', 'Hub']) || 'ARH Print Hub';
+        const adminUsername = String(getProp(item, ['AdminUsername', 'Admin Username', 'AdminUser', 'Admin User', 'Username', 'User']) || '').trim();
+        const adminPasscode = String(getProp(item, ['AdminPasscode', 'Admin Passcode', 'AdminPassword', 'Admin Password', 'Passcode', 'Password', 'Pass']) || '').trim();
+        
+        return {
+          hubName: String(hubName),
+          shortHubName: String(getProp(item, ['ShortHubName', 'Short Hub Name', 'shortHubName']) || ''),
+          orderPrefix: String(getProp(item, ['OrderPrefix', 'Order Prefix', 'orderPrefix']) || ''),
+          currencySymbol: String(getProp(item, ['CurrencySymbol', 'Currency Symbol', 'currencySymbol']) || ''),
+          colorTheme: String(getProp(item, ['ColorTheme', 'Color Theme', 'colorTheme']) || 'classic_noir'),
+          adminUsername: adminUsername,
+          adminPasscode: adminPasscode,
+          adminEmail: String(getProp(item, ['AdminEmail', 'Admin Email', 'adminEmail']) || ''),
+          logoUrl: String(getProp(item, ['AppLogoURL', 'App Logo URL', 'LogoURL', 'Logo URL', 'logoUrl']) || '')
+        };
       }
       return null;
     } catch (error) {

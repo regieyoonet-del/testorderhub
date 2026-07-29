@@ -554,40 +554,8 @@ export default function App() {
 
         // 2. Fetch companies
         const fetchedCompanies = await sheetsService.fetchCompanies(url);
-        if (fetchedCompanies !== null) {
-          setCompanies(prevCompanies => {
-            const map = new Map<string, CompanyProfile>();
-            prevCompanies.forEach(co => map.set(co.id, co));
-
-            fetchedCompanies.forEach(fetchedCo => {
-              const existingLocal = map.get(fetchedCo.id);
-              if (existingLocal) {
-                const mergedCo: CompanyProfile = {
-                  ...existingLocal,
-                  name: (fetchedCo.name && fetchedCo.name.trim() !== '') ? fetchedCo.name : existingLocal.name,
-                  username: (fetchedCo.username && fetchedCo.username.trim() !== '') ? fetchedCo.username.trim().toLowerCase() : existingLocal.username,
-                  passcode: (fetchedCo.passcode && fetchedCo.passcode.trim() !== '') ? fetchedCo.passcode : existingLocal.passcode,
-                  contactPerson: (fetchedCo.contactPerson && fetchedCo.contactPerson.trim() !== '') ? fetchedCo.contactPerson : existingLocal.contactPerson,
-                  contactEmail: (fetchedCo.contactEmail && fetchedCo.contactEmail.trim() !== '') ? fetchedCo.contactEmail : existingLocal.contactEmail,
-                  contactPhone: (fetchedCo.contactPhone && fetchedCo.contactPhone.trim() !== '') ? fetchedCo.contactPhone : existingLocal.contactPhone,
-                  deliveryAddress: (fetchedCo.deliveryAddress && fetchedCo.deliveryAddress.trim() !== '') ? fetchedCo.deliveryAddress : existingLocal.deliveryAddress,
-                  logoUrl: (fetchedCo.logoUrl !== undefined && fetchedCo.logoUrl !== null && fetchedCo.logoUrl.trim() !== '') ? fetchedCo.logoUrl : existingLocal.logoUrl,
-                  poRequired: fetchedCo.poRequired !== undefined ? fetchedCo.poRequired : existingLocal.poRequired,
-                  enabledProductIds: (fetchedCo.enabledProductIds && fetchedCo.enabledProductIds.length > 0)
-                    ? fetchedCo.enabledProductIds
-                    : existingLocal.enabledProductIds,
-                  customProducts: (fetchedCo.customProducts && fetchedCo.customProducts.length > 0)
-                    ? fetchedCo.customProducts
-                    : existingLocal.customProducts
-                };
-                map.set(fetchedCo.id, sanitizeCompany(mergedCo));
-              } else {
-                map.set(fetchedCo.id, sanitizeCompany(fetchedCo));
-              }
-            });
-
-            return Array.from(map.values()).map(sanitizeCompany);
-          });
+        if (fetchedCompanies !== null && fetchedCompanies.length > 0) {
+          setCompanies(fetchedCompanies.map(sanitizeCompany));
         }
 
         // 3. Merge products from fetchedProducts and company customProducts
@@ -614,39 +582,25 @@ export default function App() {
         // 3. Fetch orders
         const fetchedOrders = await sheetsService.fetchOrders(url);
         if (fetchedOrders !== null) {
-          setOrders(prevOrders => {
-            const map = new Map<string, Order>();
-            prevOrders.forEach(o => map.set(o.id, o));
-
-            fetchedOrders.forEach(fo => {
-              const local = map.get(fo.id);
-              if (local) {
-                const isLocalStatusSet = local.status && local.status !== 'Pending' && local.status !== 'Pending Approval';
-                map.set(fo.id, {
-                  ...fo,
-                  status: isLocalStatusSet ? local.status : fo.status,
-                  items: (fo.items && fo.items.length > 0) ? fo.items : local.items
-                });
-              } else {
-                map.set(fo.id, fo);
-              }
-            });
-
-            return Array.from(map.values());
-          });
+          setOrders(fetchedOrders);
         }
 
         // 4. Fetch admin settings
         const fetchedSettings = await sheetsService.fetchAdminSettings(url);
         if (fetchedSettings) {
-          const currentAdminUser = fetchedSettings.adminUsername || localStorage.getItem('rp_admin_username') || systemSettings.adminUsername || 'admin';
-          const currentAdminPass = fetchedSettings.adminPasscode || localStorage.getItem('rp_admin_passcode') || systemSettings.adminPasscode || 'admin123';
+          const currentAdminUser = (fetchedSettings.adminUsername && fetchedSettings.adminUsername.trim() !== '')
+            ? fetchedSettings.adminUsername.trim()
+            : (localStorage.getItem('rp_admin_username') || systemSettings.adminUsername || 'admin');
+
+          const currentAdminPass = (fetchedSettings.adminPasscode && fetchedSettings.adminPasscode.trim() !== '')
+            ? fetchedSettings.adminPasscode.trim()
+            : (localStorage.getItem('rp_admin_passcode') || systemSettings.adminPasscode || 'admin123');
 
           setSystemSettings({
-            hubName: fetchedSettings.hubName,
-            shortHubName: fetchedSettings.shortHubName,
-            orderPrefix: fetchedSettings.orderPrefix,
-            currencySymbol: fetchedSettings.currencySymbol,
+            hubName: fetchedSettings.hubName || 'ARH Print Hub',
+            shortHubName: fetchedSettings.shortHubName || 'ARH',
+            orderPrefix: fetchedSettings.orderPrefix || 'ARH-2026',
+            currencySymbol: fetchedSettings.currencySymbol || 'Php',
             colorTheme: fetchedSettings.colorTheme || 'classic_noir',
             adminEmail: fetchedSettings.adminEmail || '',
             logoUrl: fetchedSettings.logoUrl || '',

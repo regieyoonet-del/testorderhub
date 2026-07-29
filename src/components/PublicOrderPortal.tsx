@@ -14,6 +14,7 @@ import {
   Send,
   Printer,
   ArrowLeft,
+  ArrowRight,
   Store,
   Clock,
   Truck,
@@ -75,12 +76,13 @@ export default function PublicOrderPortal({
     customDetails: Record<string, string>;
   }[]>([]);
 
-  // Selected Option States per Product ID
+  // Option states per Product ID
   const [qtys, setQtys] = useState<Record<string, number>>({});
   const [sizes, setSizes] = useState<Record<string, string>>({});
   const [colors, setColors] = useState<Record<string, string>>({});
   const [customs, setCustoms] = useState<Record<string, Record<string, string>>>({});
   const [addedToast, setAddedToast] = useState<string | null>(null);
+  const [selectedDetailProduct, setSelectedDetailProduct] = useState<Product | null>(null);
 
   // Checkout Modal State
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -317,6 +319,252 @@ export default function PublicOrderPortal({
     );
   }
 
+  // Single Product Detail Page
+  if (selectedDetailProduct) {
+    const product = selectedDetailProduct;
+    const currentQty = getQty(product);
+    const currentSize = getSize(product);
+    const currentColor = getColor(product);
+    const currentCustoms = getCustoms(product);
+
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-black selection:bg-black selection:text-white pb-24">
+        {/* Header bar */}
+        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-gray-200 px-4 sm:px-8 py-4 flex items-center justify-between">
+          <button
+            onClick={() => setSelectedDetailProduct(null)}
+            className="inline-flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-wider text-black bg-gray-100 hover:bg-gray-200 px-3.5 py-2.5 rounded-xl transition-all cursor-pointer"
+            id="back-to-catalog-btn"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>← Back to Catalog</span>
+          </button>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsCheckoutOpen(true)}
+              className="relative bg-black text-white hover:bg-neutral-800 px-4 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider font-mono flex items-center gap-2 cursor-pointer shadow-xs"
+              id="portal-view-cart-btn-detail"
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <span>Cart</span>
+              {cartItems.length > 0 && (
+                <span className="bg-white text-black text-[10px] font-black px-1.5 py-0.2 rounded-full border border-black">
+                  {cartItems.reduce((acc, item) => acc + item.quantity, 0)}
+                </span>
+              )}
+            </button>
+          </div>
+        </header>
+
+        {/* Product Detail Page View */}
+        <main className="max-w-5xl mx-auto px-4 sm:px-8 py-8 w-full flex-1">
+          <div className="bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-sm p-6 sm:p-10 grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 items-start">
+            {/* Image & Badges */}
+            <div className="space-y-4">
+              <div className="relative aspect-square bg-gray-50 border border-gray-200 rounded-2xl overflow-hidden flex items-center justify-center">
+                {product.imageUrl ? (
+                  <img
+                    src={product.imageUrl}
+                    alt={product.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <Store className="w-20 h-20 text-gray-300" />
+                )}
+                <span className="absolute top-4 left-4 bg-black/90 text-white text-[10px] font-mono uppercase font-bold px-3 py-1 rounded-full backdrop-blur-xs">
+                  {product.category}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap gap-2 text-[10px] font-mono font-bold">
+                <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-lg">
+                  Unit: {product.unit}
+                </span>
+                {product.leadTime && (
+                  <span className="bg-gray-100 text-gray-700 border border-gray-200 px-3 py-1 rounded-lg">
+                    Lead Time: {product.leadTime}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Product Configuration */}
+            <div className="space-y-6">
+              <div>
+                <span className="text-[10px] uppercase font-mono font-bold text-gray-400 tracking-wider block mb-1">
+                  Item Specifications
+                </span>
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-black uppercase tracking-tight leading-tight">
+                  {product.name}
+                </h1>
+                <div className="mt-3 flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-black font-mono">
+                    {systemSettings.currencySymbol || 'Php'} {product.basePrice.toFixed(2)}
+                  </span>
+                  <span className="text-xs text-gray-500 font-mono">/ {product.unit}</span>
+                </div>
+              </div>
+
+              {product.description && (
+                <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 text-xs text-gray-600 leading-relaxed font-sans">
+                  {product.description}
+                </div>
+              )}
+
+              {/* Options */}
+              <div className="space-y-4 border-t border-gray-100 pt-5">
+                {/* Sizes */}
+                {product.sizeOptions && product.sizeOptions.length > 0 && (
+                  <div className="space-y-2">
+                    <label className="block text-xs uppercase font-mono font-bold text-gray-500">
+                      Select Size
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {product.sizeOptions.map(s => (
+                        <button
+                          key={s}
+                          onClick={() => setSizes(prev => ({ ...prev, [product.id]: s }))}
+                          className={`px-3.5 py-1.5 text-xs font-mono font-bold rounded-xl border transition-all cursor-pointer ${
+                            currentSize === s
+                              ? 'bg-black text-white border-black ring-2 ring-black/20'
+                              : 'bg-white text-gray-800 border-gray-200 hover:border-gray-400'
+                          }`}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Colors */}
+                {product.colorOptions && product.colorOptions.length > 0 && (
+                  <div className="space-y-2">
+                    <label className="block text-xs uppercase font-mono font-bold text-gray-500">
+                      Select Color
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {product.colorOptions.map(c => (
+                        <button
+                          key={c}
+                          onClick={() => setColors(prev => ({ ...prev, [product.id]: c }))}
+                          className={`px-3.5 py-1.5 text-xs font-sans font-semibold rounded-xl border transition-all cursor-pointer ${
+                            currentColor === c
+                              ? 'bg-black text-white border-black ring-2 ring-black/20'
+                              : 'bg-white text-gray-800 border-gray-200 hover:border-gray-400'
+                          }`}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Custom Fields */}
+                {product.customFields && product.customFields.map(cf => (
+                  <div key={cf.name} className="space-y-1.5">
+                    <label className="block text-xs uppercase font-mono font-bold text-gray-500">
+                      {cf.label} {cf.required && <span className="text-red-500">*</span>}
+                    </label>
+                    {cf.type === 'select' && cf.options ? (
+                      <select
+                        value={currentCustoms[cf.name] || cf.options[0]}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustoms(prev => ({
+                            ...prev,
+                            [product.id]: { ...(prev[product.id] || {}), [cf.name]: val }
+                          }));
+                        }}
+                        className="w-full bg-white border border-gray-200 focus:border-black rounded-xl p-3 text-xs font-sans text-black focus:outline-none"
+                      >
+                        {cf.options.map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder={cf.placeholder || `Enter ${cf.label}`}
+                        value={currentCustoms[cf.name] || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustoms(prev => ({
+                            ...prev,
+                            [product.id]: { ...(prev[product.id] || {}), [cf.name]: val }
+                          }));
+                        }}
+                        className="w-full bg-white border border-gray-200 focus:border-black rounded-xl p-3 text-xs font-sans text-black focus:outline-none"
+                      />
+                    )}
+                  </div>
+                ))}
+
+                {/* Quantity & Subtotal */}
+                <div className="space-y-2 pt-2">
+                  <label className="block text-xs uppercase font-mono font-bold text-gray-500">
+                    Quantity & Subtotal
+                  </label>
+                  <div className="flex flex-wrap items-center justify-between gap-4 bg-gray-50 border border-gray-200 rounded-2xl p-3">
+                    <div className="flex items-center border border-gray-300 rounded-xl bg-white overflow-hidden">
+                      <button
+                        onClick={() => {
+                          const next = Math.max(1, currentQty - 1);
+                          setQtys(prev => ({ ...prev, [product.id]: next }));
+                        }}
+                        className="px-3.5 py-2 text-gray-700 hover:text-black hover:bg-gray-100 transition-colors cursor-pointer"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <input
+                        type="number"
+                        value={currentQty}
+                        onChange={(e) => {
+                          const num = parseInt(e.target.value) || 1;
+                          setQtys(prev => ({ ...prev, [product.id]: Math.max(1, num) }));
+                        }}
+                        className="w-14 text-center bg-transparent font-mono text-sm font-bold text-black focus:outline-none"
+                      />
+                      <button
+                        onClick={() => setQtys(prev => ({ ...prev, [product.id]: currentQty + 1 }))}
+                        className="px-3.5 py-2 text-gray-700 hover:text-black hover:bg-gray-100 transition-colors cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="text-right font-mono">
+                      <span className="text-[10px] text-gray-400 block font-bold uppercase">Subtotal</span>
+                      <span className="text-lg font-black text-black">
+                        {systemSettings.currencySymbol || 'Php'} {(product.basePrice * currentQty).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Button */}
+                <div className="pt-4 flex gap-3">
+                  <button
+                    onClick={() => {
+                      handleAddToCart(product);
+                    }}
+                    className="flex-1 bg-black hover:bg-neutral-800 text-white font-extrabold text-xs uppercase tracking-wider py-4 rounded-2xl border border-black shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+                    id={`detail-add-to-cart-btn-${product.id}`}
+                  >
+                    <Plus className="w-4 h-4 stroke-[3px]" />
+                    <span>Add to Order Cart</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 font-sans pb-24">
       {/* Top Banner Header */}
@@ -415,50 +663,62 @@ export default function PublicOrderPortal({
                 id={`portal-product-card-${product.id}`}
               >
                 <div className="space-y-4">
-                  {/* Product Image */}
-                  <div className="relative aspect-4/3 bg-gray-100 border-b border-gray-100 overflow-hidden">
-                    {product.imageUrl ? (
-                      <img
-                        src={product.imageUrl}
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-300">
-                        <Store className="w-12 h-12" />
+                  {/* Product Image & Details Header Clickable */}
+                  <div
+                    onClick={() => setSelectedDetailProduct(product)}
+                    className="cursor-pointer group/card"
+                  >
+                    <div className="relative aspect-4/3 bg-gray-100 border-b border-gray-100 overflow-hidden">
+                      {product.imageUrl ? (
+                        <img
+                          src={product.imageUrl}
+                          alt={product.name}
+                          className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-300">
+                          <Store className="w-12 h-12" />
+                        </div>
+                      )}
+                      <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-xs text-black text-[9px] font-mono uppercase font-bold px-2.5 py-1 rounded-full border border-gray-200">
+                        {product.category}
+                      </span>
+                      <span className="absolute bottom-3 right-3 bg-black/80 text-white text-[9px] font-mono uppercase font-bold px-2.5 py-1 rounded-full backdrop-blur-xs flex items-center gap-1 group-hover/card:bg-black">
+                        <span>View Details</span>
+                        <ArrowRight className="w-2.5 h-2.5" />
+                      </span>
+                    </div>
+
+                    {/* Product Details */}
+                    <div className="px-5 pt-3 space-y-2">
+                      <div>
+                        <h4 className="text-base font-extrabold text-black uppercase tracking-tight group-hover/card:text-blue-600 transition-colors">
+                          {product.name}
+                        </h4>
+                        <p className="text-xs text-gray-500 line-clamp-2 mt-1 font-sans leading-relaxed">
+                          {product.description}
+                        </p>
                       </div>
-                    )}
-                    <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-xs text-black text-[9px] font-mono uppercase font-bold px-2.5 py-1 rounded-full border border-gray-200">
-                      {product.category}
-                    </span>
+
+                      <div className="flex items-baseline justify-between border-t border-gray-100 pt-2">
+                        <span className="text-lg font-black text-black font-mono">
+                          {systemSettings.currencySymbol || 'Php'} {product.basePrice.toFixed(2)}
+                          <span className="text-[10px] text-gray-400 font-normal"> / {product.unit}</span>
+                        </span>
+                        {product.minQuantity > 1 ? (
+                          <span className="text-[9px] font-mono font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                            Order Any Qty (Min: 1)
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-mono text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md">
+                            Min: 1 unit
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Product Details */}
                   <div className="px-5 space-y-3">
-                    <div>
-                      <h4 className="text-base font-extrabold text-black uppercase tracking-tight">
-                        {product.name}
-                      </h4>
-                      <p className="text-xs text-gray-500 line-clamp-2 mt-1 font-sans leading-relaxed">
-                        {product.description}
-                      </p>
-                    </div>
-
-                    <div className="flex items-baseline justify-between border-t border-gray-100 pt-2">
-                      <span className="text-lg font-black text-black font-mono">
-                        {systemSettings.currencySymbol || 'Php'} {product.basePrice.toFixed(2)}
-                        <span className="text-[10px] text-gray-400 font-normal"> / {product.unit}</span>
-                      </span>
-                      {product.minQuantity > 1 ? (
-                        <span className="text-[9px] font-mono font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                          Order Any Qty (Min: 1)
-                        </span>
-                      ) : (
-                        <span className="text-[9px] font-mono text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md">
-                          Min: 1 unit
-                        </span>
-                      )}
-                    </div>
 
                     {/* Option Controls */}
                     <div className="space-y-3 pt-2 border-t border-gray-100">

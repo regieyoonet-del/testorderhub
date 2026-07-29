@@ -1918,8 +1918,13 @@ export default function AdminDashboard({
                   )}
                   <p className="text-gray-400 underline">{selectedOrder.contactEmail}</p>
                   {selectedOrder.status === 'Pending Approval' && (
-                    <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-[11px] font-sans font-bold text-amber-900">
-                      ⏳ Order is awaiting company review &amp; confirmation before production.
+                    <div className="mt-2 bg-amber-50 border border-amber-300 rounded-xl p-3 text-xs font-sans text-amber-950 space-y-1">
+                      <div className="flex items-center gap-1.5 font-extrabold text-amber-900 uppercase">
+                        <span>⏳ Awaiting Company Approval</span>
+                      </div>
+                      <p className="leading-snug text-[11px] text-amber-900">
+                        This order was submitted through the Storefront Order Portal and requires company representative approval in their Client Portal before production.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -2035,6 +2040,11 @@ export default function AdminDashboard({
                     <button
                       key={st.val}
                       onClick={() => {
+                        if (selectedOrder.status === 'Pending Approval' && (st.val === 'In Production' || st.val === 'Shipped' || st.val === 'Completed')) {
+                          if (!window.confirm(`⚠️ Notice: This order is currently awaiting company representative approval in their Client Portal.\n\nAre you sure you want to approve this order on behalf of ${selectedOrder.companyName}?`)) {
+                            return;
+                          }
+                        }
                         handleUpdateOrderStatus(selectedOrder.id, st.val as any);
                         setSelectedOrder(prev => prev ? { ...prev, status: st.val as any } : null);
                       }}

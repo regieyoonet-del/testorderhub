@@ -320,7 +320,7 @@ function saveNewOrder(ss, order) {
   var ordersSheet = ss.getSheetByName("Orders");
   var itemsSheet = ss.getSheetByName("OrderItems");
   
-  var expectedOrdersHeaders = ["Order ID", "Order Number", "Company Name", "Contact Email", "Contact Person", "Delivery Address", "PO Number", "Total Amount", "Status", "Created At", "Notes"];
+  var expectedOrdersHeaders = ["Order ID", "Order Number", "Company Name", "Contact Email", "Contact Person", "Contact Number", "FB Messenger Link", "Delivery Address", "PO Number", "Total Amount", "Status", "Created At", "Notes"];
   var ordersData = ensureHeaders(ordersSheet, expectedOrdersHeaders);
   var ordersHeaders = ordersData[0];
   
@@ -330,6 +330,8 @@ function saveNewOrder(ss, order) {
     "Company Name": order.companyName,
     "Contact Email": order.contactEmail,
     "Contact Person": order.contactPerson,
+    "Contact Number": order.contactNumber || "",
+    "FB Messenger Link": order.fbMessengerLink || "",
     "Delivery Address": order.deliveryAddress,
     "PO Number": order.poNumber || "",
     "Total Amount": order.totalAmount,
