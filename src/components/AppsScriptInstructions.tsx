@@ -382,6 +382,10 @@ function saveProduct(ss, product) {
   var data = ensureHeaders(sheet, expectedHeaders);
   var headers = data[0];
   
+  if (!product) return { status: "error", message: "Missing product" };
+  var targetId = String(product.id || "").trim();
+  if (!targetId) return { status: "error", message: "Missing product ID" };
+
   var productIdIndex = -1;
   for (var c = 0; c < headers.length; c++) {
     if (headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "") === "productid") {
@@ -393,20 +397,55 @@ function saveProduct(ss, product) {
   
   var rowIndex = -1;
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][productIdIndex]).trim() === String(product.id).trim()) {
+    if (String(data[i][productIdIndex]).trim() === targetId) {
       rowIndex = i + 1; // 1-based index
       break;
     }
   }
   
-  var sizeOptionsStr = product.sizeOptions ? product.sizeOptions.join(", ") : "";
-  var colorOptionsStr = product.colorOptions ? product.colorOptions.join(", ") : "";
-  var imageUrlsStr = product.imageUrls ? product.imageUrls.join(";||;") : "";
-  var customFieldsStr = product.customFields ? JSON.stringify(product.customFields) : "";
+  var sizeOptionsStr = "";
+  if (Array.isArray(product.sizeOptions)) {
+    sizeOptionsStr = product.sizeOptions.join(", ");
+  } else if (Array.isArray(product.sizes)) {
+    sizeOptionsStr = product.sizes.join(", ");
+  } else if (product.sizeOptions) {
+    sizeOptionsStr = String(product.sizeOptions);
+  } else if (product.sizes) {
+    sizeOptionsStr = String(product.sizes);
+  }
+
+  var colorOptionsStr = "";
+  if (Array.isArray(product.colorOptions)) {
+    colorOptionsStr = product.colorOptions.join(", ");
+  } else if (Array.isArray(product.colors)) {
+    colorOptionsStr = product.colors.map(function(c) {
+      return (typeof c === 'object' && c && c.name) ? c.name : String(c);
+    }).join(", ");
+  } else if (product.colorOptions) {
+    colorOptionsStr = String(product.colorOptions);
+  } else if (product.colors) {
+    colorOptionsStr = String(product.colors);
+  }
+
+  var imageUrlsStr = "";
+  if (Array.isArray(product.imageUrls)) {
+    imageUrlsStr = product.imageUrls.join(";||;");
+  } else if (product.imageUrls) {
+    imageUrlsStr = String(product.imageUrls);
+  }
+
+  var customFieldsStr = "";
+  if (product.customFields) {
+    if (typeof product.customFields === 'string') {
+      customFieldsStr = product.customFields;
+    } else {
+      try { customFieldsStr = JSON.stringify(product.customFields); } catch(e) {}
+    }
+  }
   
   var productMap = {
-    "Product ID": product.id,
-    "Name": product.name,
+    "Product ID": targetId,
+    "Name": product.name || "",
     "Category": product.category || "",
     "Description": product.description || "",
     "Image URL": product.imageUrl || "",
@@ -434,7 +473,7 @@ function saveProduct(ss, product) {
     sheet.appendRow(rowData);
   }
   
-  return { status: "success", productId: product.id };
+  return { status: "success", productId: targetId };
 }
 
 function saveCompany(ss, company) {
@@ -638,6 +677,10 @@ function saveCatalogProduct(ss, product) {
   var data = ensureHeaders(sheet, expectedHeaders);
   var headers = data[0];
   
+  if (!product) return { status: "error", message: "Missing product" };
+  var targetId = String(product.id || "").trim();
+  if (!targetId) return { status: "error", message: "Missing product ID" };
+
   var productIdIndex = -1;
   for (var c = 0; c < headers.length; c++) {
     if (headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "") === "productid") {
@@ -649,21 +692,46 @@ function saveCatalogProduct(ss, product) {
   
   var rowIndex = -1;
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][productIdIndex]).trim() === String(product.id).trim()) {
+    if (String(data[i][productIdIndex]).trim() === targetId) {
       rowIndex = i + 1;
       break;
     }
   }
   
-  var brandingStr = product.brandingMethods ? product.brandingMethods.join(", ") : "";
-  var colorsStr = product.colors ? JSON.stringify(product.colors) : "";
-  var sizesStr = product.sizes ? product.sizes.join(", ") : "";
-  var imageUrlsStr = product.imageUrls ? product.imageUrls.join(";||;") : "";
+  var brandingStr = "";
+  if (Array.isArray(product.brandingMethods)) {
+    brandingStr = product.brandingMethods.join(", ");
+  } else if (product.brandingMethods) {
+    brandingStr = String(product.brandingMethods);
+  }
+
+  var colorsStr = "";
+  if (product.colors) {
+    if (typeof product.colors === 'string') {
+      colorsStr = product.colors;
+    } else {
+      try { colorsStr = JSON.stringify(product.colors); } catch(e) {}
+    }
+  }
+
+  var sizesStr = "";
+  if (Array.isArray(product.sizes)) {
+    sizesStr = product.sizes.join(", ");
+  } else if (product.sizes) {
+    sizesStr = String(product.sizes);
+  }
+
+  var imageUrlsStr = "";
+  if (Array.isArray(product.imageUrls)) {
+    imageUrlsStr = product.imageUrls.join(";||;");
+  } else if (product.imageUrls) {
+    imageUrlsStr = String(product.imageUrls);
+  }
   
   var productMap = {
-    "Product ID": product.id,
+    "Product ID": targetId,
     "SKU": product.sku || "",
-    "Name": product.name,
+    "Name": product.name || "",
     "Category": product.category || "",
     "Description": product.description || "",
     "Image URL": product.imageUrl || "",
@@ -687,7 +755,7 @@ function saveCatalogProduct(ss, product) {
     sheet.appendRow(rowData);
   }
   
-  return { status: "success", productId: product.id };
+  return { status: "success", productId: targetId };
 }
 
 function saveQuoteEnquiry(ss, enquiry) {

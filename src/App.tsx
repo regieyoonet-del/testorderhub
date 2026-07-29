@@ -881,18 +881,36 @@ export default function App() {
   };
 
   const handleForceSyncAll = async (): Promise<boolean> => {
-    if (!appsScriptConfig.isConnected || !appsScriptConfig.webAppUrl) {
+    const url = appsScriptConfig.webAppUrl?.trim();
+    if (!url) {
       return false;
     }
-    const url = appsScriptConfig.webAppUrl;
     try {
-      // 1. Sync all products (master products + company custom products)
+      // 1. Sync all products (master products + company custom products + showcase catalog products)
       const allProductsMap = new Map<string, Product>();
       products.forEach(p => allProductsMap.set(p.id, p));
       companies.forEach(co => {
         if (Array.isArray(co.customProducts)) {
           co.customProducts.forEach(cp => allProductsMap.set(cp.id, cp));
         }
+      });
+      catalogProducts.forEach(cp => {
+        const productAsB2b: Product = {
+          id: cp.id,
+          name: cp.name,
+          category: (cp.category || 'Uniforms') as any,
+          description: cp.description || '',
+          imageUrl: cp.imageUrl || '',
+          basePrice: cp.basePrice || 0,
+          minQuantity: cp.moq || 1,
+          unit: 'pcs',
+          leadTime: cp.leadTime || '7-10 Business Days',
+          sizeOptions: cp.sizes,
+          colorOptions: cp.colors?.map(c => typeof c === 'object' && c ? c.name : String(c)),
+          imageUrls: cp.imageUrls,
+          frequentlyOrdered: true
+        };
+        allProductsMap.set(cp.id, productAsB2b);
       });
 
       for (const p of allProductsMap.values()) {
@@ -938,6 +956,8 @@ export default function App() {
       return [newProduct, ...prev];
     });
 
+    const scriptUrl = appsScriptConfig.webAppUrl?.trim();
+
     // 2. Find matching company by ID or name and add product to company catalog
     setCompanies(prevCompanies => {
       const targetIdx = prevCompanies.findIndex(
@@ -955,8 +975,8 @@ export default function App() {
         };
         updated[targetIdx] = updatedCo;
 
-        if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
-          sheetsService.saveCompany(appsScriptConfig.webAppUrl, updatedCo);
+        if (scriptUrl) {
+          sheetsService.saveCompany(scriptUrl, updatedCo);
         }
 
         return updated;
@@ -970,8 +990,8 @@ export default function App() {
         };
         updated[0] = updatedCo;
 
-        if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
-          sheetsService.saveCompany(appsScriptConfig.webAppUrl, updatedCo);
+        if (scriptUrl) {
+          sheetsService.saveCompany(scriptUrl, updatedCo);
         }
 
         return updated;
@@ -979,30 +999,69 @@ export default function App() {
       return prevCompanies;
     });
 
-    // 3. Save new product to Google Sheets
-    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
-      sheetsService.saveProduct(appsScriptConfig.webAppUrl, newProduct);
+    // 3. Save new product to Google Sheets Products tab
+    if (scriptUrl) {
+      sheetsService.saveProduct(scriptUrl, newProduct);
     }
   };
 
   const handleAddCatalogProduct = (product: CatalogProduct) => {
     setCatalogProducts(prev => [product, ...prev]);
-    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
-      sheetsService.saveCatalogProduct(appsScriptConfig.webAppUrl, product);
+    const scriptUrl = appsScriptConfig.webAppUrl?.trim();
+    if (scriptUrl) {
+      sheetsService.saveCatalogProduct(scriptUrl, product);
+
+      // Also ensure it is listed in the main Products sheet so all devices get the product data
+      const productAsB2b: Product = {
+        id: product.id,
+        name: product.name,
+        category: (product.category || 'Uniforms') as any,
+        description: product.description || '',
+        imageUrl: product.imageUrl || '',
+        basePrice: product.basePrice || 0,
+        minQuantity: product.moq || 1,
+        unit: 'pcs',
+        leadTime: product.leadTime || '7-10 Business Days',
+        sizeOptions: product.sizes,
+        colorOptions: product.colors?.map(c => typeof c === 'object' && c ? c.name : String(c)),
+        imageUrls: product.imageUrls,
+        frequentlyOrdered: true
+      };
+      sheetsService.saveProduct(scriptUrl, productAsB2b);
     }
   };
 
   const handleUpdateCatalogProduct = (product: CatalogProduct) => {
     setCatalogProducts(prev => prev.map(p => p.id === product.id ? product : p));
-    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
-      sheetsService.saveCatalogProduct(appsScriptConfig.webAppUrl, product);
+    const scriptUrl = appsScriptConfig.webAppUrl?.trim();
+    if (scriptUrl) {
+      sheetsService.saveCatalogProduct(scriptUrl, product);
+
+      const productAsB2b: Product = {
+        id: product.id,
+        name: product.name,
+        category: (product.category || 'Uniforms') as any,
+        description: product.description || '',
+        imageUrl: product.imageUrl || '',
+        basePrice: product.basePrice || 0,
+        minQuantity: product.moq || 1,
+        unit: 'pcs',
+        leadTime: product.leadTime || '7-10 Business Days',
+        sizeOptions: product.sizes,
+        colorOptions: product.colors?.map(c => typeof c === 'object' && c ? c.name : String(c)),
+        imageUrls: product.imageUrls,
+        frequentlyOrdered: true
+      };
+      sheetsService.saveProduct(scriptUrl, productAsB2b);
     }
   };
 
   const handleDeleteCatalogProduct = (productId: string) => {
     setCatalogProducts(prev => prev.filter(p => p.id !== productId));
-    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
-      sheetsService.deleteCatalogProduct(appsScriptConfig.webAppUrl, productId);
+    const scriptUrl = appsScriptConfig.webAppUrl?.trim();
+    if (scriptUrl) {
+      sheetsService.deleteCatalogProduct(scriptUrl, productId);
+      sheetsService.deleteProduct(scriptUrl, productId);
     }
   };
 
