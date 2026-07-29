@@ -12,7 +12,7 @@ import { EMBEDDED_APPS_SCRIPT_URL } from '../config';
 export { parseColorList, resolveColorHex };
 
 /**
- * Case-insensitive, space-insensitive property accessor for Google Sheet JSON objects.
+ * Case-insensitive, space-insensitive, typo-tolerant property accessor for Google Sheet JSON objects.
  * Supports a single key string or an array of candidate keys.
  */
 function getProp(obj: any, key: string | string[]): any {
@@ -20,12 +20,37 @@ function getProp(obj: any, key: string | string[]): any {
   const keys = Array.isArray(key) ? key : [key];
   const cleanKeys = keys.map(k => k.toLowerCase().replace(/[^a-z0-9]/g, ''));
 
+  // 1. First pass: exact match on normalized alphanumeric key
   for (const k of Object.keys(obj)) {
     const cleanK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
     if (cleanKeys.includes(cleanK)) {
-      return obj[k];
+      if (obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== '') {
+        return obj[k];
+      }
     }
   }
+
+  // 2. Second pass: typo-tolerant fuzzy matching (e.g. "Decription", "Bae Price", "Contact Peron", "Delivery Addre", "Uername", "Pacode", "Approved Product", "Cutom Product", "Statu", "Product ID")
+  for (const k of Object.keys(obj)) {
+    const cleanK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!cleanK) continue;
+    const cleanKNoS = cleanK.replace(/s/g, '');
+
+    for (const ck of cleanKeys) {
+      if (!ck) continue;
+      const ckNoS = ck.replace(/s/g, '');
+
+      if (
+        cleanKNoS === ckNoS ||
+        (cleanK.length >= 4 && ck.length >= 4 && (cleanK.startsWith(ck.substring(0, 4)) || ck.startsWith(cleanK.substring(0, 4))) && Math.abs(cleanK.length - ck.length) <= 3)
+      ) {
+        if (obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== '') {
+          return obj[k];
+        }
+      }
+    }
+  }
+
   return undefined;
 }
 
@@ -129,7 +154,35 @@ export const sheetsService = {
       
       const data = await response.json();
       if (Array.isArray(data)) {
-        return data as Order[];
+        return data.map(item => ({
+          id: String(getProp(item, ['OrderID', 'Order ID', 'id']) || ''),
+          orderNumber: String(getProp(item, ['OrderNumber', 'Order Number', 'orderNumber']) || ''),
+          companyName: String(getProp(item, ['CompanyName', 'Company Name', 'companyName']) || ''),
+          contactEmail: String(getProp(item, ['ContactEmail', 'Contact Email', 'contactEmail']) || ''),
+          contactPerson: String(getProp(item, ['ContactPerson', 'Contact Person', 'contactPerson', 'ContactPeron']) || ''),
+          deliveryAddress: String(getProp(item, ['DeliveryAddress', 'Delivery Address', 'deliveryAddress', 'DeliveryAddre']) || ''),
+          poNumber: String(getProp(item, ['PONumber', 'PO Number', 'poNumber']) || ''),
+          totalAmount: Number(getProp(item, ['TotalAmount', 'Total Amount', 'totalAmount']) || 0),
+          status: (getProp(item, ['Status', 'status', 'Statu']) || 'Pending') as any,
+          createdAt: String(getProp(item, ['CreatedAt', 'Created At', 'createdAt']) || new Date().toISOString()),
+          notes: String(getProp(item, ['Notes', 'notes']) || ''),
+          items: (() => {
+            const rawItems = getProp(item, ['items', 'Items', 'OrderItems', 'Order Items']);
+            if (Array.isArray(rawItems)) {
+              return rawItems.map(it => ({
+                productId: String(getProp(it, ['ProductID', 'Product ID', 'productId']) || ''),
+                productName: String(getProp(it, ['ProductName', 'Product Name', 'productName']) || ''),
+                imageUrl: String(getProp(it, ['ImageURL', 'Image URL', 'imageUrl']) || ''),
+                quantity: Number(getProp(it, ['Quantity', 'quantity']) || 1),
+                price: Number(getProp(it, ['Price', 'price']) || 0),
+                selectedSize: String(getProp(it, ['SelectedSize', 'Selected Size', 'selectedSize']) || ''),
+                selectedColor: String(getProp(it, ['SelectedColor', 'Selected Color', 'selectedColor']) || ''),
+                customDetails: getProp(it, ['CustomDetails', 'Custom Details', 'customDetails'])
+              }));
+            }
+            return [];
+          })()
+        }));
       }
       return null;
     } catch (error) {
