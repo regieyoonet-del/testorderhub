@@ -8,6 +8,7 @@ import { CompanyProfile, AppsScriptConfig } from '../types';
 import AppsScriptInstructions from './AppsScriptInstructions';
 import { Check, Wifi, WifiOff, AlertCircle, FileSpreadsheet, RefreshCw } from 'lucide-react';
 import { sheetsService } from '../lib/sheetsService';
+import { EMBEDDED_APPS_SCRIPT_URL } from '../config';
 
 interface SettingsPanelProps {
   config: AppsScriptConfig;
@@ -31,7 +32,7 @@ export default function SettingsPanel({
   isSyncingSheets
 }: SettingsPanelProps) {
   // Sync States
-  const [url, setUrl] = useState(config.webAppUrl);
+  const [url, setUrl] = useState(config.webAppUrl || EMBEDDED_APPS_SCRIPT_URL);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<'idle' | 'success' | 'failed'>('idle');
   const [isSyncingAll, setIsSyncingAll] = useState(false);

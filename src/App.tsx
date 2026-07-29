@@ -10,6 +10,7 @@ import { INITIAL_PRODUCTS, INITIAL_COMPANIES, INITIAL_ORDERS, INITIAL_PORTALS } 
 import { INITIAL_CATALOG_PRODUCTS, INITIAL_QUOTE_ENQUIRIES, sanitizeCatalogProduct } from './data/initialCatalog';
 import { DEFAULT_QUOTE_NOTES } from './constants/quoteDefaults';
 import { sheetsService } from './lib/sheetsService';
+import { EMBEDDED_APPS_SCRIPT_URL } from './config';
 import Header from './components/Header';
 import ProductCatalog from './components/ProductCatalog';
 import BrowseProducts from './components/BrowseProducts';
@@ -257,21 +258,19 @@ export default function App() {
 
   const [appsScriptConfig, setAppsScriptConfig] = useState<AppsScriptConfig>(() => {
     const cached = localStorage.getItem('rp_apps_script_config');
-    let parsedConfig: AppsScriptConfig = cached ? JSON.parse(cached) : { webAppUrl: '', isConnected: false };
+    let parsedConfig: AppsScriptConfig = cached ? JSON.parse(cached) : { webAppUrl: EMBEDDED_APPS_SCRIPT_URL, isConnected: true };
 
     // Check if script URL was passed in query parameters (e.g., ?script=... or ?appsScriptUrl=...)
     const params = new URLSearchParams(window.location.search);
     const urlScript = params.get('script') || params.get('appsScriptUrl') || params.get('webAppUrl');
     const envScript = (((import.meta as any).env?.VITE_APPS_SCRIPT_URL) as string) || '';
 
-    const effectiveUrl = (urlScript && urlScript.trim()) || parsedConfig.webAppUrl || (envScript && envScript.trim());
-    if (effectiveUrl) {
-      parsedConfig = {
-        webAppUrl: effectiveUrl.trim(),
-        isConnected: true
-      };
-      localStorage.setItem('rp_apps_script_config', JSON.stringify(parsedConfig));
-    }
+    const effectiveUrl = (urlScript && urlScript.trim()) || parsedConfig.webAppUrl || (envScript && envScript.trim()) || EMBEDDED_APPS_SCRIPT_URL;
+    parsedConfig = {
+      webAppUrl: effectiveUrl.trim(),
+      isConnected: true
+    };
+    localStorage.setItem('rp_apps_script_config', JSON.stringify(parsedConfig));
     return parsedConfig;
   });
 
@@ -422,13 +421,23 @@ export default function App() {
       Promise.all([
         sheetsService.fetchPortals(url),
         sheetsService.fetchCompanies(url),
-        sheetsService.fetchProducts(url)
-      ]).then(([fetchedPortals, fetchedCompanies, fetchedProducts]) => {
+        sheetsService.fetchProducts(url),
+        sheetsService.fetchCatalogProducts(url)
+      ]).then(([fetchedPortals, fetchedCompanies, fetchedProducts, fetchedCatalogProducts]) => {
         if (fetchedProducts && fetchedProducts.length > 0) {
           setProducts(prev => {
             const map = new Map<string, Product>();
             prev.forEach(p => map.set(p.id, p));
             fetchedProducts.forEach(p => map.set(p.id, p));
+            return Array.from(map.values());
+          });
+        }
+
+        if (fetchedCatalogProducts && fetchedCatalogProducts.length > 0) {
+          setCatalogProducts(prev => {
+            const map = new Map<string, CatalogProduct>();
+            prev.forEach(p => map.set(p.id, p));
+            fetchedCatalogProducts.forEach(p => map.set(p.id, p));
             return Array.from(map.values());
           });
         }
@@ -1018,7 +1027,7 @@ export default function App() {
         category: (product.category || 'Uniforms') as any,
         description: product.description || '',
         imageUrl: product.imageUrl || '',
-        basePrice: product.basePrice || 0,
+        basePrice: (product as any).basePrice || 0,
         minQuantity: product.moq || 1,
         unit: 'pcs',
         leadTime: product.leadTime || '7-10 Business Days',
@@ -1043,7 +1052,7 @@ export default function App() {
         category: (product.category || 'Uniforms') as any,
         description: product.description || '',
         imageUrl: product.imageUrl || '',
-        basePrice: product.basePrice || 0,
+        basePrice: (product as any).basePrice || 0,
         minQuantity: product.moq || 1,
         unit: 'pcs',
         leadTime: product.leadTime || '7-10 Business Days',
@@ -1301,7 +1310,9 @@ export default function App() {
     setOrderPortals(prev => [newPortal, ...prev]);
 
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
-      sheetsService.savePortal(appsScriptConfig.webAppUrl, newPortal);
+      const url = appsScriptConfig.webAppUrl;
+      sheetsService.savePortal(url, newPortal);
+      syncPortalProductsToSheets(url, newPortal.productIds, newPortal.companyId);
     }
   };
 
@@ -1312,7 +1323,9 @@ export default function App() {
     }
 
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
-      sheetsService.savePortal(appsScriptConfig.webAppUrl, updatedPortal);
+      const url = appsScriptConfig.webAppUrl;
+      sheetsService.savePortal(url, updatedPortal);
+      syncPortalProductsToSheets(url, updatedPortal.productIds, updatedPortal.companyId);
     }
   };
 
@@ -1390,11 +1403,11 @@ export default function App() {
 
     const productMap = new Map<string, Product>();
     const enabledIds = company.enabledProductIds;
-    const hasExplicitEnabledList = Array.isArray(enabledIds);
+    const hasExplicitEnabledList = Array.isArray(enabledIds) && enabledIds.length > 0;
 
     // First pass: add master products filtered by enabledProductIds if specified
     masterList.forEach(p => {
-      if (!hasExplicitEnabledList || enabledIds.includes(p.id)) {
+      if (!hasExplicitEnabledList || enabledIds!.includes(p.id)) {
         productMap.set(p.id, p);
       }
     });
@@ -1402,7 +1415,7 @@ export default function App() {
     // Second pass: add/override with company custom products
     if (Array.isArray(company.customProducts) && company.customProducts.length > 0) {
       company.customProducts.forEach(cp => {
-        if (!hasExplicitEnabledList || enabledIds.includes(cp.id) || company.customProducts?.some(c => c.id === cp.id)) {
+        if (!hasExplicitEnabledList || enabledIds!.includes(cp.id) || company.customProducts?.some(c => c.id === cp.id)) {
           productMap.set(cp.id, cp);
         }
       });
@@ -1412,6 +1425,48 @@ export default function App() {
   };
 
   const scopedProducts = getCompanyProducts(activeCompany, products);
+
+  // Helper to ensure selected portal products exist in Google Sheets
+  const syncPortalProductsToSheets = (url: string, productIds?: string[], companyId?: string) => {
+    if (!url) return;
+    const targetCompany = companies.find(c => c.id === companyId) || activeCompany;
+
+    const productMap = new Map<string, Product>();
+    products.forEach(p => productMap.set(p.id, p));
+    if (targetCompany && Array.isArray(targetCompany.customProducts)) {
+      targetCompany.customProducts.forEach(cp => productMap.set(cp.id, cp));
+    }
+    catalogProducts.forEach(cp => {
+      if (!productMap.has(cp.id)) {
+        productMap.set(cp.id, {
+          id: cp.id,
+          name: cp.name,
+          category: (cp.category || 'Uniforms') as any,
+          description: cp.description || '',
+          imageUrl: cp.imageUrl || '',
+          basePrice: cp.basePrice || 0,
+          minQuantity: cp.moq || 1,
+          unit: 'pcs',
+          leadTime: cp.leadTime || '7-10 Business Days',
+          sizeOptions: cp.sizes,
+          colorOptions: cp.colors?.map(c => typeof c === 'object' && c ? c.name : String(c)),
+          imageUrls: cp.imageUrls,
+          frequentlyOrdered: true
+        });
+      }
+    });
+
+    const idsToSync = (productIds && productIds.length > 0)
+      ? productIds
+      : Array.from(productMap.keys());
+
+    idsToSync.forEach(id => {
+      const prod = productMap.get(id);
+      if (prod) {
+        sheetsService.saveProduct(url, prod);
+      }
+    });
+  };
 
   // Render public order portal if active or opened via share link
   if (activePublicPortal) {
@@ -1428,29 +1483,39 @@ export default function App() {
         productMap.set(cp.id, {
           id: cp.id,
           name: cp.name,
-          category: cp.category,
-          basePrice: cp.basePrice,
-          minQuantity: cp.minQuantity,
+          category: (cp.category || 'Uniforms') as any,
+          description: cp.description || '',
+          imageUrl: cp.imageUrl || '',
+          basePrice: cp.basePrice || 0,
+          minQuantity: cp.moq || cp.minQuantity || 1,
           unit: 'pcs',
-          description: cp.description,
-          imageUrl: cp.imageUrl,
+          leadTime: cp.leadTime,
           sizeOptions: cp.sizes,
-          colorOptions: cp.colors
+          colorOptions: cp.colors?.map(c => typeof c === 'object' && c ? c.name : String(c)),
+          imageUrls: cp.imageUrls,
+          frequentlyOrdered: true
         });
       }
     });
 
     const allProductsArray = Array.from(productMap.values());
-    const companyAvailableProducts = getCompanyProducts(portalCompany, allProductsArray);
 
-    // Guarantee that products explicitly in activePublicPortal.productIds are included
+    let companyAvailableProducts: Product[] = [];
+
     if (activePublicPortal.productIds && activePublicPortal.productIds.length > 0) {
       const portalSet = new Set(activePublicPortal.productIds.map(id => String(id).trim()));
-      allProductsArray.forEach(p => {
-        if (portalSet.has(String(p.id).trim()) && !companyAvailableProducts.some(cap => String(cap.id).trim() === String(p.id).trim())) {
-          companyAvailableProducts.push(p);
-        }
-      });
+      companyAvailableProducts = allProductsArray.filter(p => portalSet.has(String(p.id).trim()));
+
+      if (companyAvailableProducts.length === 0) {
+        companyAvailableProducts = getCompanyProducts(portalCompany, allProductsArray);
+      }
+    } else {
+      companyAvailableProducts = getCompanyProducts(portalCompany, allProductsArray);
+    }
+
+    // Safety fallback: If still 0 products, show all available products
+    if (companyAvailableProducts.length === 0 && allProductsArray.length > 0) {
+      companyAvailableProducts = allProductsArray;
     }
 
     return (

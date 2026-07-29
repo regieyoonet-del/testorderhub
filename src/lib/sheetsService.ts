@@ -7,6 +7,7 @@ import { Order, Product, CompanyProfile, CatalogProduct, QuoteEnquiry, ColorOpti
 import { INITIAL_CATALOG_PRODUCTS } from '../data/initialCatalog';
 import { parseColorList, resolveColorHex } from '../utils/colorUtils';
 import { DEFAULT_QUOTE_NOTES } from '../constants/quoteDefaults';
+import { EMBEDDED_APPS_SCRIPT_URL } from '../config';
 
 export { parseColorList, resolveColorHex };
 
@@ -28,6 +29,11 @@ function getProp(obj: any, key: string | string[]): any {
   return undefined;
 }
 
+function resolveUrl(url?: string): string {
+  const cleaned = (url || '').trim();
+  return cleaned || EMBEDDED_APPS_SCRIPT_URL;
+}
+
 /**
  * Service to handle Google Sheets App Script API connections.
  * It communicates with the user's deployed Google Apps Script.
@@ -37,10 +43,7 @@ export const sheetsService = {
    * Test if the Apps Script URL is valid and responds correctly.
    */
   async testConnection(url: string): Promise<boolean> {
-    if (!url) return false;
-    
-    // Clean up the URL
-    const cleanedUrl = url.trim();
+    const cleanedUrl = resolveUrl(url);
     
     try {
       const response = await fetch(`${cleanedUrl}?action=ping`, {
