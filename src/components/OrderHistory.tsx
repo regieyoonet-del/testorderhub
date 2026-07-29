@@ -5,7 +5,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Order, CartItem } from '../types';
-import { Calendar, RefreshCw, ChevronDown, ChevronUp, Clock, Package, CheckCircle2, Truck, ArrowRight, Store, Layers } from 'lucide-react';
+import { Calendar, RefreshCw, ChevronDown, ChevronUp, Clock, Package, CheckCircle2, Truck, ArrowRight, Store, Layers, ExternalLink } from 'lucide-react';
 
 interface OrderHistoryProps {
   orders: Order[];
@@ -322,6 +322,24 @@ export default function OrderHistory({
                         <p className="mt-1 leading-normal">
                           Receiver: {order.contactPerson} (<span className="underline">{order.contactEmail}</span>)
                         </p>
+                        {order.contactNumber && (
+                          <p className="mt-1 text-gray-700 font-bold font-mono text-[11px]">
+                            📞 Phone: {order.contactNumber}
+                          </p>
+                        )}
+                        {order.fbMessengerLink && (
+                          <p className="mt-1">
+                            <a
+                              href={order.fbMessengerLink.startsWith('http') ? order.fbMessengerLink : `https://${order.fbMessengerLink}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline bg-blue-50 px-2 py-0.5 rounded border border-blue-200 text-[11px]"
+                            >
+                              <span>💬 FB Messenger</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </p>
+                        )}
                         {order.notes && (
                           <p className="mt-2 text-gray-500 italic bg-white p-2 border border-gray-100 font-mono text-[11px]">
                             Notes: "{order.notes}"

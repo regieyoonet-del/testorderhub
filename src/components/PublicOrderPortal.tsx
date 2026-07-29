@@ -31,6 +31,8 @@ interface PublicOrderPortalProps {
   systemSettings: SystemSettings;
   onSubmitOrder: (orderData: {
     contactPerson: string;
+    contactNumber?: string;
+    fbMessengerLink?: string;
     contactEmail: string;
     deliveryAddress: string;
     poNumber?: string;
@@ -87,13 +89,15 @@ export default function PublicOrderPortal({
 
   // Form inputs
   const [shopperName, setShopperName] = useState('');
+  const [shopperPhone, setShopperPhone] = useState('');
+  const [fbMessengerLink, setFbMessengerLink] = useState('');
   const [shopperEmail, setShopperEmail] = useState('');
   const [deliveryDept, setDeliveryDept] = useState(company.deliveryAddress || '');
   const [poNumber, setPoNumber] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
 
-  // Handle option changes
-  const getQty = (p: Product) => qtys[p.id] || p.minQuantity || 1;
+  // Handle option changes (Min quantity lock removed for portal orders)
+  const getQty = (p: Product) => qtys[p.id] || 1;
   const getSize = (p: Product) => sizes[p.id] || (p.sizeOptions && p.sizeOptions.length > 0 ? p.sizeOptions[0] : undefined);
   const getColor = (p: Product) => colors[p.id] || (p.colorOptions && p.colorOptions.length > 0 ? p.colorOptions[0] : undefined);
   const getCustoms = (p: Product) => customs[p.id] || {};
@@ -138,7 +142,7 @@ export default function PublicOrderPortal({
     setCartItems(prev =>
       prev.map(item => {
         if (item.id === id) {
-          const bounded = Math.max(item.product.minQuantity || 1, newQty);
+          const bounded = Math.max(1, newQty);
           return { ...item, quantity: bounded };
         }
         return item;
@@ -153,8 +157,8 @@ export default function PublicOrderPortal({
 
   const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!shopperName.trim() || !shopperEmail.trim() || !deliveryDept.trim()) {
-      alert('Please fill out all required order details.');
+    if (!shopperName.trim() || !shopperPhone.trim() || !shopperEmail.trim() || !deliveryDept.trim()) {
+      alert('Please fill out all required order details (Customer Name, Contact Number, Corporate Email, and Delivery Address).');
       return;
     }
     if (cartItems.length === 0) {
@@ -166,6 +170,8 @@ export default function PublicOrderPortal({
     try {
       const createdOrder = await onSubmitOrder({
         contactPerson: shopperName.trim(),
+        contactNumber: shopperPhone.trim(),
+        fbMessengerLink: fbMessengerLink.trim() || undefined,
         contactEmail: shopperEmail.trim(),
         deliveryAddress: deliveryDept.trim(),
         poNumber: poNumber.trim() || undefined,
@@ -337,20 +343,10 @@ export default function PublicOrderPortal({
                   Order Portal
                 </span>
               </div>
-              <span className="text-xs font-semibold text-gray-500 block mt-0.5">{portal.name}</span>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            {onClosePublicView && isLoggedIn && (
-              <button
-                onClick={onClosePublicView}
-                className="text-xs font-mono text-gray-500 hover:text-black hover:underline transition-colors hidden sm:inline"
-              >
-                Exit Storefront Preview
-              </button>
-            )}
-
             <button
               onClick={() => setIsCheckoutOpen(true)}
               className="relative bg-black hover:bg-neutral-800 text-white font-extrabold text-xs uppercase tracking-wider py-2.5 px-4 rounded-xl border border-black transition-all cursor-pointer flex items-center gap-2 shadow-xs"
@@ -369,20 +365,11 @@ export default function PublicOrderPortal({
       </header>
 
       {/* Hero Welcome Section */}
-      <div className="bg-white border-b border-gray-200 py-8 px-4 sm:px-8">
-        <div className="max-w-6xl mx-auto space-y-2">
-          <div className="inline-flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-widest text-gray-400">
-            <Store className="w-3.5 h-3.5 text-black" />
-            <span>Authorized Corporate Storefront</span>
-          </div>
+      <div className="bg-white border-b border-gray-200 py-6 px-4 sm:px-8">
+        <div className="max-w-6xl mx-auto">
           <h2 className="text-2xl sm:text-3xl font-black text-black uppercase tracking-tight">
             {portal.name}
           </h2>
-          {portal.description && (
-            <p className="text-xs sm:text-sm text-gray-600 max-w-3xl leading-relaxed font-sans">
-              {portal.description}
-            </p>
-          )}
         </div>
       </div>
 
@@ -462,9 +449,13 @@ export default function PublicOrderPortal({
                         {systemSettings.currencySymbol || 'Php'} {product.basePrice.toFixed(2)}
                         <span className="text-[10px] text-gray-400 font-normal"> / {product.unit}</span>
                       </span>
-                      {product.minQuantity > 1 && (
-                        <span className="text-[10px] font-mono text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
-                          MOQ: {product.minQuantity}
+                      {product.minQuantity > 1 ? (
+                        <span className="text-[9px] font-mono font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                          Order Any Qty (Min: 1)
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-mono text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md">
+                          Min: 1 unit
                         </span>
                       )}
                     </div>
@@ -568,7 +559,7 @@ export default function PublicOrderPortal({
                           <div className="flex items-center border border-gray-200 rounded-xl bg-gray-50 overflow-hidden">
                             <button
                               onClick={() => {
-                                const next = Math.max(product.minQuantity || 1, currentQty - 1);
+                                const next = Math.max(1, currentQty - 1);
                                 setQtys(prev => ({ ...prev, [product.id]: next }));
                               }}
                               className="px-3 py-1.5 text-gray-600 hover:text-black hover:bg-gray-200 transition-colors cursor-pointer"
@@ -579,8 +570,8 @@ export default function PublicOrderPortal({
                               type="number"
                               value={currentQty}
                               onChange={(e) => {
-                                const num = parseInt(e.target.value) || product.minQuantity || 1;
-                                setQtys(prev => ({ ...prev, [product.id]: Math.max(product.minQuantity || 1, num) }));
+                                const num = parseInt(e.target.value) || 1;
+                                setQtys(prev => ({ ...prev, [product.id]: Math.max(1, num) }));
                               }}
                               className="w-12 text-center bg-transparent font-mono text-xs font-bold text-black focus:outline-none"
                             />
@@ -728,7 +719,7 @@ export default function PublicOrderPortal({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="block text-[10px] uppercase font-mono font-bold text-gray-700">
-                    Your Full Name <span className="text-red-500">*</span>
+                    Customer Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -738,6 +729,37 @@ export default function PublicOrderPortal({
                     onChange={(e) => setShopperName(e.target.value)}
                     className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3 py-2 text-xs font-semibold text-black focus:outline-none"
                     id="shopper-name-input"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-700">
+                    Contact Number <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="e.g. +63 917 123 4567"
+                    value={shopperPhone}
+                    onChange={(e) => setShopperPhone(e.target.value)}
+                    className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3 py-2 text-xs font-semibold text-black focus:outline-none font-mono"
+                    id="shopper-phone-input"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-700">
+                    Facebook Messenger Link
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. https://m.me/janedoe or fb.com/janedoe"
+                    value={fbMessengerLink}
+                    onChange={(e) => setFbMessengerLink(e.target.value)}
+                    className="w-full bg-white border border-gray-200 focus:border-black rounded-xl px-3 py-2 text-xs text-black focus:outline-none font-mono"
+                    id="shopper-messenger-input"
                   />
                 </div>
 

@@ -1342,6 +1342,8 @@ export default function App() {
 
   const handlePublicPortalSubmitOrder = async (orderData: {
     contactPerson: string;
+    contactNumber?: string;
+    fbMessengerLink?: string;
     contactEmail: string;
     deliveryAddress: string;
     poNumber?: string;
@@ -1367,6 +1369,8 @@ export default function App() {
       companyName: portalCompany.name,
       contactEmail: orderData.contactEmail,
       contactPerson: orderData.contactPerson,
+      contactNumber: orderData.contactNumber,
+      fbMessengerLink: orderData.fbMessengerLink,
       deliveryAddress: orderData.deliveryAddress,
       poNumber: orderData.poNumber,
       notes: orderData.notes,

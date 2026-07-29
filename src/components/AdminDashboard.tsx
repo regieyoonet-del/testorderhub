@@ -55,7 +55,8 @@ import {
   Eye,
   RefreshCw,
   Inbox,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ClientDashboardModal from './ClientDashboardModal';
@@ -1188,10 +1189,30 @@ export default function AdminDashboard({
                             <h5 className="font-extrabold text-xs text-black uppercase tracking-tight">
                               {ord.companyName}
                             </h5>
-                            <div className="text-[10px] text-gray-500 font-mono mt-0.5">
-                              <span className="font-semibold block text-neutral-800">{ord.contactPerson}</span>
+                            <div className="text-[10px] text-gray-500 font-mono mt-0.5 space-y-0.5">
+                              <span className="font-semibold block text-neutral-800">Customer: {ord.contactPerson}</span>
+                              {ord.contactNumber && (
+                                <span className="text-gray-700 font-bold block">Phone: {ord.contactNumber}</span>
+                              )}
+                              {ord.fbMessengerLink && (
+                                <a
+                                  href={ord.fbMessengerLink.startsWith('http') ? ord.fbMessengerLink : `https://${ord.fbMessengerLink}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-blue-600 hover:underline block font-extrabold text-[9px] flex items-center gap-1"
+                                >
+                                  <span>FB Messenger Profile</span>
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                              )}
                               <span className="text-gray-400 block break-all">{ord.contactEmail}</span>
                             </div>
+                            {ord.status === 'Pending Approval' && (
+                              <div className="mt-1.5 bg-amber-50 border border-amber-200 rounded p-1.5 text-[9px] font-mono font-bold text-amber-900 leading-tight">
+                                ⏳ Awaiting company confirmation before production
+                              </div>
+                            )}
                           </div>
 
                           {/* Order items count & Billing total */}
@@ -1876,10 +1897,31 @@ export default function AdminDashboard({
               {/* Info Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
                 <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 space-y-2">
-                  <span className="text-[9px] uppercase tracking-wider text-gray-400 font-bold block">Client Account</span>
+                  <span className="text-[9px] uppercase tracking-wider text-gray-400 font-bold block">Client Account &amp; Customer Details</span>
                   <p className="font-extrabold text-sm text-black uppercase">{selectedOrder.companyName}</p>
-                  <p className="text-gray-600 font-bold">{selectedOrder.contactPerson}</p>
+                  <p className="text-gray-900 font-bold">Customer: {selectedOrder.contactPerson}</p>
+                  {selectedOrder.contactNumber && (
+                    <p className="text-gray-700 font-bold">Phone: {selectedOrder.contactNumber}</p>
+                  )}
+                  {selectedOrder.fbMessengerLink && (
+                    <p>
+                      <a
+                        href={selectedOrder.fbMessengerLink.startsWith('http') ? selectedOrder.fbMessengerLink : `https://${selectedOrder.fbMessengerLink}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline bg-blue-50 px-2 py-0.5 rounded border border-blue-200 text-xs"
+                      >
+                        <span>FB Messenger Profile</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </p>
+                  )}
                   <p className="text-gray-400 underline">{selectedOrder.contactEmail}</p>
+                  {selectedOrder.status === 'Pending Approval' && (
+                    <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-[11px] font-sans font-bold text-amber-900">
+                      ⏳ Order is awaiting company review &amp; confirmation before production.
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 space-y-2">

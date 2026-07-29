@@ -55,6 +55,8 @@ export interface Order {
   createdAt: string;
   deliveryAddress: string;
   contactPerson: string;
+  contactNumber?: string;
+  fbMessengerLink?: string;
   poNumber?: string;
   notes?: string;
   portalId?: string;

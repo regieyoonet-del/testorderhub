@@ -1614,10 +1614,29 @@ export default function ClientDashboardModal({
                                 <p className="font-semibold text-black leading-snug">{ord.deliveryAddress}</p>
                               </div>
                               <div>
-                                <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold mb-1">Purchasing Rep</span>
+                                <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold mb-1">Purchasing Rep / Customer Details</span>
                                 <p className="font-semibold text-black">
                                   {ord.contactPerson} ({ord.contactEmail})
                                 </p>
+                                {ord.contactNumber && (
+                                  <p className="text-[11px] text-gray-700 font-bold mt-1 flex items-center gap-1">
+                                    <span>📞 Contact:</span>
+                                    <span className="font-mono">{ord.contactNumber}</span>
+                                  </p>
+                                )}
+                                {ord.fbMessengerLink && (
+                                  <p className="text-[11px] mt-1">
+                                    <a
+                                      href={ord.fbMessengerLink.startsWith('http') ? ord.fbMessengerLink : `https://${ord.fbMessengerLink}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline bg-blue-50 px-2 py-0.5 rounded border border-blue-200"
+                                    >
+                                      <span>💬 FB Messenger Profile</span>
+                                      <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  </p>
+                                )}
                               </div>
                             </div>
 
