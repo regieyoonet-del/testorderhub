@@ -542,9 +542,6 @@ export default function App() {
       try {
         // 1. Fetch products
         const fetchedProducts = await sheetsService.fetchProducts(url);
-        if (fetchedProducts !== null) {
-          setProducts(fetchedProducts);
-        }
 
         // 2. Fetch companies
         const fetchedCompanies = await sheetsService.fetchCompanies(url);
@@ -581,6 +578,27 @@ export default function App() {
             });
 
             return Array.from(map.values()).map(sanitizeCompany);
+          });
+        }
+
+        // 3. Merge products from fetchedProducts and company customProducts
+        if (fetchedProducts !== null || fetchedCompanies !== null) {
+          setProducts(prevProducts => {
+            const map = new Map<string, Product>();
+            prevProducts.forEach(p => map.set(p.id, p));
+            if (fetchedProducts) {
+              fetchedProducts.forEach(p => map.set(p.id, p));
+            }
+            if (fetchedCompanies) {
+              fetchedCompanies.forEach(c => {
+                if (Array.isArray(c.customProducts)) {
+                  c.customProducts.forEach(cp => {
+                    if (cp && cp.id) map.set(cp.id, cp);
+                  });
+                }
+              });
+            }
+            return Array.from(map.values());
           });
         }
 
@@ -701,16 +719,60 @@ export default function App() {
     setSelectedCompanyId(co.id);
 
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
-      sheetsService.saveCompany(appsScriptConfig.webAppUrl, co);
+      const url = appsScriptConfig.webAppUrl;
+      sheetsService.saveCompany(url, co);
+      if (Array.isArray(co.customProducts)) {
+        co.customProducts.forEach(cp => {
+          sheetsService.saveProduct(url, cp);
+        });
+      }
+    }
+
+    if (Array.isArray(co.customProducts) && co.customProducts.length > 0) {
+      setProducts(prev => {
+        const map = new Map<string, Product>();
+        prev.forEach(p => map.set(p.id, p));
+        co.customProducts!.forEach(cp => map.set(cp.id, cp));
+        return Array.from(map.values());
+      });
     }
   };
 
   const handleUpdateCompany = (updatedCo: CompanyProfile) => {
     const sanitized = sanitizeCompany(updatedCo);
+
+    // Track deleted custom products and sync deletion with Google Sheets
+    const oldCompany = companies.find(c => c.id === sanitized.id);
+    if (oldCompany && Array.isArray(oldCompany.customProducts)) {
+      const newCustomIds = new Set((sanitized.customProducts || []).map(p => p.id));
+      oldCompany.customProducts.forEach(oldCp => {
+        if (!newCustomIds.has(oldCp.id)) {
+          if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+            sheetsService.deleteProduct(appsScriptConfig.webAppUrl, oldCp.id);
+          }
+        }
+      });
+    }
+
     setCompanies(prev => prev.map(c => c.id === sanitized.id ? sanitized : c));
 
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
-      sheetsService.saveCompany(appsScriptConfig.webAppUrl, sanitized);
+      const url = appsScriptConfig.webAppUrl;
+      sheetsService.saveCompany(url, sanitized);
+      if (Array.isArray(sanitized.customProducts)) {
+        sanitized.customProducts.forEach(cp => {
+          sheetsService.saveProduct(url, cp);
+        });
+      }
+    }
+
+    if (Array.isArray(sanitized.customProducts) && sanitized.customProducts.length > 0) {
+      setProducts(prev => {
+        const map = new Map<string, Product>();
+        prev.forEach(p => map.set(p.id, p));
+        sanitized.customProducts!.forEach(cp => map.set(cp.id, cp));
+        return Array.from(map.values());
+      });
     }
   };
 
@@ -824,8 +886,16 @@ export default function App() {
     }
     const url = appsScriptConfig.webAppUrl;
     try {
-      // 1. Sync all products
-      for (const p of products) {
+      // 1. Sync all products (master products + company custom products)
+      const allProductsMap = new Map<string, Product>();
+      products.forEach(p => allProductsMap.set(p.id, p));
+      companies.forEach(co => {
+        if (Array.isArray(co.customProducts)) {
+          co.customProducts.forEach(cp => allProductsMap.set(cp.id, cp));
+        }
+      });
+
+      for (const p of allProductsMap.values()) {
         await sheetsService.saveProduct(url, p);
       }
       // 2. Sync all companies

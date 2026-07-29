@@ -393,7 +393,7 @@ function saveProduct(ss, product) {
   
   var rowIndex = -1;
   for (var i = 1; i < data.length; i++) {
-    if (data[i][productIdIndex] === product.id) {
+    if (String(data[i][productIdIndex]).trim() === String(product.id).trim()) {
       rowIndex = i + 1; // 1-based index
       break;
     }
@@ -454,7 +454,7 @@ function saveCompany(ss, company) {
   
   var rowIndex = -1;
   for (var i = 1; i < data.length; i++) {
-    if (data[i][companyIdIndex] === company.id) {
+    if (String(data[i][companyIdIndex]).trim() === String(company.id).trim()) {
       rowIndex = i + 1;
       break;
     }
@@ -563,7 +563,7 @@ function deleteRowById(ss, sheetName, colHeader, targetId) {
   if (colIndex === -1) colIndex = 0;
   
   for (var i = 1; i < data.length; i++) {
-    if (data[i][colIndex] === targetId) {
+    if (String(data[i][colIndex]).trim() === String(targetId).trim()) {
       sheet.deleteRow(i + 1);
       return { status: "success", id: targetId, deleted: true };
     }
@@ -649,7 +649,7 @@ function saveCatalogProduct(ss, product) {
   
   var rowIndex = -1;
   for (var i = 1; i < data.length; i++) {
-    if (data[i][productIdIndex] === product.id) {
+    if (String(data[i][productIdIndex]).trim() === String(product.id).trim()) {
       rowIndex = i + 1;
       break;
     }
@@ -707,7 +707,7 @@ function saveQuoteEnquiry(ss, enquiry) {
   
   var rowIndex = -1;
   for (var i = 1; i < data.length; i++) {
-    if (data[i][enquiryIdIndex] === enquiry.id) {
+    if (String(data[i][enquiryIdIndex]).trim() === String(enquiry.id).trim()) {
       rowIndex = i + 1;
       break;
     }
@@ -778,7 +778,7 @@ function updateQuoteEnquiryStatus(ss, enquiryId, status) {
   if (statusIndex === -1) statusIndex = 14;
   
   for (var i = 1; i < data.length; i++) {
-    if (data[i][idIndex] === enquiryId) {
+    if (String(data[i][idIndex]).trim() === String(enquiryId).trim()) {
       sheet.getRange(i + 1, statusIndex + 1).setValue(status);
       return { status: "success", enquiryId: enquiryId, updated: true };
     }
