@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { OrderPortal, Product, CompanyProfile, SystemSettings } from '../types';
+import { OrderPortal, Product, CompanyProfile, SystemSettings, Order } from '../types';
 import {
   Store,
   Plus,
@@ -25,7 +25,18 @@ import {
   CheckCircle2,
   AlertTriangle,
   Clock,
-  ArrowLeft
+  ArrowLeft,
+  Inbox,
+  CheckSquare,
+  Square,
+  Send,
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  FileText,
+  XCircle,
+  MessageSquare
 } from 'lucide-react';
 
 interface OrderPortalsProps {
@@ -38,6 +49,9 @@ interface OrderPortalsProps {
   onDeletePortal: (portalId: string) => void;
   onViewPortal: (portal: OrderPortal) => void;
   appsScriptUrl?: string;
+  orders?: Order[];
+  onUpdateOrders?: (newOrders: Order[]) => Promise<void>;
+  onUpdateOrderStatus?: (orderId: string, newStatus: Order['status']) => void;
 }
 
 export default function OrderPortals({
@@ -49,10 +63,89 @@ export default function OrderPortals({
   onUpdatePortal,
   onDeletePortal,
   onViewPortal,
-  appsScriptUrl
+  appsScriptUrl,
+  orders = [],
+  onUpdateOrders,
+  onUpdateOrderStatus
 }: OrderPortalsProps) {
+  // Section Navigation Tab State
+  const [activeSection, setActiveSection] = useState<'portals' | 'submissions'>('portals');
+
   // Filter portals belonging to active company
   const companyPortals = portals.filter(p => p.companyId === activeCompany.id);
+
+  // Compute portal orders for active company
+  const companyPortalOrders = orders.filter(o =>
+    o.companyName.toLowerCase() === activeCompany.name.toLowerCase() &&
+    (o.id.startsWith('ord-portal-') || Boolean(o.portalId) || Boolean(o.portalName) || o.status === 'Pending Approval')
+  );
+
+  const pendingPortalOrders = companyPortalOrders.filter(o => o.status === 'Pending Approval');
+
+  // Submissions Tab Filter & Batch State
+  const [submissionFilter, setSubmissionFilter] = useState<'pending' | 'approved' | 'all'>('pending');
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [isProcessingBatch, setIsProcessingBatch] = useState(false);
+
+  const filteredSubmissions = companyPortalOrders.filter(o => {
+    if (submissionFilter === 'pending') return o.status === 'Pending Approval';
+    if (submissionFilter === 'approved') return o.status !== 'Pending Approval';
+    return true;
+  });
+
+  const handleSelectAllSubmissions = () => {
+    if (selectedOrderIds.length === filteredSubmissions.length && filteredSubmissions.length > 0) {
+      setSelectedOrderIds([]);
+    } else {
+      setSelectedOrderIds(filteredSubmissions.map(o => o.id));
+    }
+  };
+
+  const handleToggleSelectOrder = (orderId: string) => {
+    setSelectedOrderIds(prev =>
+      prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]
+    );
+  };
+
+  const handleBatchUpdateStatus = async (newStatus: Order['status']) => {
+    if (selectedOrderIds.length === 0) return;
+    setIsProcessingBatch(true);
+    try {
+      const updatedOrders = orders.map(o =>
+        selectedOrderIds.includes(o.id) ? { ...o, status: newStatus } : o
+      );
+      if (onUpdateOrders) {
+        await onUpdateOrders(updatedOrders);
+      } else if (onUpdateOrderStatus) {
+        for (const id of selectedOrderIds) {
+          onUpdateOrderStatus(id, newStatus);
+        }
+      }
+      setSelectedOrderIds([]);
+    } catch (err) {
+      console.error('Failed to batch update orders:', err);
+    } finally {
+      setIsProcessingBatch(false);
+    }
+  };
+
+  const handleSingleUpdateStatus = async (orderId: string, newStatus: Order['status']) => {
+    setIsProcessingBatch(true);
+    try {
+      const updatedOrders = orders.map(o =>
+        o.id === orderId ? { ...o, status: newStatus } : o
+      );
+      if (onUpdateOrders) {
+        await onUpdateOrders(updatedOrders);
+      } else if (onUpdateOrderStatus) {
+        onUpdateOrderStatus(orderId, newStatus);
+      }
+    } catch (err) {
+      console.error('Failed to update order status:', err);
+    } finally {
+      setIsProcessingBatch(false);
+    }
+  };
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -435,25 +528,73 @@ export default function OrderPortals({
         </button>
       </div>
 
-      {/* Metrics Bar */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
-          <span className="text-[10px] uppercase font-mono font-bold text-gray-400 block mb-1">Total Portals</span>
-          <span className="text-2xl font-black text-black font-mono">{companyPortals.length}</span>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
-          <span className="text-[10px] uppercase font-mono font-bold text-gray-400 block mb-1">Active Links</span>
-          <span className="text-2xl font-black text-emerald-600 font-mono">{activeCount}</span>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
-          <span className="text-[10px] uppercase font-mono font-bold text-gray-400 block mb-1">Paused / Closed</span>
-          <span className="text-2xl font-black text-amber-600 font-mono">{pausedCount}</span>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
-          <span className="text-[10px] uppercase font-mono font-bold text-gray-400 block mb-1">Products Shared</span>
-          <span className="text-2xl font-black text-black font-mono">{totalProductsShared}</span>
-        </div>
+      {/* Sub-Navigation Tabs: Storefront Portals vs Portal Submissions */}
+      <div className="flex items-center gap-3 border-b border-gray-200 pb-2 overflow-x-auto">
+        <button
+          onClick={() => setActiveSection('portals')}
+          className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-sans text-xs uppercase tracking-wider font-extrabold transition-all cursor-pointer ${
+            activeSection === 'portals'
+              ? 'bg-black text-white shadow-sm'
+              : 'bg-white border border-gray-200 text-gray-600 hover:text-black hover:border-black'
+          }`}
+          id="tab-btn-portals-links"
+        >
+          <Globe className="w-4 h-4" />
+          <span>Storefront Links</span>
+          <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full ${
+            activeSection === 'portals' ? 'bg-neutral-800 text-white' : 'bg-gray-100 text-gray-700'
+          }`}>
+            {companyPortals.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveSection('submissions')}
+          className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-sans text-xs uppercase tracking-wider font-extrabold transition-all cursor-pointer ${
+            activeSection === 'submissions'
+              ? 'bg-black text-white shadow-sm'
+              : 'bg-white border border-gray-200 text-gray-600 hover:text-black hover:border-black'
+          }`}
+          id="tab-btn-portals-submissions"
+        >
+          <Inbox className="w-4 h-4" />
+          <span>Portal Submissions (Pending Confirmation)</span>
+          {pendingPortalOrders.length > 0 ? (
+            <span className="bg-amber-500 text-white text-[10px] font-mono font-black px-2.5 py-0.5 rounded-full animate-pulse shadow-xs">
+              {pendingPortalOrders.length} Pending
+            </span>
+          ) : (
+            <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full ${
+              activeSection === 'submissions' ? 'bg-neutral-800 text-white' : 'bg-gray-100 text-gray-700'
+            }`}>
+              {companyPortalOrders.length}
+            </span>
+          )}
+        </button>
       </div>
+
+      {/* SECTION 1: STOREFRONT PORTALS LINKS */}
+      {activeSection === 'portals' && (
+        <div className="space-y-8">
+          {/* Metrics Bar */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+              <span className="text-[10px] uppercase font-mono font-bold text-gray-400 block mb-1">Total Portals</span>
+              <span className="text-2xl font-black text-black font-mono">{companyPortals.length}</span>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+              <span className="text-[10px] uppercase font-mono font-bold text-gray-400 block mb-1">Active Links</span>
+              <span className="text-2xl font-black text-emerald-600 font-mono">{activeCount}</span>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+              <span className="text-[10px] uppercase font-mono font-bold text-gray-400 block mb-1">Paused / Closed</span>
+              <span className="text-2xl font-black text-amber-600 font-mono">{pausedCount}</span>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+              <span className="text-[10px] uppercase font-mono font-bold text-gray-400 block mb-1">Products Shared</span>
+              <span className="text-2xl font-black text-black font-mono">{totalProductsShared}</span>
+            </div>
+          </div>
 
       {/* Portal Cards Grid */}
       {companyPortals.length === 0 ? (
@@ -645,6 +786,313 @@ export default function OrderPortals({
               </div>
             );
           })}
+        </div>
+      )}
+      </div>
+      )}
+
+      {/* SECTION 2: PORTAL ORDER SUBMISSIONS (PENDING CONFIRMATION BY COMPANY ADMIN) */}
+      {activeSection === 'submissions' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Submissions Header Info */}
+          <div className="bg-amber-50/80 border border-amber-200 rounded-3xl p-6 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="bg-amber-600 text-white text-[9px] font-mono font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full">
+                  Company Admin Confirmation Queue
+                </span>
+                <span className="text-xs font-mono font-bold text-amber-900">{activeCompany.name}</span>
+              </div>
+              <h3 className="text-lg font-black text-black uppercase tracking-tight">
+                Portal Order Submissions
+              </h3>
+              <p className="text-xs text-amber-900/80 leading-relaxed max-w-2xl font-sans">
+                Review and manage orders coming from your public storefront links. Confirm and batch-send them to the Print Hub Admin for official production &amp; fulfillment.
+              </p>
+            </div>
+
+            <div className="bg-white border border-amber-200 rounded-2xl p-4 text-center shrink-0 min-w-[140px] shadow-2xs">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-800 block">Pending Review</span>
+              <span className="text-3xl font-black text-amber-600 font-mono">{pendingPortalOrders.length}</span>
+            </div>
+          </div>
+
+          {/* Filters & Batch Controls Bar */}
+          <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            {/* Filter Buttons */}
+            <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+              <button
+                onClick={() => setSubmissionFilter('pending')}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
+                  submissionFilter === 'pending'
+                    ? 'bg-black text-white shadow-xs'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Pending Confirmation ({pendingPortalOrders.length})</span>
+              </button>
+
+              <button
+                onClick={() => setSubmissionFilter('approved')}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
+                  submissionFilter === 'approved'
+                    ? 'bg-black text-white shadow-xs'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Sent to Admin ({companyPortalOrders.length - pendingPortalOrders.length})</span>
+              </button>
+
+              <button
+                onClick={() => setSubmissionFilter('all')}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
+                  submissionFilter === 'all'
+                    ? 'bg-black text-white shadow-xs'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                <span>All Submissions ({companyPortalOrders.length})</span>
+              </button>
+            </div>
+
+            {/* Batch Action Bar */}
+            {filteredSubmissions.length > 0 && (
+              <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end pt-3 md:pt-0 border-t md:border-t-0 border-gray-100">
+                <button
+                  onClick={handleSelectAllSubmissions}
+                  className="flex items-center gap-2 text-xs font-mono font-bold text-gray-700 hover:text-black cursor-pointer bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl transition-all"
+                  id="select-all-portal-submissions-btn"
+                >
+                  {selectedOrderIds.length === filteredSubmissions.length && filteredSubmissions.length > 0 ? (
+                    <CheckSquare className="w-4 h-4 text-black" />
+                  ) : (
+                    <Square className="w-4 h-4 text-gray-400" />
+                  )}
+                  <span>
+                    {selectedOrderIds.length === filteredSubmissions.length ? 'Deselect All' : `Select All (${filteredSubmissions.length})`}
+                  </span>
+                </button>
+
+                {selectedOrderIds.length > 0 && (
+                  <div className="flex items-center gap-2 animate-fade-in">
+                    <button
+                      onClick={() => handleBatchUpdateStatus('Pending')}
+                      disabled={isProcessingBatch}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-wider py-2 px-3.5 rounded-xl border border-emerald-600 shadow-md transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                      id="batch-approve-btn"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Approve Selected ({selectedOrderIds.length})</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleBatchUpdateStatus('Canceled')}
+                      disabled={isProcessingBatch}
+                      className="bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs uppercase tracking-wider py-2 px-3 rounded-xl border border-red-600 shadow-md transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                      id="batch-decline-btn"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      <span>Decline</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Submissions List */}
+          {filteredSubmissions.length === 0 ? (
+            <div className="bg-white border border-dashed border-gray-300 rounded-3xl p-12 text-center space-y-3">
+              <Inbox className="w-12 h-12 text-gray-300 mx-auto" />
+              <h4 className="text-base font-extrabold text-black uppercase tracking-tight">No Orders In This Queue</h4>
+              <p className="text-xs text-gray-500 max-w-sm mx-auto font-sans leading-relaxed">
+                {submissionFilter === 'pending'
+                  ? 'There are currently no portal orders awaiting company confirmation.'
+                  : 'No portal submissions match the selected filter.'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {filteredSubmissions.map(ord => {
+                const isSelected = selectedOrderIds.includes(ord.id);
+                const isPending = ord.status === 'Pending Approval';
+
+                return (
+                  <div
+                    key={ord.id}
+                    className={`bg-white border rounded-3xl p-6 shadow-xs transition-all space-y-6 ${
+                      isSelected ? 'border-black ring-2 ring-black/5 bg-gray-50/50' : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    id={`portal-order-card-${ord.id}`}
+                  >
+                    {/* Header Row */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleToggleSelectOrder(ord.id)}
+                          className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-black cursor-pointer transition-colors"
+                          aria-label="Select Order"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-5 h-5 text-black" />
+                          ) : (
+                            <Square className="w-5 h-5 text-gray-300" />
+                          )}
+                        </button>
+
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-black text-black font-mono tracking-tight">{ord.id}</span>
+                            <span className="text-xs font-mono text-gray-400">
+                              • {new Date(ord.createdAt).toLocaleDateString()} at {new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="bg-gray-100 text-gray-700 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                              <Globe className="w-3 h-3 text-gray-500" />
+                              <span>{ord.portalName || 'Public Storefront Portal'}</span>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Status & Actions */}
+                      <div className="flex items-center gap-3 self-end sm:self-auto">
+                        {isPending ? (
+                          <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-mono font-extrabold uppercase px-3 py-1 rounded-full flex items-center gap-1.5 animate-pulse">
+                            <Clock className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Awaiting Company Confirmation</span>
+                          </span>
+                        ) : (
+                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-mono font-extrabold uppercase px-3 py-1 rounded-full flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>{ord.status === 'Pending' ? 'Sent to Admin' : ord.status}</span>
+                          </span>
+                        )}
+
+                        {isPending && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleSingleUpdateStatus(ord.id, 'Pending')}
+                              disabled={isProcessingBatch}
+                              className="bg-black hover:bg-neutral-800 text-white font-extrabold text-xs uppercase tracking-wider py-2 px-4 rounded-xl border border-black shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
+                              id={`approve-order-btn-${ord.id}`}
+                            >
+                              <Send className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>Approve &amp; Send to Admin</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleSingleUpdateStatus(ord.id, 'Canceled')}
+                              disabled={isProcessingBatch}
+                              className="bg-white hover:bg-red-50 text-red-600 border border-red-200 font-bold text-xs uppercase tracking-wider py-2 px-3 rounded-xl transition-all cursor-pointer flex items-center gap-1"
+                              id={`decline-order-btn-${ord.id}`}
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                              <span>Decline</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Customer Info Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 border border-gray-100 rounded-2xl p-4 text-xs font-sans">
+                      <div>
+                        <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">Purchaser / Contact Person</span>
+                        <div className="font-extrabold text-black flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5 text-gray-400" />
+                          <span>{ord.contactPerson || 'N/A'}</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">Email / Phone</span>
+                        <div className="font-medium text-gray-800 space-y-0.5">
+                          {ord.contactEmail && (
+                            <div className="flex items-center gap-1 truncate">
+                              <Mail className="w-3 h-3 text-gray-400" />
+                              <span>{ord.contactEmail}</span>
+                            </div>
+                          )}
+                          {ord.contactNumber && (
+                            <div className="flex items-center gap-1">
+                              <Phone className="w-3 h-3 text-gray-400" />
+                              <span>{ord.contactNumber}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">Delivery Address / Dept</span>
+                        <div className="font-medium text-gray-800 flex items-start gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
+                          <span className="line-clamp-2">{ord.deliveryAddress || 'Standard Corporate Delivery'}</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">PO Number &amp; Notes</span>
+                        <div className="font-mono text-gray-800 space-y-0.5">
+                          {ord.poNumber && <div className="font-bold text-black">PO: {ord.poNumber}</div>}
+                          {ord.notes && <div className="text-[11px] italic text-gray-600 line-clamp-2">"{ord.notes}"</div>}
+                          {!ord.poNumber && !ord.notes && <span className="text-gray-400">None provided</span>}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Order Items Table */}
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block">Requested Items</span>
+                      <div className="border border-gray-200 rounded-2xl overflow-hidden divide-y divide-gray-100">
+                        {ord.items.map((it, idx) => (
+                          <div key={idx} className="p-3 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                            <div className="flex items-center gap-3">
+                              <span className="w-7 h-7 rounded-xl bg-gray-100 text-black font-mono font-extrabold flex items-center justify-center shrink-0">
+                                {it.quantity}x
+                              </span>
+                              <div>
+                                <span className="font-extrabold text-black uppercase tracking-tight block">{it.productName || (it as any).name}</span>
+                                <div className="flex flex-wrap items-center gap-2 mt-0.5 text-[11px] text-gray-500 font-mono">
+                                  {it.selectedSize && <span className="bg-gray-100 px-2 py-0.5 rounded">Size: {it.selectedSize}</span>}
+                                  {it.selectedColor && <span className="bg-gray-100 px-2 py-0.5 rounded">Color: {it.selectedColor}</span>}
+                                  {it.customDetails && Object.entries(it.customDetails).map(([k, v]) => (
+                                    <span key={k} className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded font-bold">
+                                      {k}: {String(v)}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="text-right font-mono self-end sm:self-auto">
+                              <span className="text-xs text-gray-500">
+                                {systemSettings.currencySymbol || 'Php'} {it.price.toLocaleString('en-US', { minimumFractionDigits: 2 })} / ea
+                              </span>
+                              <div className="font-extrabold text-black text-sm">
+                                {systemSettings.currencySymbol || 'Php'} {(it.price * it.quantity).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Total Amount Footer */}
+                    <div className="flex items-center justify-between pt-3 border-t border-gray-100 font-mono">
+                      <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Total Order Value</span>
+                      <span className="text-xl font-black text-black">
+                        {systemSettings.currencySymbol || 'Php'} {ord.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

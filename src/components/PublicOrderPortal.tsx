@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { OrderPortal, Product, CompanyProfile, Order, OrderItem, SystemSettings } from '../types';
+import ProductImageCarousel from './ProductImageCarousel';
 import {
   ShoppingBag,
   CheckCircle,
@@ -348,17 +349,14 @@ export default function PublicOrderPortal({
           <div className="bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-sm p-6 sm:p-10 grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12 items-start">
             {/* Image & Badges */}
             <div className="space-y-4">
-              <div className="relative aspect-square bg-gray-50 border border-gray-200 rounded-2xl overflow-hidden flex items-center justify-center">
-                {product.imageUrl ? (
-                  <img
-                    src={product.imageUrl}
-                    alt={product.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <Store className="w-20 h-20 text-gray-300" />
-                )}
-                <span className="absolute top-4 left-4 bg-black/90 text-white text-[10px] font-mono uppercase font-bold px-3 py-1 rounded-full backdrop-blur-xs">
+              <div className="relative border border-gray-200 rounded-2xl overflow-hidden shadow-xs">
+                <ProductImageCarousel
+                  product={product}
+                  showFavoriteButton={false}
+                  aspectClass="aspect-square"
+                  className="w-full"
+                />
+                <span className="absolute top-4 left-4 z-20 bg-black/90 text-white text-[10px] font-mono uppercase font-bold px-3 py-1 rounded-full backdrop-blur-xs">
                   {product.category}
                 </span>
               </div>
@@ -580,7 +578,21 @@ export default function PublicOrderPortal({
             </div>
           </div>
 
-          {/* Header Cart Button Removed as requested */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsCheckoutOpen(true)}
+              className="relative bg-black hover:bg-neutral-800 text-white font-extrabold text-xs uppercase tracking-wider py-2.5 px-4 rounded-xl border border-black transition-all cursor-pointer flex items-center gap-2 shadow-xs"
+              id="portal-cart-btn"
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <span className="hidden sm:inline">Order Cart</span>
+              {cartItems.length > 0 && (
+                <span className="bg-white text-black text-[10px] font-mono font-black w-5 h-5 rounded-full flex items-center justify-center border border-black">
+                  {cartItems.reduce((acc, it) => acc + it.quantity, 0)}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -640,22 +652,17 @@ export default function PublicOrderPortal({
                     onClick={() => setSelectedDetailProduct(product)}
                     className="cursor-pointer group/card"
                   >
-                    <div className="relative aspect-4/3 bg-gray-100 border-b border-gray-100 overflow-hidden">
-                      {product.imageUrl ? (
-                        <img
-                          src={product.imageUrl}
-                          alt={product.name}
-                          className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-300">
-                          <Store className="w-12 h-12" />
-                        </div>
-                      )}
-                      <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-xs text-black text-[9px] font-mono uppercase font-bold px-2.5 py-1 rounded-full border border-gray-200">
+                    <div className="relative aspect-4/3 border-b border-gray-100 overflow-hidden">
+                      <ProductImageCarousel
+                        product={product}
+                        onImageClick={() => setSelectedDetailProduct(product)}
+                        showFavoriteButton={false}
+                        aspectClass="aspect-4/3"
+                      />
+                      <span className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-xs text-black text-[9px] font-mono uppercase font-bold px-2.5 py-1 rounded-full border border-gray-200">
                         {product.category}
                       </span>
-                      <span className="absolute bottom-3 right-3 bg-black/80 text-white text-[9px] font-mono uppercase font-bold px-2.5 py-1 rounded-full backdrop-blur-xs flex items-center gap-1 group-hover/card:bg-black">
+                      <span className="absolute bottom-3 right-3 z-20 bg-black/80 text-white text-[9px] font-mono uppercase font-bold px-2.5 py-1 rounded-full backdrop-blur-xs flex items-center gap-1 group-hover/card:bg-black">
                         <span>View Details</span>
                         <ArrowRight className="w-2.5 h-2.5" />
                       </span>

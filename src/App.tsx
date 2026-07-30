@@ -1679,6 +1679,8 @@ export default function App() {
                 onDeletePortal={handleDeletePortal}
                 onViewPortal={(portal) => setActivePublicPortal(portal)}
                 appsScriptUrl={appsScriptConfig.isConnected ? appsScriptConfig.webAppUrl : undefined}
+                orders={orders}
+                onUpdateOrders={handleUpdateOrders}
               />
             )}
 
