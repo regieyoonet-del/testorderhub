@@ -882,8 +882,8 @@ function saveAdminSettings(ss, settings, adminUser, adminPass) {
     "Short Hub Name": settings.shortHubName,
     "Order Prefix": settings.orderPrefix,
     "Currency Symbol": settings.currencySymbol,
-    "Admin Username": adminUser || "admin",
-    "Admin Passcode": adminPass || "1234",
+    "Admin Username": adminUser || "",
+    "Admin Passcode": adminPass || "",
     "Color Theme": settings.colorTheme || "classic_noir",
     "Admin Email": settings.adminEmail || "",
     "App Logo URL": settings.logoUrl || ""
