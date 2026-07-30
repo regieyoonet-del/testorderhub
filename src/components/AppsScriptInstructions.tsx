@@ -292,7 +292,7 @@ function getOrdersWithItems(ss) {
       deliveryAddress: order.DeliveryAddress || order["Delivery Address"],
       poNumber: order.PONumber || order["PO Number"] || "",
       totalAmount: Number(order.TotalAmount || order["Total Amount"]),
-      status: order.Status || "Pending",
+      status: order.Status || "Pending Approval",
       createdAt: order.CreatedAt || order["Created At"],
       notes: order.Notes || "",
       portalId: order.PortalID || order["Portal ID"] || order.portalId || "",
@@ -339,7 +339,7 @@ function saveNewOrder(ss, order) {
     "Delivery Address": order.deliveryAddress,
     "PO Number": order.poNumber || "",
     "Total Amount": order.totalAmount,
-    "Status": order.status || "Pending",
+    "Status": order.status || "Pending Approval",
     "Created At": order.createdAt,
     "Notes": order.notes || "",
     "Portal ID": order.portalId || "",
@@ -660,12 +660,12 @@ function updateOrderStatus(ss, orderId, status) {
       idIndex = c;
     } else if (normH === "ordernumber") {
       orderNumIndex = c;
-    } else if (normH === "status") {
+    } else if (normH === "status" || normH.indexOf("status") !== -1) {
       statusIndex = c;
     }
   }
   if (idIndex === -1) idIndex = 0;
-  if (statusIndex === -1) statusIndex = 8;
+  if (statusIndex === -1) statusIndex = 10;
   
   var cleanTargetId = String(orderId).trim();
   for (var i = 1; i < data.length; i++) {

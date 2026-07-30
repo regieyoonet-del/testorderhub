@@ -355,6 +355,7 @@ export default function PublicOrderPortal({
                   showFavoriteButton={false}
                   aspectClass="aspect-square"
                   className="w-full"
+                  imageFit="contain"
                 />
                 <span className="absolute top-4 left-4 z-20 bg-black/90 text-white text-[10px] font-mono uppercase font-bold px-3 py-1 rounded-full backdrop-blur-xs">
                   {product.category}
@@ -658,6 +659,7 @@ export default function PublicOrderPortal({
                         onImageClick={() => setSelectedDetailProduct(product)}
                         showFavoriteButton={false}
                         aspectClass="aspect-4/3"
+                        imageFit="contain"
                       />
                       <span className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-xs text-black text-[9px] font-mono uppercase font-bold px-2.5 py-1 rounded-full border border-gray-200">
                         {product.category}

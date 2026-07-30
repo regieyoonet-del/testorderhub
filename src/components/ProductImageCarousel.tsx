@@ -17,6 +17,7 @@ interface ProductImageCarouselProps {
   showFavoriteButton?: boolean;
   aspectClass?: string;
   className?: string;
+  imageFit?: 'contain' | 'cover';
 }
 
 export default function ProductImageCarousel({
@@ -26,7 +27,8 @@ export default function ProductImageCarousel({
   onToggleFavorite,
   showFavoriteButton = true,
   aspectClass = "aspect-square",
-  className = ""
+  className = "",
+  imageFit = "contain"
 }: ProductImageCarouselProps) {
   const images = Array.from(new Set([product.imageUrl, ...(product.imageUrls || [])].filter(Boolean)));
   const [activeIdx, setActiveIdx] = useState<number>(0);
@@ -52,7 +54,7 @@ export default function ProductImageCarousel({
         <img
           src={currentImage}
           alt={product.name}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          className={`w-full h-full ${imageFit === 'contain' ? 'object-contain p-2' : 'object-cover'} transition-transform duration-500 group-hover:scale-102`}
           referrerPolicy="no-referrer"
         />
       ) : (

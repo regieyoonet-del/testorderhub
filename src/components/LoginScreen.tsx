@@ -32,10 +32,13 @@ export default function LoginScreen({ companies, onLogin, systemSettings }: Logi
     }
 
     // Check Admin Credentials
-    const savedAdminUser = (systemSettings?.adminUsername || localStorage.getItem('rp_admin_username') || 'admin').toLowerCase();
-    const savedAdminPass = systemSettings?.adminPasscode || localStorage.getItem('rp_admin_passcode') || 'admin123';
+    const savedAdminUser = (localStorage.getItem('rp_admin_username') || systemSettings?.adminUsername || 'admin').toLowerCase();
+    const savedAdminPass = localStorage.getItem('rp_admin_passcode') || systemSettings?.adminPasscode || 'admin123';
 
-    if ((trimmedUser === savedAdminUser || trimmedUser === 'admin') && (trimmedPass === savedAdminPass || trimmedPass === 'admin123' || trimmedPass === 'admin')) {
+    const isAdminUserMatch = trimmedUser === savedAdminUser || (savedAdminUser === 'admin' && trimmedUser === 'admin');
+    const isAdminPassMatch = trimmedPass === savedAdminPass || (savedAdminPass === 'admin123' && (trimmedPass === 'admin123' || trimmedPass === 'admin'));
+
+    if (isAdminUserMatch && isAdminPassMatch) {
       onLogin('admin');
       return;
     }

@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { OrderPortal, Product, CompanyProfile, SystemSettings, Order } from '../types';
+import { OrderPortal, Product, CompanyProfile, SystemSettings, Order, OrderItem } from '../types';
 import {
   Store,
   Plus,
@@ -111,14 +111,76 @@ export default function OrderPortals({
     if (selectedOrderIds.length === 0) return;
     setIsProcessingBatch(true);
     try {
-      const updatedOrders = orders.map(o =>
-        selectedOrderIds.includes(o.id) ? { ...o, status: newStatus } : o
-      );
-      if (onUpdateOrders) {
-        await onUpdateOrders(updatedOrders);
-      } else if (onUpdateOrderStatus) {
-        for (const id of selectedOrderIds) {
-          onUpdateOrderStatus(id, newStatus);
+      const selectedOrders = orders.filter(o => selectedOrderIds.includes(o.id));
+
+      if (newStatus === 'Approved' && selectedOrders.length > 1) {
+        // Consolidate selected portal submissions into 1 single order card for Admin
+        const primary = selectedOrders[0];
+
+        // Combine items & sum quantities for identical items
+        const consolidatedItems: OrderItem[] = [];
+        selectedOrders.forEach(ord => {
+          (ord.items || []).forEach(item => {
+            const customStr = JSON.stringify(item.customDetails || {});
+            const existing = consolidatedItems.find(i =>
+              i.productId === item.productId &&
+              (i.selectedSize || '') === (item.selectedSize || '') &&
+              (i.selectedColor || '') === (item.selectedColor || '') &&
+              JSON.stringify(i.customDetails || {}) === customStr
+            );
+            if (existing) {
+              existing.quantity += item.quantity;
+            } else {
+              consolidatedItems.push({ ...item });
+            }
+          });
+        });
+
+        const totalAmount = selectedOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+
+        const orderSummaries = selectedOrders.map((o, idx) => {
+          const itemSummary = (o.items || []).map(i => `${i.productName} (x${i.quantity})`).join(', ');
+          return `${idx + 1}. ${o.orderNumber} (${o.contactPerson || o.contactEmail || 'Portal User'}): ${itemSummary}${o.notes ? ` [Notes: ${o.notes}]` : ''}`;
+        }).join('\n');
+
+        const combinedNotes = `📦 CONSOLIDATED BATCH ORDER (${selectedOrders.length} Portal Submissions Combined):\n${orderSummaries}`;
+
+        const consolidatedOrder: Order = {
+          id: `ord-batch-${Date.now()}`,
+          orderNumber: `${primary.orderNumber}-BATCH`,
+          companyName: primary.companyName,
+          contactEmail: primary.contactEmail,
+          contactPerson: primary.contactPerson || 'Company Representative',
+          contactNumber: primary.contactNumber,
+          fbMessengerLink: primary.fbMessengerLink,
+          deliveryAddress: primary.deliveryAddress,
+          poNumber: primary.poNumber,
+          notes: combinedNotes,
+          portalId: primary.portalId,
+          portalName: primary.portalName,
+          items: consolidatedItems,
+          status: 'Approved',
+          totalAmount: totalAmount,
+          createdAt: new Date().toISOString()
+        };
+
+        // Remove individual selected portal orders and replace with the 1 consolidated order
+        const remainingOrders = orders.filter(o => !selectedOrderIds.includes(o.id));
+        const updatedOrders = [consolidatedOrder, ...remainingOrders];
+
+        if (onUpdateOrders) {
+          await onUpdateOrders(updatedOrders);
+        }
+      } else {
+        const updatedOrders = orders.map(o =>
+          selectedOrderIds.includes(o.id) ? { ...o, status: newStatus } : o
+        );
+        if (onUpdateOrders) {
+          await onUpdateOrders(updatedOrders);
+        } else if (onUpdateOrderStatus) {
+          for (const id of selectedOrderIds) {
+            onUpdateOrderStatus(id, newStatus);
+          }
         }
       }
       setSelectedOrderIds([]);
@@ -878,13 +940,17 @@ export default function OrderPortals({
                 {selectedOrderIds.length > 0 && (
                   <div className="flex items-center gap-2 animate-fade-in">
                     <button
-                      onClick={() => handleBatchUpdateStatus('Pending')}
+                      onClick={() => handleBatchUpdateStatus('Approved')}
                       disabled={isProcessingBatch}
                       className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-wider py-2 px-3.5 rounded-xl border border-emerald-600 shadow-md transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                       id="batch-approve-btn"
                     >
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>Approve Selected ({selectedOrderIds.length})</span>
+                      <span>
+                        {selectedOrderIds.length > 1
+                          ? `Approve & Combine into 1 Order (${selectedOrderIds.length})`
+                          : `Approve Selected (${selectedOrderIds.length})`}
+                      </span>
                     </button>
 
                     <button
@@ -968,14 +1034,14 @@ export default function OrderPortals({
                         ) : (
                           <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-mono font-extrabold uppercase px-3 py-1 rounded-full flex items-center gap-1.5">
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>{ord.status === 'Pending' ? 'Sent to Admin' : ord.status}</span>
+                            <span>{ord.status === 'Approved' || ord.status === 'Pending' ? 'Sent to Admin' : ord.status}</span>
                           </span>
                         )}
 
                         {isPending && (
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => handleSingleUpdateStatus(ord.id, 'Pending')}
+                              onClick={() => handleSingleUpdateStatus(ord.id, 'Approved')}
                               disabled={isProcessingBatch}
                               className="bg-black hover:bg-neutral-800 text-white font-extrabold text-xs uppercase tracking-wider py-2 px-4 rounded-xl border border-black shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
                               id={`approve-order-btn-${ord.id}`}

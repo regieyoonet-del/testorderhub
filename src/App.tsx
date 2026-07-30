@@ -571,7 +571,36 @@ export default function App() {
         // 2. Fetch companies
         const fetchedCompanies = await sheetsService.fetchCompanies(url);
         if (fetchedCompanies !== null && fetchedCompanies.length > 0) {
-          setCompanies(fetchedCompanies.map(sanitizeCompany));
+          setCompanies(prevCompanies => {
+            return fetchedCompanies.map(fc => {
+              const sanitizedFC = sanitizeCompany(fc);
+              const existing = prevCompanies.find(p => p.id === fc.id);
+
+              let passcode = sanitizedFC.passcode;
+              let username = sanitizedFC.username;
+
+              if (existing) {
+                if (existing.passcode && existing.passcode.trim() !== '') {
+                  // If fetched passcode is default or empty, preserve user-updated passcode
+                  const defaultPass = `${sanitizedFC.username.substring(0, 4)}2026`;
+                  if (!sanitizedFC.passcode || sanitizedFC.passcode === defaultPass || sanitizedFC.passcode === 'acme2026') {
+                    passcode = existing.passcode;
+                  }
+                }
+                if (existing.username && existing.username.trim() !== '') {
+                  if (!sanitizedFC.username || sanitizedFC.username === 'client') {
+                    username = existing.username;
+                  }
+                }
+              }
+
+              return {
+                ...sanitizedFC,
+                username,
+                passcode
+              };
+            });
+          });
         }
 
         // 3. Merge products from fetchedProducts and company customProducts
@@ -598,19 +627,45 @@ export default function App() {
         // 3. Fetch orders
         const fetchedOrders = await sheetsService.fetchOrders(url);
         if (fetchedOrders !== null) {
-          setOrders(fetchedOrders);
+          setOrders(prevOrders => {
+            const fetchedIds = new Set(fetchedOrders.map(o => o.id));
+            const unsyncedLocal = prevOrders.filter(o => !fetchedIds.has(o.id));
+
+            const localMap = new Map<string, Order>(prevOrders.map(o => [o.id, o]));
+            const mergedFetched = fetchedOrders.map(fo => {
+              const local = localMap.get(fo.id);
+              if (local) {
+                // If order was approved or updated locally, do not revert it to 'Pending Approval' if Google Sheets returns stale status
+                if (local.status !== 'Pending Approval' && (fo.status === 'Pending Approval' || fo.status === 'Pending')) {
+                  return { ...fo, status: local.status };
+                }
+              }
+              return fo;
+            });
+
+            return [...unsyncedLocal, ...mergedFetched];
+          });
         }
 
         // 4. Fetch admin settings
         const fetchedSettings = await sheetsService.fetchAdminSettings(url);
         if (fetchedSettings) {
-          const currentAdminUser = (fetchedSettings.adminUsername && fetchedSettings.adminUsername.trim() !== '')
-            ? fetchedSettings.adminUsername.trim()
-            : (localStorage.getItem('rp_admin_username') || systemSettings.adminUsername || 'admin');
+          const storedAdminUser = localStorage.getItem('rp_admin_username');
+          const storedAdminPass = localStorage.getItem('rp_admin_passcode');
 
-          const currentAdminPass = (fetchedSettings.adminPasscode && fetchedSettings.adminPasscode.trim() !== '')
-            ? fetchedSettings.adminPasscode.trim()
-            : (localStorage.getItem('rp_admin_passcode') || systemSettings.adminPasscode || 'admin123');
+          let currentAdminUser = 'admin';
+          if (storedAdminUser && storedAdminUser.trim() !== '') {
+            currentAdminUser = storedAdminUser.trim();
+          } else if (fetchedSettings.adminUsername && fetchedSettings.adminUsername.trim() !== '') {
+            currentAdminUser = fetchedSettings.adminUsername.trim();
+          }
+
+          let currentAdminPass = 'admin123';
+          if (storedAdminPass && storedAdminPass.trim() !== '') {
+            currentAdminPass = storedAdminPass.trim();
+          } else if (fetchedSettings.adminPasscode && fetchedSettings.adminPasscode.trim() !== '' && fetchedSettings.adminPasscode.trim() !== 'admin123') {
+            currentAdminPass = fetchedSettings.adminPasscode.trim();
+          }
 
           setSystemSettings({
             hubName: fetchedSettings.hubName || 'ARH Print Hub',
@@ -823,27 +878,31 @@ export default function App() {
   };
 
   const handleUpdateOrders = async (newOrders: Order[]) => {
-    // 1. Sync deletions (works for both online/offline)
-    for (const oldOrd of orders) {
-      const stillExists = newOrders.some(newOrd => newOrd.id === oldOrd.id);
-      if (!stillExists) {
-        if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
-          await sheetsService.deleteOrder(appsScriptConfig.webAppUrl, oldOrd.id);
-        }
-      }
-    }
-
-    // 2. Sync status changes (works for both online/offline)
-    for (const newOrd of newOrders) {
-      const oldOrd = orders.find(o => o.id === newOrd.id);
-      if (oldOrd && oldOrd.status !== newOrd.status) {
-        if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
-          await sheetsService.updateOrderStatus(appsScriptConfig.webAppUrl, newOrd.id, newOrd.status);
-        }
-      }
-    }
-
+    // 1. Update React state immediately for instant feedback and localStorage persistence
     setOrders(newOrders);
+
+    // 2. Sync changes asynchronously with Google Sheets
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      const url = appsScriptConfig.webAppUrl;
+
+      // Sync deletions
+      for (const oldOrd of orders) {
+        const stillExists = newOrders.some(newOrd => newOrd.id === oldOrd.id);
+        if (!stillExists) {
+          sheetsService.deleteOrder(url, oldOrd.id).catch(console.error);
+        }
+      }
+
+      // Sync status updates & new orders
+      for (const newOrd of newOrders) {
+        const oldOrd = orders.find(o => o.id === newOrd.id);
+        if (!oldOrd) {
+          sheetsService.saveOrder(url, newOrd).catch(console.error);
+        } else if (oldOrd.status !== newOrd.status) {
+          sheetsService.updateOrderStatus(url, newOrd.id, newOrd.status).catch(console.error);
+        }
+      }
+    }
   };
 
   const handleUpdateSystemSettings = (newSettings: SystemSettings) => {
