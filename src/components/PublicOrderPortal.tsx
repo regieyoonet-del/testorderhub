@@ -340,21 +340,7 @@ export default function PublicOrderPortal({
             <span>← Back to Catalog</span>
           </button>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsCheckoutOpen(true)}
-              className="relative bg-black text-white hover:bg-neutral-800 px-4 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider font-mono flex items-center gap-2 cursor-pointer shadow-xs"
-              id="portal-view-cart-btn-detail"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span>Cart</span>
-              {cartItems.length > 0 && (
-                <span className="bg-white text-black text-[10px] font-black px-1.5 py-0.2 rounded-full border border-black">
-                  {cartItems.reduce((acc, item) => acc + item.quantity, 0)}
-                </span>
-              )}
-            </button>
-          </div>
+          {/* Header Cart Button Removed as requested */}
         </header>
 
         {/* Product Detail Page View */}
@@ -594,21 +580,7 @@ export default function PublicOrderPortal({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsCheckoutOpen(true)}
-              className="relative bg-black hover:bg-neutral-800 text-white font-extrabold text-xs uppercase tracking-wider py-2.5 px-4 rounded-xl border border-black transition-all cursor-pointer flex items-center gap-2 shadow-xs"
-              id="portal-cart-btn"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span className="hidden sm:inline">Order Cart</span>
-              {cartItems.length > 0 && (
-                <span className="bg-white text-black text-[10px] font-mono font-black w-5 h-5 rounded-full flex items-center justify-center border border-black">
-                  {cartItems.reduce((acc, it) => acc + it.quantity, 0)}
-                </span>
-              )}
-            </button>
-          </div>
+          {/* Header Cart Button Removed as requested */}
         </div>
       </header>
 
