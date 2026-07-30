@@ -219,7 +219,7 @@ function initSheets(ss) {
   
   // Headers definitions
   var headers = {
-    "Orders": ["Order ID", "Order Number", "Company Name", "Contact Email", "Contact Person", "Delivery Address", "PO Number", "Total Amount", "Status", "Created At", "Notes"],
+    "Orders": ["Order ID", "Order Number", "Company Name", "Contact Email", "Contact Person", "Contact Number", "FB Messenger Link", "Delivery Address", "PO Number", "Total Amount", "Status", "Created At", "Notes", "Portal ID", "Portal Name"],
     "OrderItems": ["Order ID", "Product ID", "Product Name", "Image URL", "Quantity", "Price", "Selected Size", "Selected Color", "Custom Details"],
     "Products": ["Product ID", "Name", "Category", "Description", "Image URL", "Base Price", "Original Price", "Min Quantity", "Unit", "Size Options", "Color Options", "Frequently Ordered", "Shipping Fee", "Image URLs", "Custom Fields"],
     "CatalogProducts": ["Product ID", "SKU", "Name", "Category", "Description", "Image URL", "Image URLs", "MOQ", "Lead Time", "Branding Methods", "Colors", "Sizes", "Status"],
@@ -287,12 +287,16 @@ function getOrdersWithItems(ss) {
       companyName: order.CompanyName || order["Company Name"],
       contactEmail: order.ContactEmail || order["Contact Email"],
       contactPerson: order.ContactPerson || order["Contact Person"],
+      contactNumber: order.ContactNumber || order["Contact Number"] || "",
+      fbMessengerLink: order.FBMessengerLink || order["FB Messenger Link"] || "",
       deliveryAddress: order.DeliveryAddress || order["Delivery Address"],
       poNumber: order.PONumber || order["PO Number"] || "",
       totalAmount: Number(order.TotalAmount || order["Total Amount"]),
       status: order.Status || "Pending",
       createdAt: order.CreatedAt || order["Created At"],
       notes: order.Notes || "",
+      portalId: order.PortalID || order["Portal ID"] || order.portalId || "",
+      portalName: order.PortalName || order["Portal Name"] || order.portalName || "",
       items: orderItems
     };
   });
@@ -320,7 +324,7 @@ function saveNewOrder(ss, order) {
   var ordersSheet = ss.getSheetByName("Orders");
   var itemsSheet = ss.getSheetByName("OrderItems");
   
-  var expectedOrdersHeaders = ["Order ID", "Order Number", "Company Name", "Contact Email", "Contact Person", "Contact Number", "FB Messenger Link", "Delivery Address", "PO Number", "Total Amount", "Status", "Created At", "Notes"];
+  var expectedOrdersHeaders = ["Order ID", "Order Number", "Company Name", "Contact Email", "Contact Person", "Contact Number", "FB Messenger Link", "Delivery Address", "PO Number", "Total Amount", "Status", "Created At", "Notes", "Portal ID", "Portal Name"];
   var ordersData = ensureHeaders(ordersSheet, expectedOrdersHeaders);
   var ordersHeaders = ordersData[0];
   
@@ -337,7 +341,9 @@ function saveNewOrder(ss, order) {
     "Total Amount": order.totalAmount,
     "Status": order.status || "Pending",
     "Created At": order.createdAt,
-    "Notes": order.notes || ""
+    "Notes": order.notes || "",
+    "Portal ID": order.portalId || "",
+    "Portal Name": order.portalName || ""
   };
   
   var orderRow = [];

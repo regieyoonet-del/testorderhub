@@ -168,6 +168,8 @@ export const sheetsService = {
           status: (getProp(item, ['Status', 'status', 'Statu']) || 'Pending') as any,
           createdAt: String(getProp(item, ['CreatedAt', 'Created At', 'createdAt']) || new Date().toISOString()),
           notes: String(getProp(item, ['Notes', 'notes']) || ''),
+          portalId: String(getProp(item, ['PortalID', 'Portal ID', 'portalId']) || ''),
+          portalName: String(getProp(item, ['PortalName', 'Portal Name', 'portalName']) || ''),
           items: (() => {
             const rawItems = getProp(item, ['items', 'Items', 'OrderItems', 'Order Items']);
             if (Array.isArray(rawItems)) {
