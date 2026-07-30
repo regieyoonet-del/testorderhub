@@ -290,11 +290,24 @@ export default function App() {
     };
   });
 
-  // Client Authentication State
+  // Client Authentication State (Session-isolated so new windows/browsers/shared links land on sign-in window)
   const [loggedInUser, setLoggedInUser] = useState<{ role: 'admin' | 'client'; companyId?: string } | null>(() => {
-    const cached = localStorage.getItem('rp_logged_in_user');
-    return cached ? JSON.parse(cached) : null;
+    try {
+      localStorage.removeItem('rp_logged_in_user');
+      const cached = sessionStorage.getItem('rp_logged_in_user');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
   });
+
+  useEffect(() => {
+    if (loggedInUser) {
+      sessionStorage.setItem('rp_logged_in_user', JSON.stringify(loggedInUser));
+    } else {
+      sessionStorage.removeItem('rp_logged_in_user');
+    }
+  }, [loggedInUser]);
 
   // Active Selected Company (Admin can change this to preview catalog, client is locked to their profile)
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>(() => {
@@ -542,9 +555,12 @@ export default function App() {
 
   const [isSyncingSheets, setIsSyncingSheets] = useState(false);
   const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
+  const isSyncingRef = React.useRef(false);
 
   const syncWithSheets = async () => {
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      if (isSyncingRef.current) return;
+      isSyncingRef.current = true;
       const url = appsScriptConfig.webAppUrl;
       setIsSyncingSheets(true);
       
@@ -642,6 +658,7 @@ export default function App() {
         console.error('Error syncing with Google Sheets:', err);
       } finally {
         setIsSyncingSheets(false);
+        isSyncingRef.current = false;
       }
     }
   };
@@ -649,6 +666,17 @@ export default function App() {
   // Pull live data from Sheets on load or config change
   useEffect(() => {
     syncWithSheets();
+  }, [appsScriptConfig.isConnected, appsScriptConfig.webAppUrl]);
+
+  // Auto-refresh every 20 seconds to fetch data from Google Sheets automatically
+  useEffect(() => {
+    if (!appsScriptConfig.isConnected || !appsScriptConfig.webAppUrl) return;
+
+    const intervalId = setInterval(() => {
+      syncWithSheets();
+    }, 20000);
+
+    return () => clearInterval(intervalId);
   }, [appsScriptConfig.isConnected, appsScriptConfig.webAppUrl]);
 
   // Ensure default active tab is appropriate for logged-in user
@@ -1063,6 +1091,7 @@ export default function App() {
 
   const handleLogout = () => {
     setLoggedInUser(null);
+    sessionStorage.removeItem('rp_logged_in_user');
     localStorage.removeItem('rp_logged_in_user');
   };
 
