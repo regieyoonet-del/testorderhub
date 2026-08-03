@@ -370,9 +370,12 @@ export default function ClientDashboardModal({
   // Derived / Filtered States
   // ----------------------------------------------------
   
-  // Orders strictly belonging to this company
+  // Direct orders strictly belonging to this company (excluding custom portal orders for ARH Admin view)
   const companyOrders = useMemo(() => {
-    return orders.filter(o => o.companyName.toLowerCase() === company.name.toLowerCase());
+    return orders.filter(
+      o => o.companyName.toLowerCase() === company.name.toLowerCase() &&
+      !(o.id.startsWith('ord-portal-') || Boolean(o.portalId) || Boolean(o.portalName) || o.status === 'Pending Approval')
+    );
   }, [orders, company.name]);
 
   // Financial statistics
@@ -1645,6 +1648,13 @@ export default function ClientDashboardModal({
                                   {ord.orderNumber}
                                 </span>
                                 <span className={`px-2 py-0.5 text-[9px] font-mono font-bold uppercase rounded-md border ${
+                                  ord.status === 'Reviewed' ? 'bg-purple-100 text-purple-900 border-purple-300' :
+                                  ord.status === 'To Order' ? 'bg-amber-100 text-amber-900 border-amber-300' :
+                                  ord.status === 'Ordered' ? 'bg-blue-100 text-blue-900 border-blue-300' :
+                                  ord.status === 'Admin Received' ? 'bg-teal-100 text-teal-900 border-teal-300' :
+                                  ord.status === 'Customer Claimed' ? 'bg-emerald-100 text-emerald-900 border-emerald-300' :
+                                  ord.status === 'Delivered' ? 'bg-green-100 text-green-900 border-green-300' :
+                                  ord.status === 'Picked Up' ? 'bg-indigo-100 text-indigo-900 border-indigo-300' :
                                   ord.status === 'Pending Approval' ? 'bg-amber-100 text-amber-900 border-amber-300 animate-pulse' :
                                   ord.status === 'Completed' ? 'bg-green-50 text-green-700 border-green-100' :
                                   ord.status === 'Shipped' ? 'bg-blue-50 text-blue-700 border-blue-100' :
@@ -1850,13 +1860,16 @@ export default function ClientDashboardModal({
                                 Quick Dispatch Action
                               </span>
                               
-                              <div className="flex gap-1">
+                              <div className="flex flex-wrap gap-1">
                                 {[
-                                  { label: 'Portal Review', val: 'Pending Approval' },
-                                  { label: 'Sent to Admin', val: 'Pending' },
-                                  { label: 'Approve', val: 'Approved' },
-                                  { label: 'Production', val: 'In Production' },
-                                  { label: 'Ship', val: 'Shipped' },
+                                  { label: 'Reviewed', val: 'Reviewed' },
+                                  { label: 'To Order', val: 'To Order' },
+                                  { label: 'Ordered', val: 'Ordered' },
+                                  { label: 'Admin Recv', val: 'Admin Received' },
+                                  { label: 'Claimed', val: 'Customer Claimed' },
+                                  { label: 'Delivered', val: 'Delivered' },
+                                  { label: 'Picked Up', val: 'Picked Up' },
+                                  { label: 'Pending', val: 'Pending Approval' },
                                   { label: 'Completed', val: 'Completed' }
                                 ].map((st) => (
                                   <button

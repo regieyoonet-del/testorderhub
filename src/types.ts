@@ -56,7 +56,21 @@ export interface Order {
   companyName: string;
   contactEmail: string;
   items: OrderItem[];
-  status: 'Pending Approval' | 'Pending' | 'Approved' | 'In Production' | 'Shipped' | 'Completed' | 'Canceled';
+  status:
+    | 'Reviewed'
+    | 'To Order'
+    | 'Ordered'
+    | 'Admin Received'
+    | 'Customer Claimed'
+    | 'Delivered'
+    | 'Picked Up'
+    | 'Pending Approval'
+    | 'Pending'
+    | 'Approved'
+    | 'In Production'
+    | 'Shipped'
+    | 'Completed'
+    | 'Canceled';
   totalAmount: number;
   createdAt: string;
   deliveryAddress: string;

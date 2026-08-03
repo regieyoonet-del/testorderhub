@@ -481,8 +481,15 @@ export default function AdminDashboard({
     onUpdateOrders(updated);
   };
 
+  // Exclude custom company storefront portal orders from ARH Admin order views & analytics
+  const directCompanyOrders = React.useMemo(() => {
+    return orders.filter(
+      o => !(o.id.startsWith('ord-portal-') || Boolean(o.portalId) || Boolean(o.portalName) || o.status === 'Pending Approval')
+    );
+  }, [orders]);
+
   const filteredOrders = React.useMemo(() => {
-    const list = orders.filter((ord) => {
+    const list = directCompanyOrders.filter((ord) => {
       // Search matching
       const matchesSearch = 
         ord.orderNumber.toLowerCase().includes(orderSearch.toLowerCase()) ||
@@ -553,7 +560,7 @@ export default function AdminDashboard({
       // Default: newest first
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
-  }, [orders, orderSearch, filterStatus, filterCompany, filterCategory, filterDate, filterSpecificDate, products, orderSort]);
+  }, [directCompanyOrders, orderSearch, filterStatus, filterCompany, filterCategory, filterDate, filterSpecificDate, products, orderSort]);
 
   const filteredCompanies = companies.filter(
     (co) =>
@@ -574,7 +581,7 @@ export default function AdminDashboard({
         {[
           { id: 'clients', label: 'Client Accounts', icon: Users, count: companies.length },
           { id: 'catalog', label: 'ARH Products', icon: Layers, count: catalogProducts.length },
-          { id: 'orders', label: 'Orders', icon: ClipboardList, count: orders.length },
+          { id: 'orders', label: 'Orders', icon: ClipboardList, count: directCompanyOrders.length },
           { id: 'analytics', label: 'Analytics', icon: BarChart3, count: null },
           { id: 'settings', label: 'Admin Settings', icon: Settings, count: null },
           { id: 'sync', label: 'Google Sheet Sync', icon: FileSpreadsheet, count: null }
@@ -1302,19 +1309,19 @@ export default function AdminDashboard({
       {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
       {adminTab === 'analytics' && (() => {
         // Data Calculations
-        const totalRevenue = orders.reduce((sum, o) => sum + o.totalAmount, 0);
-        const totalOrders = orders.length;
+        const totalRevenue = directCompanyOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+        const totalOrders = directCompanyOrders.length;
         const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
         
         // Count total items ordered
-        const totalUnits = orders.reduce((sum, o) => {
+        const totalUnits = directCompanyOrders.reduce((sum, o) => {
           return sum + o.items.reduce((itemSum, it) => itemSum + it.quantity, 0);
         }, 0);
 
         // Revenue by Company
         const revenueByCompany = companies.map(co => {
           // match orders by companyName
-          const coOrders = orders.filter(o => o.companyName.toLowerCase() === co.name.toLowerCase());
+          const coOrders = directCompanyOrders.filter(o => o.companyName.toLowerCase() === co.name.toLowerCase());
           const totalCoRevenue = coOrders.reduce((sum, o) => sum + o.totalAmount, 0);
           const coOrderCount = coOrders.length;
           return {
@@ -1335,8 +1342,8 @@ export default function AdminDashboard({
         };
 
         const statusDistribution = ['Pending', 'Approved', 'In Production', 'Shipped', 'Completed'].map(st => {
-          const count = orders.filter(o => o.status === st).length;
-          const revenue = orders.filter(o => o.status === st).reduce((sum, o) => sum + o.totalAmount, 0);
+          const count = directCompanyOrders.filter(o => o.status === st).length;
+          const revenue = directCompanyOrders.filter(o => o.status === st).reduce((sum, o) => sum + o.totalAmount, 0);
           return {
             name: st,
             value: count,
@@ -1347,7 +1354,7 @@ export default function AdminDashboard({
 
         // Product Leaderboard
         const productPerformanceMap: { [key: string]: { name: string, quantity: number, revenue: number } } = {};
-        orders.forEach(o => {
+        directCompanyOrders.forEach(o => {
           o.items.forEach(it => {
             const key = it.productName;
             if (!productPerformanceMap[key]) {

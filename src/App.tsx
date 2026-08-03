@@ -378,6 +378,23 @@ export default function App() {
     }
 
     const tokenClean = urlPortalToken.trim();
+    const searchParams = new URLSearchParams(window.location.search);
+    const urlCp = searchParams.get('cp');
+    const urlCvp = searchParams.get('cvp');
+
+    let urlCustomPrices: Record<string, number> | undefined;
+    let urlCustomVariantPrices: Record<string, Record<string, number>> | undefined;
+
+    if (urlCp) {
+      try {
+        urlCustomPrices = JSON.parse(decodeURIComponent(urlCp));
+      } catch (e) {}
+    }
+    if (urlCvp) {
+      try {
+        urlCustomVariantPrices = JSON.parse(decodeURIComponent(urlCvp));
+      } catch (e) {}
+    }
 
     // 1. Check local portals first
     let match = orderPortals.find(p =>
@@ -423,12 +440,20 @@ export default function App() {
     }
 
     if (match) {
-      setActivePublicPortal(match);
-      setIsResolvingPortal(false);
-      return;
+      const mergedMatch: OrderPortal = {
+        ...match,
+        customPrices: urlCustomPrices || match.customPrices,
+        customVariantPrices: urlCustomVariantPrices || match.customVariantPrices
+      };
+      setActivePublicPortal(mergedMatch);
+      // If NOT connected to Sheets, we are done. If connected, we continue to fetch live Sheets data to get latest updates!
+      if (!appsScriptConfig.isConnected || !appsScriptConfig.webAppUrl) {
+        setIsResolvingPortal(false);
+        return;
+      }
     }
 
-    // 3. If not found locally yet or if connected to Sheets, fetch live data from Google Sheets
+    // 3. If connected to Sheets, fetch live data from Google Sheets to ensure device consistency
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
       setIsResolvingPortal(true);
       const url = appsScriptConfig.webAppUrl;
@@ -473,8 +498,8 @@ export default function App() {
             const existing = poMap.get(fp.id);
             poMap.set(fp.id, {
               ...fp,
-              customPrices: fp.customPrices || existing?.customPrices,
-              customVariantPrices: fp.customVariantPrices || existing?.customVariantPrices
+              customPrices: (fp.customPrices && Object.keys(fp.customPrices).length > 0) ? fp.customPrices : (existing?.customPrices || urlCustomPrices),
+              customVariantPrices: (fp.customVariantPrices && Object.keys(fp.customVariantPrices).length > 0) ? fp.customVariantPrices : (existing?.customVariantPrices || urlCustomVariantPrices)
             });
           });
           updatedPortalsList = Array.from(poMap.values());
@@ -522,7 +547,11 @@ export default function App() {
         }
 
         if (fetchedMatch) {
-          setActivePublicPortal(fetchedMatch);
+          setActivePublicPortal({
+            ...fetchedMatch,
+            customPrices: (fetchedMatch.customPrices && Object.keys(fetchedMatch.customPrices).length > 0) ? fetchedMatch.customPrices : urlCustomPrices,
+            customVariantPrices: (fetchedMatch.customVariantPrices && Object.keys(fetchedMatch.customVariantPrices).length > 0) ? fetchedMatch.customVariantPrices : urlCustomVariantPrices
+          });
         }
         setIsResolvingPortal(false);
       }).catch(err => {
@@ -533,6 +562,26 @@ export default function App() {
       setIsResolvingPortal(false);
     }
   }, [urlPortalToken, orderPortals, companies, products, appsScriptConfig.isConnected, appsScriptConfig.webAppUrl]);
+
+  useEffect(() => {
+    if (activePublicPortal) {
+      const updated = orderPortals.find(p => p.id === activePublicPortal.id || p.shareToken === activePublicPortal.shareToken);
+      if (updated) {
+        if (
+          JSON.stringify(updated.customPrices) !== JSON.stringify(activePublicPortal.customPrices) ||
+          JSON.stringify(updated.customVariantPrices) !== JSON.stringify(activePublicPortal.customVariantPrices) ||
+          updated.name !== activePublicPortal.name ||
+          updated.status !== activePublicPortal.status
+        ) {
+          setActivePublicPortal(prev => prev ? ({
+            ...updated,
+            customPrices: (updated.customPrices && Object.keys(updated.customPrices).length > 0) ? updated.customPrices : prev.customPrices,
+            customVariantPrices: (updated.customVariantPrices && Object.keys(updated.customVariantPrices).length > 0) ? updated.customVariantPrices : prev.customVariantPrices
+          }) : null);
+        }
+      }
+    }
+  }, [orderPortals]);
 
   useEffect(() => {
     if (loggedInUser) {

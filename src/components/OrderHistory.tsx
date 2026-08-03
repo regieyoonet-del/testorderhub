@@ -64,12 +64,54 @@ export default function OrderHistory({
   };
 
   const getStatusBadge = (status: Order['status']) => {
-    const commonStyle = "text-[10px] font-mono uppercase px-2 py-0.5 border font-bold flex items-center gap-1 shrink-0";
+    const commonStyle = "text-[10px] font-mono uppercase px-2 py-0.5 border font-bold flex items-center gap-1 shrink-0 rounded-md";
     switch (status) {
+      case 'Reviewed':
+        return (
+          <span className={`${commonStyle} bg-purple-100 text-purple-900 border-purple-300`}>
+            ✓ Reviewed
+          </span>
+        );
+      case 'To Order':
+        return (
+          <span className={`${commonStyle} bg-amber-100 text-amber-900 border-amber-300`}>
+            <Clock className="w-3 h-3 text-amber-700" /> To Order
+          </span>
+        );
+      case 'Ordered':
+        return (
+          <span className={`${commonStyle} bg-blue-100 text-blue-900 border-blue-300`}>
+            ● Ordered
+          </span>
+        );
+      case 'Admin Received':
+        return (
+          <span className={`${commonStyle} bg-teal-100 text-teal-900 border-teal-300`}>
+            ✓ Admin Received
+          </span>
+        );
+      case 'Customer Claimed':
+        return (
+          <span className={`${commonStyle} bg-emerald-100 text-emerald-900 border-emerald-300`}>
+            ✓ Customer Claimed
+          </span>
+        );
+      case 'Delivered':
+        return (
+          <span className={`${commonStyle} bg-green-100 text-green-900 border-green-300`}>
+            <Truck className="w-3 h-3 text-green-700" /> Delivered
+          </span>
+        );
+      case 'Picked Up':
+        return (
+          <span className={`${commonStyle} bg-indigo-100 text-indigo-900 border-indigo-300`}>
+            ✓ Picked Up
+          </span>
+        );
       case 'Pending Approval':
         return (
           <span className={`${commonStyle} bg-amber-100 text-amber-900 border-amber-300 animate-pulse`}>
-            <Clock className="w-3 h-3 text-amber-600" /> Pending Review (Portal Order)
+            <Clock className="w-3 h-3 text-amber-600" /> Pending Review
           </span>
         );
       case 'Pending':
@@ -103,7 +145,7 @@ export default function OrderHistory({
           </span>
         );
       default:
-        return <span className={`${commonStyle} bg-white text-gray-400 border-gray-200`}>{status}</span>;
+        return <span className={`${commonStyle} bg-gray-100 text-gray-700 border-gray-300`}>{status}</span>;
     }
   };
 

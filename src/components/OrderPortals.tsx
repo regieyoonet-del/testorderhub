@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
-import { OrderPortal, Product, CompanyProfile, SystemSettings, Order, OrderItem } from '../types';
+import React, { useState, useMemo } from 'react';
+import { OrderPortal, Product, CompanyProfile, SystemSettings, Order } from '../types';
 import {
   Store,
   Plus,
@@ -17,26 +17,17 @@ import {
   X,
   Search,
   Package,
-  Layers,
   Globe,
-  Share2,
-  Info,
-  Sliders,
-  CheckCircle2,
-  AlertTriangle,
   Clock,
   ArrowLeft,
   Inbox,
-  CheckSquare,
-  Square,
-  Send,
+  CheckCircle2,
   User,
   Mail,
   Phone,
   MapPin,
-  FileText,
-  XCircle,
-  MessageSquare
+  Sliders,
+  ChevronDown
 } from 'lucide-react';
 
 interface OrderPortalsProps {
@@ -65,163 +56,12 @@ export default function OrderPortals({
   onViewPortal,
   appsScriptUrl,
   orders = [],
-  onUpdateOrders,
   onUpdateOrderStatus
 }: OrderPortalsProps) {
-  // Section Navigation Tab State
-  const [activeSection, setActiveSection] = useState<'portals' | 'submissions'>('portals');
-
   // Filter portals belonging to active company
   const companyPortals = portals.filter(p => p.companyId === activeCompany.id);
 
-  // Compute portal orders for active company
-  const companyPortalOrders = orders.filter(o =>
-    o.companyName.toLowerCase() === activeCompany.name.toLowerCase() &&
-    (o.id.startsWith('ord-portal-') || Boolean(o.portalId) || Boolean(o.portalName) || o.status === 'Pending Approval')
-  );
-
-  const pendingPortalOrders = companyPortalOrders.filter(o => o.status === 'Pending Approval');
-
-  // Submissions Tab Filter & Batch State
-  const [submissionFilter, setSubmissionFilter] = useState<'pending' | 'approved' | 'all'>('pending');
-  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
-  const [isProcessingBatch, setIsProcessingBatch] = useState(false);
-
-  const filteredSubmissions = companyPortalOrders.filter(o => {
-    if (submissionFilter === 'pending') return o.status === 'Pending Approval';
-    if (submissionFilter === 'approved') return o.status !== 'Pending Approval';
-    return true;
-  });
-
-  const handleSelectAllSubmissions = () => {
-    if (selectedOrderIds.length === filteredSubmissions.length && filteredSubmissions.length > 0) {
-      setSelectedOrderIds([]);
-    } else {
-      setSelectedOrderIds(filteredSubmissions.map(o => o.id));
-    }
-  };
-
-  const handleToggleSelectOrder = (orderId: string) => {
-    setSelectedOrderIds(prev =>
-      prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]
-    );
-  };
-
-  const handleBatchUpdateStatus = async (newStatus: Order['status']) => {
-    if (selectedOrderIds.length === 0) return;
-    setIsProcessingBatch(true);
-    try {
-      const selectedOrders = orders.filter(o => selectedOrderIds.includes(o.id));
-
-      if (newStatus === 'Approved' && selectedOrders.length > 1) {
-        // Consolidate selected portal submissions into 1 single order card for Admin
-        const primary = selectedOrders[0];
-
-        // Preserve individual order items per submitter for post-fulfillment distribution
-        const consolidatedItems: OrderItem[] = [];
-        selectedOrders.forEach(ord => {
-          const personName = ord.contactPerson || ord.contactEmail || 'Portal Submitter';
-          (ord.items || []).forEach(item => {
-            consolidatedItems.push({
-              ...item,
-              submitterName: personName,
-              submitterEmail: ord.contactEmail,
-              submitterPhone: ord.contactNumber,
-              originalOrderNumber: ord.orderNumber
-            });
-          });
-        });
-
-        const totalAmount = selectedOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-
-        const orderSummaries = selectedOrders.map((o, idx) => {
-          const itemSummary = (o.items || []).map(i => {
-            let specStr = '';
-            if (i.selectedSize) specStr += `Size: ${i.selectedSize} `;
-            if (i.selectedColor) specStr += `Color: ${i.selectedColor} `;
-            if (i.customDetails && Object.keys(i.customDetails).length > 0) {
-              specStr += `Details: ${JSON.stringify(i.customDetails)} `;
-            }
-            return `• ${i.productName} (Qty: ${i.quantity}, Price: ${systemSettings.currencySymbol || 'Php'} ${(i.price || 0).toFixed(2)}${specStr ? `, ${specStr.trim()}` : ''})`;
-          }).join('\n    ');
-
-          return `SUBMISSION #${idx + 1}: ${o.orderNumber}
-  - Submitter: ${o.contactPerson || 'N/A'} (${o.contactEmail || 'N/A'}, ${o.contactNumber || 'N/A'})
-  - Delivery Dept/Address: ${o.deliveryAddress || 'N/A'}
-  - PO Number: ${o.poNumber || 'N/A'}
-  - Items Ordered:
-    ${itemSummary}
-  - Subtotal: ${systemSettings.currencySymbol || 'Php'} ${(o.totalAmount || 0).toFixed(2)}
-  ${o.notes ? `  - Notes: ${o.notes}` : ''}`;
-        }).join('\n\n');
-
-        const combinedNotes = `📦 CONSOLIDATED BATCH ORDER (${selectedOrders.length} Portal Submissions Combined for ARH Admin):\n\n${orderSummaries}`;
-
-        const consolidatedOrder: Order = {
-          id: `ord-batch-${Date.now()}`,
-          orderNumber: `${primary.orderNumber}-BATCH`,
-          companyName: primary.companyName,
-          contactEmail: primary.contactEmail,
-          contactPerson: primary.contactPerson || 'Company Representative',
-          contactNumber: primary.contactNumber,
-          fbMessengerLink: primary.fbMessengerLink,
-          deliveryAddress: primary.deliveryAddress,
-          poNumber: primary.poNumber,
-          notes: combinedNotes,
-          portalId: primary.portalId,
-          portalName: primary.portalName,
-          items: consolidatedItems,
-          status: 'Approved',
-          totalAmount: totalAmount,
-          createdAt: new Date().toISOString()
-        };
-
-        // Remove individual selected portal orders and replace with the 1 consolidated order
-        const remainingOrders = orders.filter(o => !selectedOrderIds.includes(o.id));
-        const updatedOrders = [consolidatedOrder, ...remainingOrders];
-
-        if (onUpdateOrders) {
-          await onUpdateOrders(updatedOrders);
-        }
-      } else {
-        const updatedOrders = orders.map(o =>
-          selectedOrderIds.includes(o.id) ? { ...o, status: newStatus } : o
-        );
-        if (onUpdateOrders) {
-          await onUpdateOrders(updatedOrders);
-        } else if (onUpdateOrderStatus) {
-          for (const id of selectedOrderIds) {
-            onUpdateOrderStatus(id, newStatus);
-          }
-        }
-      }
-      setSelectedOrderIds([]);
-    } catch (err) {
-      console.error('Failed to batch update orders:', err);
-    } finally {
-      setIsProcessingBatch(false);
-    }
-  };
-
-  const handleSingleUpdateStatus = async (orderId: string, newStatus: Order['status']) => {
-    setIsProcessingBatch(true);
-    try {
-      const updatedOrders = orders.map(o =>
-        o.id === orderId ? { ...o, status: newStatus } : o
-      );
-      if (onUpdateOrders) {
-        await onUpdateOrders(updatedOrders);
-      } else if (onUpdateOrderStatus) {
-        onUpdateOrderStatus(orderId, newStatus);
-      }
-    } catch (err) {
-      console.error('Failed to update order status:', err);
-    } finally {
-      setIsProcessingBatch(false);
-    }
-  };
-
-  // Modal State
+  // Modal / Dedicated Page View State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPortal, setEditingPortal] = useState<OrderPortal | null>(null);
   const [deletingPortal, setDeletingPortal] = useState<OrderPortal | null>(null);
@@ -235,6 +75,11 @@ export default function OrderPortals({
   const [customPrices, setCustomPrices] = useState<Record<string, number>>({});
   const [customVariantPrices, setCustomVariantPrices] = useState<Record<string, Record<string, number>>>({});
 
+  // Portal Orders Filter & Sorting State (used when viewing a portal detail page)
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState<string>('all');
+  const [orderSort, setOrderSort] = useState<'newest' | 'oldest' | 'amount_high' | 'amount_low' | 'az' | 'za'>('newest');
+
   // UI Toast Feedback
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -243,6 +88,16 @@ export default function OrderPortals({
     const pathname = window.location.pathname;
     const shareParam = portal.shareToken || portal.id;
     let url = `${origin}${pathname}?portal=${shareParam}`;
+    if (portal.customPrices && Object.keys(portal.customPrices).length > 0) {
+      try {
+        url += `&cp=${encodeURIComponent(JSON.stringify(portal.customPrices))}`;
+      } catch (e) {}
+    }
+    if (portal.customVariantPrices && Object.keys(portal.customVariantPrices).length > 0) {
+      try {
+        url += `&cvp=${encodeURIComponent(JSON.stringify(portal.customVariantPrices))}`;
+      } catch (e) {}
+    }
     if (appsScriptUrl && appsScriptUrl.trim()) {
       url += `&script=${encodeURIComponent(appsScriptUrl.trim())}`;
     }
@@ -262,11 +117,13 @@ export default function OrderPortals({
     setName('');
     setDescription('');
     setStatus('Active');
-    // Default to all available products
     setSelectedProductIds(availableProducts.map(p => p.id));
     setCustomPrices({});
     setCustomVariantPrices({});
     setProductSearch('');
+    setOrderSearch('');
+    setOrderStatusFilter('all');
+    setOrderSort('newest');
     setIsModalOpen(true);
   };
 
@@ -279,6 +136,9 @@ export default function OrderPortals({
     setCustomPrices(portal.customPrices || {});
     setCustomVariantPrices(portal.customVariantPrices || {});
     setProductSearch('');
+    setOrderSearch('');
+    setOrderStatusFilter('all');
+    setOrderSort('newest');
     setIsModalOpen(true);
   };
 
@@ -321,6 +181,8 @@ export default function OrderPortals({
         updatedAt: new Date().toISOString()
       };
       onUpdatePortal(updated);
+      setEditingPortal(updated);
+      alert('Storefront portal details saved successfully!');
     } else {
       onCreatePortal({
         companyId: activeCompany.id,
@@ -332,12 +194,12 @@ export default function OrderPortals({
         customPrices,
         customVariantPrices
       });
+      setIsModalOpen(false);
     }
-
-    setIsModalOpen(false);
   };
 
-  const handleQuickStatusToggle = (portal: OrderPortal) => {
+  const handleQuickStatusToggle = (portal: OrderPortal, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     let nextStatus: 'Active' | 'Paused' | 'Closed' = 'Active';
     if (portal.status === 'Active') nextStatus = 'Paused';
     else if (portal.status === 'Paused') nextStatus = 'Active';
@@ -350,6 +212,53 @@ export default function OrderPortals({
     });
   };
 
+  // Compute orders belonging specifically to the currently selected portal
+  const editingPortalOrders = useMemo(() => {
+    if (!editingPortal) return [];
+    return orders.filter(o =>
+      o.portalId === editingPortal.id ||
+      o.portalName === editingPortal.name ||
+      (editingPortal.shareToken && o.portalId === editingPortal.shareToken)
+    );
+  }, [orders, editingPortal]);
+
+  const filteredAndSortedPortalOrders = useMemo(() => {
+    const list = editingPortalOrders.filter(o => {
+      if (orderStatusFilter !== 'all' && o.status !== orderStatusFilter) {
+        return false;
+      }
+      if (orderSearch) {
+        const q = orderSearch.toLowerCase();
+        const matchesNum = (o.orderNumber || '').toLowerCase().includes(q) || (o.id || '').toLowerCase().includes(q);
+        const matchesPO = (o.poNumber || '').toLowerCase().includes(q);
+        const matchesPerson = (o.contactPerson || '').toLowerCase().includes(q);
+        const matchesEmail = (o.contactEmail || '').toLowerCase().includes(q);
+        return matchesNum || matchesPO || matchesPerson || matchesEmail;
+      }
+      return true;
+    });
+
+    return list.sort((a, b) => {
+      if (orderSort === 'oldest') {
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      }
+      if (orderSort === 'amount_high') {
+        return (b.totalAmount || 0) - (a.totalAmount || 0);
+      }
+      if (orderSort === 'amount_low') {
+        return (a.totalAmount || 0) - (b.totalAmount || 0);
+      }
+      if (orderSort === 'az') {
+        return (a.orderNumber || '').localeCompare(b.orderNumber || '');
+      }
+      if (orderSort === 'za') {
+        return (b.orderNumber || '').localeCompare(a.orderNumber || '');
+      }
+      // Default: newest first (Newer - Older)
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [editingPortalOrders, orderStatusFilter, orderSearch, orderSort]);
+
   const filteredModalProducts = availableProducts.filter(p =>
     p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
     p.category.toLowerCase().includes(productSearch.toLowerCase())
@@ -359,84 +268,132 @@ export default function OrderPortals({
   const pausedCount = companyPortals.filter(p => p.status === 'Paused').length;
   const totalProductsShared = Array.from(new Set(companyPortals.flatMap(p => p.productIds))).length;
 
+  // -----------------------------------------------------------------------------------
+  // DEDICATED STOREFRONT DETAIL & EDIT PAGE VIEW
+  // -----------------------------------------------------------------------------------
   if (isModalOpen) {
     return (
-      <div className="space-y-6 animate-fade-in max-w-5xl mx-auto">
-        {/* Dedicated Page Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-gray-200 rounded-3xl p-6 shadow-xs">
-          <div className="flex items-center gap-3">
+      <div className="space-y-8 animate-fade-in max-w-6xl mx-auto">
+        {/* Navigation & Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-gray-200 rounded-3xl p-6 md:p-8 shadow-xs">
+          <div className="flex items-start sm:items-center gap-4">
             <button
               onClick={() => setIsModalOpen(false)}
-              className="p-2.5 rounded-2xl bg-gray-100 hover:bg-black hover:text-white text-gray-700 transition-all cursor-pointer flex items-center justify-center shrink-0"
-              title="Return to Order Portals List"
+              className="p-3 rounded-2xl bg-gray-100 hover:bg-black hover:text-white text-gray-700 transition-all cursor-pointer flex items-center justify-center shrink-0"
+              title="Return to Storefront Links"
+              id="back-to-portals-btn"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ArrowLeft className="w-5 h-5 stroke-[2.5]" />
             </button>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="bg-black text-white text-[9px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full font-bold">
-                  {editingPortal ? 'Edit Mode' : 'New Storefront'}
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="bg-black text-white text-[9px] font-mono uppercase tracking-wider px-2.5 py-0.5 rounded-full font-extrabold">
+                  {editingPortal ? 'Storefront Portal Page' : 'New Storefront Setup'}
                 </span>
-                <span className="text-xs text-gray-500 font-mono">{activeCompany.name}</span>
+                <span className="text-xs text-gray-400 font-mono">{activeCompany.name}</span>
               </div>
-              <h2 className="text-xl md:text-2xl font-black text-black uppercase tracking-tight font-sans mt-0.5">
-                {editingPortal ? `Edit Portal: ${editingPortal.name}` : 'Create Order Portal Page'}
+              <h2 className="text-2xl md:text-3xl font-black text-black uppercase tracking-tight font-sans">
+                {editingPortal ? editingPortal.name : 'Create New Order Portal'}
               </h2>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 self-end sm:self-auto">
+          <div className="flex items-center gap-3 self-end sm:self-auto flex-wrap">
             {editingPortal && (
-              <button
-                type="button"
-                onClick={() => setDeletingPortal(editingPortal)}
-                className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-extrabold text-xs uppercase tracking-wider py-2.5 px-3.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
-                title="Delete this Order Portal"
-                id="editor-delete-portal-btn"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => onViewPortal(editingPortal)}
+                  className="bg-black hover:bg-neutral-800 text-white font-extrabold text-xs uppercase tracking-wider py-2.5 px-4 rounded-xl border border-black shadow-xs transition-all cursor-pointer flex items-center gap-2"
+                  id="view-live-storefront-btn-page"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>View Live Storefront</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDeletingPortal(editingPortal)}
+                  className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-extrabold text-xs uppercase tracking-wider py-2.5 px-3.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
+                  id="editor-delete-portal-btn"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
+              </>
             )}
-            <button
-              type="button"
-              onClick={() => setIsModalOpen(false)}
-              className="bg-white border border-gray-300 text-gray-700 hover:text-black font-bold text-xs uppercase tracking-wider py-2.5 px-4 rounded-xl transition-all cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="portal-editor-form"
-              className="bg-black hover:bg-neutral-800 text-white font-extrabold text-xs uppercase tracking-wider py-2.5 px-6 rounded-xl border border-black shadow-md transition-all cursor-pointer flex items-center gap-2"
-              id="save-portal-btn-page"
-            >
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>{editingPortal ? 'Save Changes' : 'Create Order Portal'}</span>
-            </button>
           </div>
         </div>
 
-        {/* Dedicated Page Editor Form */}
-        <form id="portal-editor-form" onSubmit={handleSavePortal} className="space-y-6">
-          {/* Section 1: Portal Name, Status & Description */}
-          <div className="bg-white border border-gray-200 rounded-3xl p-6 md:p-8 space-y-5 shadow-xs">
-            <h3 className="text-xs font-mono uppercase font-bold text-gray-400 tracking-wider pb-3 border-b border-gray-100 flex items-center gap-2">
-              <Store className="w-4 h-4 text-black" />
-              1. Storefront Identity &amp; Access Controls
+        {/* Shareable Link Highlight Box (If editing an existing portal) */}
+        {editingPortal && (
+          <div className="bg-gradient-to-r from-neutral-900 via-black to-neutral-900 border border-neutral-800 rounded-3xl p-6 text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-emerald-400" />
+                <span className="text-[10px] uppercase font-mono font-bold tracking-widest text-gray-400">Shareable Storefront Link</span>
+              </div>
+              <p className="text-xs text-gray-300 font-sans">
+                Share this unique link with your team, customers, or partners to collect orders directly.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 bg-neutral-800/80 border border-neutral-700 rounded-2xl p-2 w-full md:max-w-md">
+              <input
+                type="text"
+                readOnly
+                value={getPortalUrl(editingPortal)}
+                className="bg-transparent text-xs font-mono text-gray-200 w-full focus:outline-none px-2 select-all truncate"
+              />
+              <button
+                type="button"
+                onClick={(e) => handleCopyLink(editingPortal, e)}
+                className={`px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                  copiedId === editingPortal.id
+                    ? 'bg-emerald-600 text-white border border-emerald-600'
+                    : 'bg-white text-black hover:bg-gray-100 border border-white'
+                }`}
+                id="copy-portal-link-detail-page"
+              >
+                {copiedId === editingPortal.id ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 stroke-[3px]" />
+                    <span>Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy Link</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STOREFRONT EDIT FORM */}
+        <form onSubmit={handleSavePortal} className="space-y-8">
+          {/* Section 1: Identity & Controls */}
+          <div className="bg-white border border-gray-200 rounded-3xl p-6 md:p-8 space-y-6 shadow-xs">
+            <h3 className="text-xs font-mono uppercase font-bold text-gray-400 tracking-wider pb-3 border-b border-gray-100 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Store className="w-4 h-4 text-black" />
+                1. Storefront Identity &amp; Access Controls
+              </span>
+              <span className="text-[10px] font-normal text-gray-400">Configuration</span>
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div className="md:col-span-2 space-y-1.5">
                 <label className="block text-xs uppercase font-mono font-extrabold text-black">
-                  Portal Name <span className="text-red-500">*</span>
+                  Storefront Portal Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
-                  placeholder="e.g. Staff Uniforms, Team Merchandise, Sales Rep Catalog"
+                  placeholder="e.g. Staff Uniforms, Sales Rep Apparel, Event Merch"
                   className="w-full bg-gray-50 border border-gray-200 focus:bg-white focus:border-black rounded-xl px-4 py-3 text-xs font-semibold text-black focus:outline-none"
                   id="portal-name-input"
                 />
@@ -465,7 +422,7 @@ export default function OrderPortals({
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
-                placeholder="e.g. Welcome! Please select your shirt size and embroidery position. Submit your request before Friday 5 PM."
+                placeholder="e.g. Welcome! Please select your item, size, and color preferences. Orders will be consolidated for production."
                 className="w-full bg-gray-50 border border-gray-200 focus:bg-white focus:border-black rounded-xl p-3.5 text-xs text-black focus:outline-none resize-none leading-relaxed font-sans"
                 id="portal-description-input"
               />
@@ -478,10 +435,10 @@ export default function OrderPortals({
               <div>
                 <h3 className="text-xs font-mono uppercase font-bold text-gray-400 tracking-wider flex items-center gap-2">
                   <Package className="w-4 h-4 text-black" />
-                  2. Select Available Products ({selectedProductIds.length} / {availableProducts.length} Selected)
+                  2. Storefront Products ({selectedProductIds.length} / {availableProducts.length} Selected)
                 </h3>
                 <p className="text-xs text-gray-500 font-sans mt-0.5">
-                  Only checked items will be visible on this portal's shared ordering link.
+                  Select which items from your company catalog are enabled on this storefront link.
                 </p>
               </div>
 
@@ -501,13 +458,13 @@ export default function OrderPortals({
                 type="text"
                 value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
-                placeholder="Search products by name or category..."
+                placeholder="Search catalog products..."
                 className="w-full bg-gray-50 border border-gray-200 focus:bg-white focus:border-black rounded-xl pl-10 pr-4 py-2.5 text-xs text-black focus:outline-none font-sans"
               />
             </div>
 
-            {/* Product Cards Selection Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar">
+            {/* Product Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[450px] overflow-y-auto pr-1 custom-scrollbar">
               {filteredModalProducts.map(prod => {
                 const isSelected = selectedProductIds.includes(prod.id);
                 const customPrice = customPrices[prod.id] !== undefined ? customPrices[prod.id] : prod.basePrice;
@@ -522,14 +479,13 @@ export default function OrderPortals({
                         ? 'border-black bg-neutral-50 shadow-xs'
                         : 'border-gray-200 bg-white hover:border-gray-400'
                     }`}
-                    id={`select-product-chip-${prod.id}`}
                   >
                     <div className="flex items-center justify-between gap-3 cursor-pointer" onClick={() => handleToggleProduct(prod.id)}>
                       <div className="flex items-center gap-3.5 min-w-0">
                         <input
                           type="checkbox"
                           checked={isSelected}
-                          onChange={() => {}} // Handled by parent div onClick
+                          onChange={() => {}}
                           className="w-4 h-4 text-black rounded border-gray-300 focus:ring-black cursor-pointer shrink-0"
                         />
                         {prod.imageUrl ? (
@@ -554,12 +510,12 @@ export default function OrderPortals({
                       )}
                     </div>
 
-                    {/* Custom Portal Price & Variant Price Overrides */}
+                    {/* Custom Portal Pricing Overrides */}
                     {isSelected && (
                       <div className="mt-3 pt-3 border-t border-gray-200 space-y-2" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between gap-2">
                           <label className="text-[10px] font-mono font-bold text-gray-700 uppercase tracking-wider">
-                            Portal Item Price (Markup):
+                            Storefront Display Price:
                           </label>
                           <div className="flex items-center gap-1 bg-white border border-gray-300 rounded-lg px-2 py-1 w-32 focus-within:border-black">
                             <span className="text-[10px] font-mono text-gray-400">{systemSettings.currencySymbol || 'Php'}</span>
@@ -579,7 +535,7 @@ export default function OrderPortals({
                         {hasSizes && (
                           <div className="mt-2 bg-white border border-gray-200 rounded-xl p-2.5 space-y-1.5">
                             <span className="text-[9px] font-mono font-bold text-gray-500 uppercase tracking-wider block">
-                              Variant Size Pricing Overrides:
+                              Variant Size Pricing:
                             </span>
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                               {prod.sizeOptions?.map(sz => {
@@ -617,16 +573,16 @@ export default function OrderPortals({
 
               {filteredModalProducts.length === 0 && (
                 <div className="col-span-2 text-center py-10 text-xs text-gray-400 font-mono bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                  No matching products found.
+                  No matching catalog products found.
                 </div>
               )}
             </div>
           </div>
 
-          {/* Page Action Bar Footer */}
+          {/* Save Button Bar */}
           <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-xs flex items-center justify-between">
             <span className="text-xs font-mono text-gray-500">
-              {selectedProductIds.length} product(s) enabled for this storefront link.
+              {selectedProductIds.length} product(s) active on this storefront.
             </span>
 
             <div className="flex items-center gap-3">
@@ -635,524 +591,228 @@ export default function OrderPortals({
                 onClick={() => setIsModalOpen(false)}
                 className="bg-white border border-gray-300 text-gray-700 hover:text-black font-bold text-xs uppercase tracking-wider py-2.5 px-5 rounded-xl transition-all cursor-pointer"
               >
-                Cancel
+                Back to Links
               </button>
               <button
                 type="submit"
                 className="bg-black hover:bg-neutral-800 text-white font-extrabold text-xs uppercase tracking-wider py-2.5 px-6 rounded-xl border border-black shadow-md transition-all cursor-pointer flex items-center gap-2"
+                id="save-portal-details-btn"
               >
                 <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>{editingPortal ? 'Save Changes' : 'Create Order Portal'}</span>
+                <span>{editingPortal ? 'Save Storefront Details' : 'Create Storefront Portal'}</span>
               </button>
             </div>
           </div>
         </form>
-      </div>
-    );
-  }
 
-  return (
-    <div className="space-y-8 animate-fade-in">
-      {/* Header Bar */}
-      <div className="bg-white border border-gray-200 rounded-3xl p-6 md:p-8 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-        <div className="space-y-1 max-w-2xl">
-          <h2 className="text-2xl font-black text-black uppercase tracking-tight font-sans">
-            Custom Order Portals
-          </h2>
-          <p className="text-xs text-gray-500 leading-relaxed font-sans">
-            Create tailored ordering links for your employees, sales teams, departments, or resellers.
-            Shoppers select sizes and options directly without logging into your corporate account.
-          </p>
-        </div>
-
-        <button
-          onClick={openCreateModal}
-          className="bg-black hover:bg-neutral-800 text-white font-extrabold text-xs uppercase tracking-wider py-3.5 px-6 rounded-2xl border border-black shadow-md transition-all cursor-pointer flex items-center gap-2 shrink-0"
-          id="create-order-portal-btn"
-        >
-          <Plus className="w-4 h-4 stroke-[3px]" />
-          <span>Create Order Portal</span>
-        </button>
-      </div>
-
-      {/* Sub-Navigation Tabs: Storefront Portals vs Portal Submissions */}
-      <div className="flex items-center gap-3 border-b border-gray-200 pb-2 overflow-x-auto">
-        <button
-          onClick={() => setActiveSection('portals')}
-          className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-sans text-xs uppercase tracking-wider font-extrabold transition-all cursor-pointer ${
-            activeSection === 'portals'
-              ? 'bg-black text-white shadow-sm'
-              : 'bg-white border border-gray-200 text-gray-600 hover:text-black hover:border-black'
-          }`}
-          id="tab-btn-portals-links"
-        >
-          <Globe className="w-4 h-4" />
-          <span>Storefront Links</span>
-          <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full ${
-            activeSection === 'portals' ? 'bg-neutral-800 text-white' : 'bg-gray-100 text-gray-700'
-          }`}>
-            {companyPortals.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveSection('submissions')}
-          className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-sans text-xs uppercase tracking-wider font-extrabold transition-all cursor-pointer ${
-            activeSection === 'submissions'
-              ? 'bg-black text-white shadow-sm'
-              : 'bg-white border border-gray-200 text-gray-600 hover:text-black hover:border-black'
-          }`}
-          id="tab-btn-portals-submissions"
-        >
-          <Inbox className="w-4 h-4" />
-          <span>Portal Submissions (Pending Confirmation)</span>
-          {pendingPortalOrders.length > 0 ? (
-            <span className="bg-amber-500 text-white text-[10px] font-mono font-black px-2.5 py-0.5 rounded-full animate-pulse shadow-xs">
-              {pendingPortalOrders.length} Pending
-            </span>
-          ) : (
-            <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full ${
-              activeSection === 'submissions' ? 'bg-neutral-800 text-white' : 'bg-gray-100 text-gray-700'
-            }`}>
-              {companyPortalOrders.length}
-            </span>
-          )}
-        </button>
-      </div>
-
-      {/* SECTION 1: STOREFRONT PORTALS LINKS */}
-      {activeSection === 'portals' && (
-        <div className="space-y-8">
-          {/* Metrics Bar */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
-              <span className="text-[10px] uppercase font-mono font-bold text-gray-400 block mb-1">Total Portals</span>
-              <span className="text-2xl font-black text-black font-mono">{companyPortals.length}</span>
-            </div>
-            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
-              <span className="text-[10px] uppercase font-mono font-bold text-gray-400 block mb-1">Active Links</span>
-              <span className="text-2xl font-black text-emerald-600 font-mono">{activeCount}</span>
-            </div>
-            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
-              <span className="text-[10px] uppercase font-mono font-bold text-gray-400 block mb-1">Paused / Closed</span>
-              <span className="text-2xl font-black text-amber-600 font-mono">{pausedCount}</span>
-            </div>
-            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
-              <span className="text-[10px] uppercase font-mono font-bold text-gray-400 block mb-1">Products Shared</span>
-              <span className="text-2xl font-black text-black font-mono">{totalProductsShared}</span>
-            </div>
-          </div>
-
-      {/* Portal Cards Grid */}
-      {companyPortals.length === 0 ? (
-        <div className="bg-white border border-dashed border-gray-300 rounded-3xl p-12 text-center space-y-4">
-          <div className="w-16 h-16 bg-gray-50 border border-gray-200 rounded-2xl flex items-center justify-center mx-auto text-gray-400">
-            <Store className="w-8 h-8" />
-          </div>
-          <div className="max-w-md mx-auto space-y-2">
-            <h3 className="text-base font-bold text-black uppercase tracking-tight">No Order Portals Yet</h3>
-            <p className="text-xs text-gray-500 font-sans leading-relaxed">
-              Build your first ordering portal to let staff or resellers order specific products with personalized options.
-            </p>
-          </div>
-          <button
-            onClick={openCreateModal}
-            className="bg-black text-white font-extrabold text-xs uppercase tracking-wider py-2.5 px-5 rounded-xl border border-black hover:bg-neutral-800 transition-all cursor-pointer inline-flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Create First Portal</span>
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {companyPortals.map((portal) => {
-            const portalSet = new Set((portal.productIds || []).map(id => String(id).trim()));
-            const portalProducts = portalSet.size > 0
-              ? availableProducts.filter(p => portalSet.has(String(p.id).trim()))
-              : availableProducts;
-            const portalUrl = getPortalUrl(portal);
-
-            return (
-              <div
-                key={portal.id}
-                className="bg-white border border-gray-200 rounded-3xl p-6 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-6"
-                id={`portal-card-${portal.id}`}
-              >
-                {/* Header info */}
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-extrabold text-black uppercase tracking-tight truncate">
-                          {portal.name}
-                        </h3>
-                      </div>
-                      {portal.description && (
-                        <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed font-sans">
-                          {portal.description}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Status Badge */}
-                    <div className="shrink-0">
-                      {portal.status === 'Active' && (
-                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          Active
-                        </span>
-                      )}
-                      {portal.status === 'Paused' && (
-                        <span className="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
-                          <Clock className="w-3 h-3 text-amber-600" />
-                          Paused
-                        </span>
-                      )}
-                      {portal.status === 'Closed' && (
-                        <span className="bg-gray-100 text-gray-600 border border-gray-200 text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
-                          <Power className="w-3 h-3 text-gray-400" />
-                          Closed
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Products Preview Chips */}
-                  <div className="space-y-2 pt-2 border-t border-gray-100">
-                    <div className="flex items-center justify-between text-[11px] font-mono font-bold uppercase text-gray-400">
-                      <span>Products Included ({portalProducts.length})</span>
-                      <span className="text-[10px] font-normal text-gray-400">From Company Catalog</span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto custom-scrollbar">
-                      {portalProducts.map(prod => (
-                        <div
-                          key={prod.id}
-                          className="bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1 text-[11px] font-sans font-semibold text-black flex items-center gap-1.5"
-                        >
-                          {prod.imageUrl ? (
-                            <img src={prod.imageUrl} alt={prod.name} className="w-4 h-4 rounded-md object-cover" />
-                          ) : (
-                            <Package className="w-3.5 h-3.5 text-gray-400" />
-                          )}
-                          <span className="truncate max-w-[140px]">{prod.name}</span>
-                        </div>
-                      ))}
-                      {portalProducts.length === 0 && (
-                        <span className="text-xs text-amber-600 font-mono italic">No active products selected</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Share Link Box */}
-                  <div className="space-y-1.5 pt-1">
-                    <label className="block text-[10px] uppercase font-mono font-bold text-gray-400">Shareable Storefront Link</label>
-                    <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-2xl p-2">
-                      <input
-                        type="text"
-                        readOnly
-                        value={portalUrl}
-                        className="bg-transparent text-xs font-mono text-gray-700 w-full focus:outline-none px-2 select-all truncate"
-                      />
-                      <button
-                        onClick={(e) => handleCopyLink(portal, e)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer shrink-0 flex items-center gap-1.5 ${
-                          copiedId === portal.id
-                            ? 'bg-emerald-600 text-white border border-emerald-600'
-                            : 'bg-black text-white hover:bg-neutral-800 border border-black'
-                        }`}
-                        id={`copy-portal-link-${portal.id}`}
-                      >
-                        {copiedId === portal.id ? (
-                          <>
-                            <Check className="w-3.5 h-3.5 stroke-[3px]" />
-                            <span>Copied</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5" />
-                            <span>Copy Link</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card Footer Actions */}
-                <div className="pt-4 border-t border-gray-100 flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => onViewPortal(portal)}
-                      className="bg-black hover:bg-neutral-800 text-white font-extrabold text-xs uppercase tracking-wider py-2 px-3.5 rounded-xl border border-black transition-all cursor-pointer flex items-center gap-1.5"
-                      id={`view-portal-btn-${portal.id}`}
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      <span>View Storefront</span>
-                    </button>
-
-                    <button
-                      onClick={() => openEditModal(portal)}
-                      className="bg-white hover:bg-gray-50 text-black border border-gray-300 font-bold text-xs uppercase tracking-wider py-2 px-3 rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
-                      id={`edit-portal-btn-${portal.id}`}
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                      <span>Edit</span>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleQuickStatusToggle(portal)}
-                      className={`text-xs font-mono font-bold uppercase tracking-wider py-2 px-2.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1 ${
-                        portal.status === 'Active'
-                          ? 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100'
-                          : 'border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
-                      }`}
-                      title="Toggle Portal Status"
-                      id={`toggle-status-btn-${portal.id}`}
-                    >
-                      <Power className="w-3.5 h-3.5" />
-                      <span>{portal.status === 'Active' ? 'Pause' : 'Activate'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeletingPortal(portal);
-                      }}
-                      className="text-gray-400 hover:text-red-600 p-2 rounded-xl hover:bg-red-50 transition-colors cursor-pointer"
-                      title="Delete Portal"
-                      id={`delete-portal-btn-${portal.id}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      </div>
-      )}
-
-      {/* SECTION 2: PORTAL ORDER SUBMISSIONS (PENDING CONFIRMATION BY COMPANY ADMIN) */}
-      {activeSection === 'submissions' && (
-        <div className="space-y-6 animate-fade-in">
-          {/* Submissions Header Info */}
-          <div className="bg-amber-50/80 border border-amber-200 rounded-3xl p-6 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="bg-amber-600 text-white text-[9px] font-mono font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full">
-                  Company Admin Confirmation Queue
-                </span>
-                <span className="text-xs font-mono font-bold text-amber-900">{activeCompany.name}</span>
-              </div>
-              <h3 className="text-lg font-black text-black uppercase tracking-tight">
-                Portal Order Submissions
-              </h3>
-              <p className="text-xs text-amber-900/80 leading-relaxed max-w-2xl font-sans">
-                Review and manage orders coming from your public storefront links. Confirm and batch-send them to the Print Hub Admin for official production &amp; fulfillment.
-              </p>
-            </div>
-
-            <div className="bg-white border border-amber-200 rounded-2xl p-4 text-center shrink-0 min-w-[140px] shadow-2xs">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-800 block">Pending Review</span>
-              <span className="text-3xl font-black text-amber-600 font-mono">{pendingPortalOrders.length}</span>
-            </div>
-          </div>
-
-          {/* Filters & Batch Controls Bar */}
-          <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            {/* Filter Buttons */}
-            <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
-              <button
-                onClick={() => setSubmissionFilter('pending')}
-                className={`px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
-                  submissionFilter === 'pending'
-                    ? 'bg-black text-white shadow-xs'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                <Clock className="w-3.5 h-3.5" />
-                <span>Pending Confirmation ({pendingPortalOrders.length})</span>
-              </button>
-
-              <button
-                onClick={() => setSubmissionFilter('approved')}
-                className={`px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
-                  submissionFilter === 'approved'
-                    ? 'bg-black text-white shadow-xs'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Sent to Admin ({companyPortalOrders.length - pendingPortalOrders.length})</span>
-              </button>
-
-              <button
-                onClick={() => setSubmissionFilter('all')}
-                className={`px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 ${
-                  submissionFilter === 'all'
-                    ? 'bg-black text-white shadow-xs'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                <span>All Submissions ({companyPortalOrders.length})</span>
-              </button>
-            </div>
-
-            {/* Batch Action Bar */}
-            {filteredSubmissions.length > 0 && (
-              <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end pt-3 md:pt-0 border-t md:border-t-0 border-gray-100">
-                <button
-                  onClick={handleSelectAllSubmissions}
-                  className="flex items-center gap-2 text-xs font-mono font-bold text-gray-700 hover:text-black cursor-pointer bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl transition-all"
-                  id="select-all-portal-submissions-btn"
-                >
-                  {selectedOrderIds.length === filteredSubmissions.length && filteredSubmissions.length > 0 ? (
-                    <CheckSquare className="w-4 h-4 text-black" />
-                  ) : (
-                    <Square className="w-4 h-4 text-gray-400" />
-                  )}
-                  <span>
-                    {selectedOrderIds.length === filteredSubmissions.length ? 'Deselect All' : `Select All (${filteredSubmissions.length})`}
+        {/* SECTION 3: ALL ORDERS PLACED THROUGH THIS STOREFRONT LINK */}
+        {editingPortal && (
+          <div className="space-y-6 pt-4 border-t border-gray-200">
+            {/* Orders Header Banner */}
+            <div className="bg-neutral-900 border border-neutral-800 text-white rounded-3xl p-6 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-1 max-w-xl">
+                <div className="flex items-center gap-2">
+                  <span className="bg-amber-400 text-black text-[9px] font-mono font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full">
+                    Storefront Orders Log
                   </span>
-                </button>
+                  <span className="text-xs font-mono text-gray-300">{editingPortal.name}</span>
+                </div>
+                <h3 className="text-xl md:text-2xl font-black uppercase tracking-tight text-white">
+                  Orders Received via this Link
+                </h3>
+                <p className="text-xs text-gray-400 leading-relaxed font-sans">
+                  Complete order history placed by shoppers through this custom storefront link.
+                </p>
+              </div>
 
-                {selectedOrderIds.length > 0 && (
-                  <div className="flex items-center gap-2 animate-fade-in">
-                    <button
-                      onClick={() => handleBatchUpdateStatus('Approved')}
-                      disabled={isProcessingBatch}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-wider py-2 px-3.5 rounded-xl border border-emerald-600 shadow-md transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                      id="batch-approve-btn"
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>
-                        {selectedOrderIds.length > 1
-                          ? `Approve & Combine into 1 Order (${selectedOrderIds.length})`
-                          : `Approve Selected (${selectedOrderIds.length})`}
-                      </span>
-                    </button>
+              <div className="flex items-center gap-4 self-start md:self-auto">
+                <div className="bg-neutral-800 border border-neutral-700 rounded-2xl p-4 text-center min-w-[130px]">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-gray-400 block mb-0.5">
+                    Total Orders
+                  </span>
+                  <span className="text-2xl font-black text-amber-400 font-mono">
+                    {editingPortalOrders.length}
+                  </span>
+                </div>
+                <div className="bg-neutral-800 border border-neutral-700 rounded-2xl p-4 text-center min-w-[150px]">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-gray-400 block mb-0.5">
+                    Storefront Value
+                  </span>
+                  <span className="text-xl font-black text-emerald-400 font-mono">
+                    {systemSettings.currencySymbol || 'Php'} {editingPortalOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+            </div>
 
-                    <button
-                      onClick={() => handleBatchUpdateStatus('Canceled')}
-                      disabled={isProcessingBatch}
-                      className="bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs uppercase tracking-wider py-2 px-3 rounded-xl border border-red-600 shadow-md transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                      id="batch-decline-btn"
-                    >
-                      <XCircle className="w-4 h-4" />
-                      <span>Decline</span>
-                    </button>
-                  </div>
+            {/* Filter, Search & Sort Bar */}
+            <div className="bg-white border border-gray-200 rounded-3xl p-4 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+              {/* Search Box */}
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={orderSearch}
+                  onChange={(e) => setOrderSearch(e.target.value)}
+                  placeholder="Search orders by Order #, Submitter Name, Email, PO #..."
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-10 pr-4 py-2 text-xs font-sans text-black focus:outline-none focus:border-black focus:bg-white transition-all"
+                  id="portal-link-orders-search-input"
+                />
+                {orderSearch && (
+                  <button
+                    onClick={() => setOrderSearch('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black text-xs font-mono font-bold cursor-pointer"
+                  >
+                    ✕
+                  </button>
                 )}
               </div>
-            )}
-          </div>
 
-          {/* Submissions List */}
-          {filteredSubmissions.length === 0 ? (
-            <div className="bg-white border border-dashed border-gray-300 rounded-3xl p-12 text-center space-y-3">
-              <Inbox className="w-12 h-12 text-gray-300 mx-auto" />
-              <h4 className="text-base font-extrabold text-black uppercase tracking-tight">No Orders In This Queue</h4>
-              <p className="text-xs text-gray-500 max-w-sm mx-auto font-sans leading-relaxed">
-                {submissionFilter === 'pending'
-                  ? 'There are currently no portal orders awaiting company confirmation.'
-                  : 'No portal submissions match the selected filter.'}
-              </p>
+              {/* Status Filter & Sort Dropdown */}
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Status Filter */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-gray-400 shrink-0">Status:</span>
+                  <select
+                    value={orderStatusFilter}
+                    onChange={(e) => setOrderStatusFilter(e.target.value)}
+                    className="bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-black focus:border-black focus:outline-none cursor-pointer shadow-2xs font-mono"
+                    id="portal-link-orders-status-filter"
+                  >
+                    <option value="all">All Statuses ({editingPortalOrders.length})</option>
+                    <option value="Reviewed">Reviewed</option>
+                    <option value="To Order">To Order</option>
+                    <option value="Ordered">Ordered</option>
+                    <option value="Admin Received">Admin Received</option>
+                    <option value="Customer Claimed">Customer Claimed</option>
+                    <option value="Delivered">Delivered</option>
+                    <option value="Picked Up">Picked Up</option>
+                    <option value="Pending Approval">Pending Approval</option>
+                    <option value="Approved">Approved</option>
+                    <option value="In Production">In Production</option>
+                    <option value="Shipped">Shipped</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Canceled">Canceled</option>
+                  </select>
+                </div>
+
+                {/* Order Sorting Dropdown */}
+                <div className="flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-gray-400 shrink-0">Sort:</span>
+                  <select
+                    value={orderSort}
+                    onChange={(e) => setOrderSort(e.target.value as any)}
+                    className="bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-black focus:border-black focus:outline-none cursor-pointer shadow-2xs font-sans"
+                    id="portal-link-orders-sort-select"
+                  >
+                    <option value="newest">Newer - Older</option>
+                    <option value="oldest">Older - Newer</option>
+                    <option value="amount_high">Price: High to Low</option>
+                    <option value="amount_low">Price: Low to High</option>
+                    <option value="az">Order #: A - Z</option>
+                    <option value="za">Order #: Z - A</option>
+                  </select>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="space-y-6">
-              {filteredSubmissions.map(ord => {
-                const isSelected = selectedOrderIds.includes(ord.id);
-                const isPending = ord.status === 'Pending Approval';
 
-                return (
+            {/* Orders Cards List */}
+            {filteredAndSortedPortalOrders.length === 0 ? (
+              <div className="bg-white border border-dashed border-gray-300 rounded-3xl p-12 text-center space-y-3">
+                <Inbox className="w-12 h-12 text-gray-300 mx-auto" />
+                <h4 className="text-base font-extrabold text-black uppercase tracking-tight">No Storefront Orders</h4>
+                <p className="text-xs text-gray-500 max-w-sm mx-auto font-sans leading-relaxed">
+                  {editingPortalOrders.length === 0
+                    ? 'No orders have been submitted through this storefront link yet.'
+                    : 'No portal orders match your current search and filter criteria.'}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {filteredAndSortedPortalOrders.map(ord => (
                   <div
                     key={ord.id}
-                    className={`bg-white border rounded-3xl p-6 shadow-xs transition-all space-y-6 ${
-                      isSelected ? 'border-black ring-2 ring-black/5 bg-gray-50/50' : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                    id={`portal-order-card-${ord.id}`}
+                    className="bg-white border border-gray-200 hover:border-gray-300 rounded-3xl p-6 shadow-xs transition-all space-y-6"
+                    id={`storefront-order-card-${ord.id}`}
                   >
                     {/* Header Row */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-100">
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => handleToggleSelectOrder(ord.id)}
-                          className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-black cursor-pointer transition-colors"
-                          aria-label="Select Order"
-                        >
-                          {isSelected ? (
-                            <CheckSquare className="w-5 h-5 text-black" />
-                          ) : (
-                            <Square className="w-5 h-5 text-gray-300" />
-                          )}
-                        </button>
-
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-black text-black font-mono tracking-tight">{ord.id}</span>
-                            <span className="text-xs font-mono text-gray-400">
-                              • {new Date(ord.createdAt).toLocaleDateString()} at {new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="bg-gray-100 text-gray-700 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                              <Globe className="w-3 h-3 text-gray-500" />
-                              <span>{ord.portalName || 'Public Storefront Portal'}</span>
-                            </span>
-                          </div>
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-black text-black font-mono tracking-tight">{ord.orderNumber || ord.id}</span>
+                          <span className="text-xs font-mono text-gray-400">
+                            • {new Date(ord.createdAt).toLocaleDateString()} at {new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="bg-gray-100 text-gray-700 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                            <Globe className="w-3 h-3 text-gray-500" />
+                            <span>{ord.portalName || editingPortal.name}</span>
+                          </span>
                         </div>
                       </div>
 
-                      {/* Status & Actions */}
-                      <div className="flex items-center gap-3 self-end sm:self-auto">
-                        {isPending ? (
-                          <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-mono font-extrabold uppercase px-3 py-1 rounded-full flex items-center gap-1.5 animate-pulse">
-                            <Clock className="w-3.5 h-3.5 text-amber-600" />
-                            <span>Awaiting Company Confirmation</span>
+                      {/* Status Badge & Status Selector */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-mono font-extrabold uppercase px-3 py-1 rounded-full flex items-center gap-1.5 ${
+                            ord.status === 'Reviewed'
+                              ? 'bg-purple-100 text-purple-900 border border-purple-300'
+                              : ord.status === 'To Order'
+                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                              : ord.status === 'Ordered'
+                              ? 'bg-blue-100 text-blue-900 border border-blue-300'
+                              : ord.status === 'Admin Received'
+                              ? 'bg-teal-100 text-teal-900 border border-teal-300'
+                              : ord.status === 'Customer Claimed'
+                              ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                              : ord.status === 'Delivered'
+                              ? 'bg-green-100 text-green-900 border border-green-300'
+                              : ord.status === 'Picked Up'
+                              ? 'bg-indigo-100 text-indigo-900 border border-indigo-300'
+                              : ord.status === 'Pending Approval' || ord.status === 'Pending'
+                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                              : ord.status === 'Completed'
+                              ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                              : ord.status === 'Canceled'
+                              ? 'bg-red-100 text-red-900 border border-red-300'
+                              : 'bg-gray-100 text-gray-900 border border-gray-300'
+                          }`}>
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>{ord.status}</span>
                           </span>
-                        ) : (
-                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-mono font-extrabold uppercase px-3 py-1 rounded-full flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>{ord.status === 'Approved' || ord.status === 'Pending' ? 'Sent to Admin' : ord.status}</span>
-                          </span>
-                        )}
 
-                        {isPending && (
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleSingleUpdateStatus(ord.id, 'Approved')}
-                              disabled={isProcessingBatch}
-                              className="bg-black hover:bg-neutral-800 text-white font-extrabold text-xs uppercase tracking-wider py-2 px-4 rounded-xl border border-black shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
-                              id={`approve-order-btn-${ord.id}`}
+                          {onUpdateOrderStatus && (
+                            <select
+                              value={ord.status}
+                              onChange={(e) => onUpdateOrderStatus(ord.id, e.target.value as Order['status'])}
+                              className="bg-gray-50 border border-gray-300 text-black text-[11px] font-mono font-bold rounded-xl px-2.5 py-1 focus:outline-none focus:border-black cursor-pointer"
+                              id={`storefront-order-status-select-${ord.id}`}
                             >
-                              <Send className="w-3.5 h-3.5 text-emerald-400" />
-                              <span>Approve &amp; Send to Admin</span>
-                            </button>
-
-                            <button
-                              onClick={() => handleSingleUpdateStatus(ord.id, 'Canceled')}
-                              disabled={isProcessingBatch}
-                              className="bg-white hover:bg-red-50 text-red-600 border border-red-200 font-bold text-xs uppercase tracking-wider py-2 px-3 rounded-xl transition-all cursor-pointer flex items-center gap-1"
-                              id={`decline-order-btn-${ord.id}`}
-                            >
-                              <XCircle className="w-3.5 h-3.5" />
-                              <span>Decline</span>
-                            </button>
-                          </div>
-                        )}
+                              <option value="Reviewed">Reviewed</option>
+                              <option value="To Order">To Order</option>
+                              <option value="Ordered">Ordered</option>
+                              <option value="Admin Received">Admin Received</option>
+                              <option value="Customer Claimed">Customer Claimed</option>
+                              <option value="Delivered">Delivered</option>
+                              <option value="Picked Up">Picked Up</option>
+                              <option value="Pending Approval">Pending Approval</option>
+                              <option value="Approved">Approved</option>
+                              <option value="In Production">In Production</option>
+                              <option value="Shipped">Shipped</option>
+                              <option value="Completed">Completed</option>
+                              <option value="Canceled">Canceled</option>
+                            </select>
+                          )}
+                        </div>
                       </div>
                     </div>
 
-                    {/* Customer Info Grid */}
+                    {/* Customer / Submitter Details Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 border border-gray-100 rounded-2xl p-4 text-xs font-sans">
                       <div>
-                        <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">Purchaser / Contact Person</span>
+                        <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">Purchaser / Submitter</span>
                         <div className="font-extrabold text-black flex items-center gap-1.5">
                           <User className="w-3.5 h-3.5 text-gray-400" />
                           <span>{ord.contactPerson || 'N/A'}</span>
@@ -1174,6 +834,7 @@ export default function OrderPortals({
                               <span>{ord.contactNumber}</span>
                             </div>
                           )}
+                          {!ord.contactEmail && !ord.contactNumber && <span className="text-gray-400">N/A</span>}
                         </div>
                       </div>
 
@@ -1197,7 +858,7 @@ export default function OrderPortals({
 
                     {/* Order Items Table */}
                     <div className="space-y-2">
-                      <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block">Requested Items</span>
+                      <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block">Ordered Items Details</span>
                       <div className="border border-gray-200 rounded-2xl overflow-hidden divide-y divide-gray-100">
                         {ord.items.map((it, idx) => (
                           <div key={idx} className="p-3 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
@@ -1234,16 +895,333 @@ export default function OrderPortals({
 
                     {/* Total Amount Footer */}
                     <div className="flex items-center justify-between pt-3 border-t border-gray-100 font-mono">
-                      <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Total Order Value</span>
+                      <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Total Order Amount</span>
                       <span className="text-xl font-black text-black">
                         {systemSettings.currencySymbol || 'Php'} {ord.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </span>
                     </div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Delete Portal Custom Confirmation Modal */}
+        {deletingPortal && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-white border border-gray-200 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 my-8">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div className="flex items-center gap-3 text-red-600">
+                  <div className="w-10 h-10 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
+                    <Trash2 className="w-5 h-5 text-red-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-black uppercase tracking-tight">Delete Order Portal?</h3>
+                    <p className="text-xs text-gray-500 font-mono">This action cannot be undone</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDeletingPortal(null)}
+                  className="text-gray-400 hover:text-black p-1.5 rounded-full hover:bg-gray-100 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-600 font-sans leading-relaxed">
+                Are you sure you want to delete <strong className="text-black font-bold">"{deletingPortal.name}"</strong>? The shareable storefront link will be deactivated immediately and shoppers will no longer be able to place orders through it.
+              </p>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setDeletingPortal(null)}
+                  className="bg-white border border-gray-300 text-gray-700 hover:text-black font-bold text-xs uppercase tracking-wider py-2.5 px-4 rounded-xl transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDeletePortal(deletingPortal.id);
+                    if (editingPortal?.id === deletingPortal.id) {
+                      setIsModalOpen(false);
+                      setEditingPortal(null);
+                    }
+                    setDeletingPortal(null);
+                  }}
+                  className="bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs uppercase tracking-wider py-2.5 px-5 rounded-xl border border-red-600 shadow-md transition-all cursor-pointer flex items-center gap-2"
+                  id="confirm-delete-portal-btn"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Yes, Delete Portal</span>
+                </button>
+              </div>
             </div>
-          )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // -----------------------------------------------------------------------------------
+  // MAIN STOREFRONT PORTALS LIST VIEW
+  // -----------------------------------------------------------------------------------
+  return (
+    <div className="space-y-8 animate-fade-in">
+      {/* Header Bar */}
+      <div className="bg-white border border-gray-200 rounded-3xl p-6 md:p-8 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div className="space-y-1 max-w-2xl">
+          <h2 className="text-2xl font-black text-black uppercase tracking-tight font-sans">
+            Custom Order Portals
+          </h2>
+          <p className="text-xs text-gray-500 leading-relaxed font-sans">
+            Create tailored ordering links for your employees, sales teams, departments, or resellers.
+            Shoppers select sizes and options directly without logging into your corporate account.
+          </p>
+        </div>
+
+        <button
+          onClick={openCreateModal}
+          className="bg-black hover:bg-neutral-800 text-white font-extrabold text-xs uppercase tracking-wider py-3.5 px-6 rounded-2xl border border-black shadow-md transition-all cursor-pointer flex items-center gap-2 shrink-0"
+          id="create-order-portal-btn"
+        >
+          <Plus className="w-4 h-4 stroke-[3px]" />
+          <span>Create Order Portal</span>
+        </button>
+      </div>
+
+      {/* Metrics Bar */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+          <span className="text-[10px] uppercase font-mono font-bold text-gray-400 block mb-1">Total Portals</span>
+          <span className="text-2xl font-black text-black font-mono">{companyPortals.length}</span>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+          <span className="text-[10px] uppercase font-mono font-bold text-gray-400 block mb-1">Active Links</span>
+          <span className="text-2xl font-black text-emerald-600 font-mono">{activeCount}</span>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+          <span className="text-[10px] uppercase font-mono font-bold text-gray-400 block mb-1">Paused / Closed</span>
+          <span className="text-2xl font-black text-amber-600 font-mono">{pausedCount}</span>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+          <span className="text-[10px] uppercase font-mono font-bold text-gray-400 block mb-1">Products Shared</span>
+          <span className="text-2xl font-black text-black font-mono">{totalProductsShared}</span>
+        </div>
+      </div>
+
+      {/* Storefront Link Cards Grid */}
+      {companyPortals.length === 0 ? (
+        <div className="bg-white border border-dashed border-gray-300 rounded-3xl p-12 text-center space-y-4">
+          <div className="w-16 h-16 bg-gray-50 border border-gray-200 rounded-2xl flex items-center justify-center mx-auto text-gray-400">
+            <Store className="w-8 h-8" />
+          </div>
+          <div className="max-w-md mx-auto space-y-2">
+            <h3 className="text-base font-bold text-black uppercase tracking-tight">No Order Portals Yet</h3>
+            <p className="text-xs text-gray-500 font-sans leading-relaxed">
+              Build your first ordering portal to let staff or resellers order specific products with personalized options.
+            </p>
+          </div>
+          <button
+            onClick={openCreateModal}
+            className="bg-black text-white font-extrabold text-xs uppercase tracking-wider py-2.5 px-5 rounded-xl border border-black hover:bg-neutral-800 transition-all cursor-pointer inline-flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Create First Portal</span>
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {companyPortals.map((portal) => {
+            const portalSet = new Set((portal.productIds || []).map(id => String(id).trim()));
+            const portalProducts = portalSet.size > 0
+              ? availableProducts.filter(p => portalSet.has(String(p.id).trim()))
+              : availableProducts;
+            const portalUrl = getPortalUrl(portal);
+
+            // Calculate total orders for this portal card
+            const portalOrderCount = orders.filter(o =>
+              o.portalId === portal.id ||
+              o.portalName === portal.name ||
+              (portal.shareToken && o.portalId === portal.shareToken)
+            ).length;
+
+            return (
+              <div
+                key={portal.id}
+                onClick={() => openEditModal(portal)}
+                className="bg-white border border-gray-200 hover:border-black rounded-3xl p-6 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between gap-6 group"
+                id={`portal-card-${portal.id}`}
+              >
+                {/* Card Header & Metadata */}
+                <div className="space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-extrabold text-black uppercase tracking-tight truncate group-hover:text-amber-600 transition-colors">
+                          {portal.name}
+                        </h3>
+                      </div>
+                      {portal.description ? (
+                        <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed font-sans">
+                          {portal.description}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-gray-400 italic font-sans">
+                          Click card to manage storefront details &amp; view orders
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Status & Orders Badge */}
+                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                      {portal.status === 'Active' && (
+                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Active
+                        </span>
+                      )}
+                      {portal.status === 'Paused' && (
+                        <span className="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
+                          <Clock className="w-3 h-3 text-amber-600" />
+                          Paused
+                        </span>
+                      )}
+                      {portal.status === 'Closed' && (
+                        <span className="bg-gray-100 text-gray-600 border border-gray-200 text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
+                          <Power className="w-3 h-3 text-gray-400" />
+                          Closed
+                        </span>
+                      )}
+
+                      <span className="bg-gray-100 text-gray-700 text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-md">
+                        {portalOrderCount} Order{portalOrderCount === 1 ? '' : 's'} Recv.
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Products Included Chips */}
+                  <div className="space-y-2 pt-2 border-t border-gray-100">
+                    <div className="flex items-center justify-between text-[11px] font-mono font-bold uppercase text-gray-400">
+                      <span>Products Included ({portalProducts.length})</span>
+                      <span className="text-[10px] font-normal text-gray-400">From Company Catalog</span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto custom-scrollbar">
+                      {portalProducts.map(prod => (
+                        <div
+                          key={prod.id}
+                          className="bg-gray-50 border border-gray-200 rounded-xl px-2.5 py-1 text-[11px] font-sans font-semibold text-black flex items-center gap-1.5"
+                        >
+                          {prod.imageUrl ? (
+                            <img src={prod.imageUrl} alt={prod.name} className="w-4 h-4 rounded-md object-cover" />
+                          ) : (
+                            <Package className="w-3.5 h-3.5 text-gray-400" />
+                          )}
+                          <span className="truncate max-w-[140px]">{prod.name}</span>
+                        </div>
+                      ))}
+                      {portalProducts.length === 0 && (
+                        <span className="text-xs text-amber-600 font-mono italic">No active products selected</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Shareable Link Box */}
+                  <div className="space-y-1.5 pt-1" onClick={(e) => e.stopPropagation()}>
+                    <label className="block text-[10px] uppercase font-mono font-bold text-gray-400">Shareable Storefront Link</label>
+                    <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-2xl p-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={portalUrl}
+                        className="bg-transparent text-xs font-mono text-gray-700 w-full focus:outline-none px-2 select-all truncate"
+                      />
+                      <button
+                        onClick={(e) => handleCopyLink(portal, e)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold uppercase tracking-wider transition-all cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                          copiedId === portal.id
+                            ? 'bg-emerald-600 text-white border border-emerald-600'
+                            : 'bg-black text-white hover:bg-neutral-800 border border-black'
+                        }`}
+                        id={`copy-portal-link-${portal.id}`}
+                      >
+                        {copiedId === portal.id ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 stroke-[3px]" />
+                            <span>Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copy Link</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card Footer Actions */}
+                <div className="pt-4 border-t border-gray-100 flex items-center justify-between gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onViewPortal(portal)}
+                      className="bg-black hover:bg-neutral-800 text-white font-extrabold text-xs uppercase tracking-wider py-2 px-3.5 rounded-xl border border-black transition-all cursor-pointer flex items-center gap-1.5"
+                      id={`view-portal-btn-${portal.id}`}
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>View Storefront</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(portal)}
+                      className="bg-white hover:bg-gray-50 text-black border border-gray-300 font-bold text-xs uppercase tracking-wider py-2 px-3.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
+                      id={`edit-portal-btn-${portal.id}`}
+                    >
+                      <Edit2 className="w-3.5 h-3.5 text-black" />
+                      <span>Edit &amp; View Orders</span>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => handleQuickStatusToggle(portal, e)}
+                      className={`text-xs font-mono font-bold uppercase tracking-wider py-2 px-2.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1 ${
+                        portal.status === 'Active'
+                          ? 'border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100'
+                          : 'border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                      }`}
+                      title="Toggle Portal Status"
+                      id={`toggle-status-btn-${portal.id}`}
+                    >
+                      <Power className="w-3.5 h-3.5" />
+                      <span>{portal.status === 'Active' ? 'Pause' : 'Activate'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeletingPortal(portal);
+                      }}
+                      className="text-gray-400 hover:text-red-600 p-2 rounded-xl hover:bg-red-50 transition-colors cursor-pointer"
+                      title="Delete Portal"
+                      id={`delete-portal-btn-${portal.id}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -1286,10 +1264,6 @@ export default function OrderPortals({
                 type="button"
                 onClick={() => {
                   onDeletePortal(deletingPortal.id);
-                  if (editingPortal?.id === deletingPortal.id) {
-                    setIsModalOpen(false);
-                    setEditingPortal(null);
-                  }
                   setDeletingPortal(null);
                 }}
                 className="bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs uppercase tracking-wider py-2.5 px-5 rounded-xl border border-red-600 shadow-md transition-all cursor-pointer flex items-center gap-2"
