@@ -56,6 +56,7 @@ export default function OrderPortals({
   onViewPortal,
   appsScriptUrl,
   orders = [],
+  onUpdateOrders,
   onUpdateOrderStatus
 }: OrderPortalsProps) {
   // Filter portals belonging to active company
@@ -215,12 +216,43 @@ export default function OrderPortals({
   // Compute orders belonging specifically to the currently selected portal
   const editingPortalOrders = useMemo(() => {
     if (!editingPortal) return [];
-    return orders.filter(o =>
-      o.portalId === editingPortal.id ||
-      o.portalName === editingPortal.name ||
-      (editingPortal.shareToken && o.portalId === editingPortal.shareToken)
-    );
-  }, [orders, editingPortal]);
+    const pId = (editingPortal.id || '').trim().toLowerCase();
+    const pToken = (editingPortal.shareToken || '').trim().toLowerCase();
+    const pName = (editingPortal.name || '').trim().toLowerCase();
+    const pCompName = (editingPortal.companyName || activeCompany?.name || '').trim().toLowerCase();
+
+    return orders.filter(o => {
+      const oPortalId = (o.portalId || '').trim().toLowerCase();
+      const oPortalName = (o.portalName || '').trim().toLowerCase();
+      const oNotes = (o.notes || '').toLowerCase();
+
+      // 1. Match portal ID or shareToken
+      if (oPortalId && (oPortalId === pId || (pToken && oPortalId === pToken))) {
+        return true;
+      }
+
+      // 2. Match portal name (case-insensitive)
+      if (oPortalName && pName && oPortalName === pName) {
+        return true;
+      }
+
+      // 3. Notes contains "[order portal: <name>]"
+      if (pName && oNotes.includes(`[order portal: ${pName}`)) {
+        return true;
+      }
+
+      // 4. Fallback for portal orders belonging to the active company
+      const isPortalOrder = o.id.startsWith('ord-portal-') || o.status === 'Pending Approval' || Boolean(o.portalId) || Boolean(o.portalName) || oNotes.includes('[order portal:');
+      if (isPortalOrder) {
+        const oComp = (o.companyName || '').trim().toLowerCase();
+        if (oComp && pCompName && oComp === pCompName) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+  }, [orders, editingPortal, activeCompany]);
 
   const filteredAndSortedPortalOrders = useMemo(() => {
     const list = editingPortalOrders.filter(o => {
@@ -783,11 +815,18 @@ export default function OrderPortals({
                             <span>{ord.status}</span>
                           </span>
 
-                          {onUpdateOrderStatus && (
+                          {(onUpdateOrderStatus || onUpdateOrders) && (
                             <select
                               value={ord.status}
-                              onChange={(e) => onUpdateOrderStatus(ord.id, e.target.value as Order['status'])}
-                              className="bg-gray-50 border border-gray-300 text-black text-[11px] font-mono font-bold rounded-xl px-2.5 py-1 focus:outline-none focus:border-black cursor-pointer"
+                              onChange={(e) => {
+                                const newStatus = e.target.value as Order['status'];
+                                if (onUpdateOrderStatus) {
+                                  onUpdateOrderStatus(ord.id, newStatus);
+                                } else if (onUpdateOrders) {
+                                  onUpdateOrders(orders.map(o => o.id === ord.id ? { ...o, status: newStatus } : o));
+                                }
+                              }}
+                              className="bg-gray-50 border border-gray-300 text-black text-[11px] font-mono font-bold rounded-xl px-2.5 py-1 focus:outline-none focus:border-black cursor-pointer shadow-2xs"
                               id={`storefront-order-status-select-${ord.id}`}
                             >
                               <option value="Reviewed">Reviewed</option>

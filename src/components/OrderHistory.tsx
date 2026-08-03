@@ -267,7 +267,7 @@ export default function OrderHistory({
                         <Calendar className="w-3.5 h-3.5" /> {formattedDate}
                       </span>
                       <span>·</span>
-                      <span>By {order.contactPerson}</span>
+                      <span>By <strong className="text-black font-semibold">{order.contactPerson || order.contactEmail || 'Storefront Purchaser'}</strong></span>
                       <span>·</span>
                       <span className="font-bold text-black">{order.items.length} items</span>
                     </div>
@@ -357,15 +357,18 @@ export default function OrderHistory({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 text-xs text-gray-600">
                       <div>
                         <span className="font-bold text-black uppercase block text-[10px] font-mono">Shipping Address</span>
-                        <p className="mt-1 leading-normal">{order.deliveryAddress}</p>
+                        <p className="mt-1 leading-normal font-sans text-gray-800">{order.deliveryAddress || 'No shipping address specified'}</p>
                       </div>
                       <div>
-                        <span className="font-bold text-black uppercase block text-[10px] font-mono">Contact &amp; Delivery Details</span>
-                        <p className="mt-1 leading-normal">
-                          Receiver: {order.contactPerson} (<span className="underline">{order.contactEmail}</span>)
+                        <span className="font-bold text-black uppercase block text-[10px] font-mono">Purchaser &amp; Delivery Details</span>
+                        <p className="mt-1 leading-normal font-sans text-gray-800">
+                          <span className="font-bold text-black">Purchaser:</span> {order.contactPerson || 'Storefront Customer'}{' '}
+                          {order.contactEmail && (
+                            <span className="text-gray-600 font-mono text-[11px]">(<a href={`mailto:${order.contactEmail}`} className="underline text-blue-600">{order.contactEmail}</a>)</span>
+                          )}
                         </p>
                         {order.contactNumber && (
-                          <p className="mt-1 text-gray-700 font-bold font-mono text-[11px]">
+                          <p className="mt-1 text-gray-800 font-bold font-mono text-[11px]">
                             📞 Phone: {order.contactNumber}
                           </p>
                         )}

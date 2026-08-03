@@ -1807,6 +1807,7 @@ export default function App() {
                 appsScriptUrl={appsScriptConfig.isConnected ? appsScriptConfig.webAppUrl : undefined}
                 orders={orders}
                 onUpdateOrders={handleUpdateOrders}
+                onUpdateOrderStatus={(orderId, status) => handleUpdateOrders(orders.map(o => o.id === orderId ? { ...o, status } : o))}
               />
             )}
 
