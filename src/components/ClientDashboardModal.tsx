@@ -106,6 +106,7 @@ export default function ClientDashboardModal({
   // Searches
   const [productSearch, setProductSearch] = useState('');
   const [orderSearch, setOrderSearch] = useState('');
+  const [orderSort, setOrderSort] = useState<'newest' | 'oldest' | 'amount_high' | 'amount_low' | 'az' | 'za'>('newest');
   const [selectedOrderDetailsId, setSelectedOrderDetailsId] = useState<string | null>(null);
 
   // Product add/edit states
@@ -439,13 +440,34 @@ export default function ClientDashboardModal({
   }, [clientProducts, productSearch]);
 
   const filteredCompanyOrders = useMemo(() => {
-    if (!orderSearch) return companyOrders;
-    return companyOrders.filter(o =>
-      o.orderNumber.toLowerCase().includes(orderSearch.toLowerCase()) ||
-      o.status.toLowerCase().includes(orderSearch.toLowerCase()) ||
-      (o.poNumber && o.poNumber.toLowerCase().includes(orderSearch.toLowerCase()))
-    );
-  }, [companyOrders, orderSearch]);
+    const list = companyOrders.filter(o => {
+      if (!orderSearch) return true;
+      return (
+        o.orderNumber.toLowerCase().includes(orderSearch.toLowerCase()) ||
+        o.status.toLowerCase().includes(orderSearch.toLowerCase()) ||
+        (o.poNumber && o.poNumber.toLowerCase().includes(orderSearch.toLowerCase()))
+      );
+    });
+
+    return list.sort((a, b) => {
+      if (orderSort === 'oldest') {
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      }
+      if (orderSort === 'amount_high') {
+        return (b.totalAmount || 0) - (a.totalAmount || 0);
+      }
+      if (orderSort === 'amount_low') {
+        return (a.totalAmount || 0) - (b.totalAmount || 0);
+      }
+      if (orderSort === 'az') {
+        return (a.orderNumber || '').localeCompare(b.orderNumber || '');
+      }
+      if (orderSort === 'za') {
+        return (b.orderNumber || '').localeCompare(a.orderNumber || '');
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [companyOrders, orderSearch, orderSort]);
 
   // Toggle single allocation directly within the dashboard
   const handleToggleAllocation = (productId: string) => {
@@ -1067,6 +1089,43 @@ export default function ClientDashboardModal({
                           ))
                         )}
                       </div>
+
+                      {productForm.sizeOptions && productForm.sizeOptions.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-200/80 space-y-2">
+                          <span className="block text-[9px] uppercase font-mono tracking-wider font-extrabold text-gray-600">
+                            Variant Specific Pricing per Size (Optional):
+                          </span>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                            {productForm.sizeOptions.map((sz) => {
+                              const currentVal = productForm.variantPrices?.[sz] !== undefined ? productForm.variantPrices[sz] : productForm.basePrice;
+                              return (
+                                <div key={sz} className="bg-white border border-gray-200 rounded-xl p-2 space-y-1">
+                                  <span className="text-[9px] font-mono font-bold text-black uppercase block">{sz} Price:</span>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] font-mono text-gray-400">Php</span>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      value={currentVal}
+                                      onChange={(e) => {
+                                        const val = parseFloat(e.target.value) || 0;
+                                        setProductForm(prev => ({
+                                          ...prev,
+                                          variantPrices: {
+                                            ...(prev.variantPrices || {}),
+                                            [sz]: val
+                                          }
+                                        }));
+                                      }}
+                                      className="w-full text-xs font-mono font-bold text-black focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* COLORS */}
@@ -1527,20 +1586,35 @@ export default function ClientDashboardModal({
           {/* 3. ORDER HISTORY TAB */}
           {activeSubTab === 'orders' && (
             <div className="space-y-4 animate-fade-in">
-              {/* Order Search Filter */}
+              {/* Order Search & Sort Filters */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <div className="relative flex items-center w-full sm:max-w-xs">
-                  <Search className="absolute left-3 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search by order # or PO..."
-                    value={orderSearch}
-                    onChange={(e) => setOrderSearch(e.target.value)}
-                    className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-4 py-2 text-xs text-black focus:border-black focus:outline-none"
-                    id="client-dash-order-search"
-                  />
+                <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:max-w-md">
+                  <div className="relative flex items-center w-full">
+                    <Search className="absolute left-3 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by order # or PO..."
+                      value={orderSearch}
+                      onChange={(e) => setOrderSearch(e.target.value)}
+                      className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-4 py-2 text-xs text-black focus:border-black focus:outline-none"
+                      id="client-dash-order-search"
+                    />
+                  </div>
+                  <select
+                    value={orderSort}
+                    onChange={(e) => setOrderSort(e.target.value as any)}
+                    className="w-full sm:w-auto bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-black focus:border-black focus:outline-none shadow-2xs"
+                    id="client-dash-order-sort"
+                  >
+                    <option value="newest">Newer - Older</option>
+                    <option value="oldest">Older - Newer</option>
+                    <option value="amount_high">Price: High to Low</option>
+                    <option value="amount_low">Price: Low to High</option>
+                    <option value="az">Order #: A - Z</option>
+                    <option value="za">Order #: Z - A</option>
+                  </select>
                 </div>
-                <span className="text-[10px] text-gray-400 font-mono font-bold uppercase">
+                <span className="text-[10px] text-gray-400 font-mono font-bold uppercase shrink-0">
                   {filteredCompanyOrders.length} B2B Purchases Found
                 </span>
               </div>
@@ -1642,37 +1716,101 @@ export default function ClientDashboardModal({
 
                             {/* Line items checklist */}
                             <div className="space-y-2">
-                              <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold">Itemized Order Specifications</span>
+                              <div className="flex items-center justify-between">
+                                <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold">Itemized Order Specifications</span>
+                                {ord.items.some(i => i.submitterName) && (
+                                  <span className="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded font-mono font-bold">
+                                    📦 Submitter Items Breakdown
+                                  </span>
+                                )}
+                              </div>
                               <div className="bg-white border border-gray-200 rounded-xl overflow-hidden divide-y divide-gray-100">
-                                {ord.items.map((it, idx) => (
-                                  <div key={idx} className="p-3 flex items-center justify-between gap-3 text-[11px]">
-                                    <div className="flex items-center space-x-2.5 min-w-0">
-                                      <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
-                                        {it.imageUrl?.startsWith('http') ? (
-                                          <img src={it.imageUrl} alt={it.productName} className="w-full h-full object-cover" />
-                                        ) : (
-                                          <div className="text-base">{it.imageUrl || '📦'}</div>
-                                        )}
-                                      </div>
-                                      <div className="min-w-0">
-                                        <span className="font-bold text-black uppercase block truncate">{it.productName}</span>
-                                        <div className="flex flex-wrap gap-1 mt-0.5 text-[9px] text-gray-400 font-sans">
-                                          {it.selectedSize && <span className="bg-gray-100 text-gray-600 px-1 py-0.2 rounded font-mono font-bold">Size: {it.selectedSize}</span>}
-                                          {it.selectedColor && <span className="bg-gray-100 text-gray-600 px-1 py-0.2 rounded font-mono font-bold">Color: {it.selectedColor}</span>}
-                                          {it.customDetails && Object.keys(it.customDetails).map(k => (
-                                            <span key={k} className="bg-gray-100 text-gray-600 px-1 py-0.2 rounded font-mono font-semibold max-w-[150px] truncate">
-                                              {k}: {it.customDetails![k]}
-                                            </span>
-                                          ))}
+                                {(() => {
+                                  const hasSubmitters = ord.items.some(i => i.submitterName);
+                                  if (!hasSubmitters) {
+                                    return ord.items.map((it, idx) => (
+                                      <div key={idx} className="p-3 flex items-center justify-between gap-3 text-[11px]">
+                                        <div className="flex items-center space-x-2.5 min-w-0">
+                                          <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
+                                            {it.imageUrl?.startsWith('http') ? (
+                                              <img src={it.imageUrl} alt={it.productName} className="w-full h-full object-cover" />
+                                            ) : (
+                                              <div className="text-base">{it.imageUrl || '📦'}</div>
+                                            )}
+                                          </div>
+                                          <div className="min-w-0">
+                                            <span className="font-bold text-black uppercase block truncate">{it.productName}</span>
+                                            <div className="flex flex-wrap gap-1 mt-0.5 text-[9px] text-gray-400 font-sans">
+                                              {it.selectedSize && <span className="bg-gray-100 text-gray-600 px-1 py-0.2 rounded font-mono font-bold">Size: {it.selectedSize}</span>}
+                                              {it.selectedColor && <span className="bg-gray-100 text-gray-600 px-1 py-0.2 rounded font-mono font-bold">Color: {it.selectedColor}</span>}
+                                              {it.customDetails && Object.keys(it.customDetails).map(k => (
+                                                <span key={k} className="bg-gray-100 text-gray-600 px-1 py-0.2 rounded font-mono font-semibold max-w-[150px] truncate">
+                                                  {k}: {it.customDetails![k]}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                          <span className="font-bold text-black block">{it.quantity} @ Php {it.price.toFixed(2)}</span>
+                                          <span className="font-black text-black block text-xs mt-0.5">Php {(it.quantity * it.price).toFixed(2)}</span>
                                         </div>
                                       </div>
+                                    ));
+                                  }
+
+                                  const groups: { [name: string]: { email?: string; phone?: string; orderNum?: string; items: typeof ord.items } } = {};
+                                  ord.items.forEach(it => {
+                                    const name = it.submitterName || 'General Order';
+                                    if (!groups[name]) {
+                                      groups[name] = {
+                                        email: it.submitterEmail,
+                                        phone: it.submitterPhone,
+                                        orderNum: it.originalOrderNumber,
+                                        items: []
+                                      };
+                                    }
+                                    groups[name].items.push(it);
+                                  });
+
+                                  return Object.entries(groups).map(([name, group], gIdx) => (
+                                    <div key={gIdx} className="p-3 space-y-2">
+                                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-center justify-between text-[10px] font-mono">
+                                        <span className="font-bold text-amber-950 uppercase">👤 Person: {name}</span>
+                                        {group.orderNum && (
+                                          <span className="bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-bold">
+                                            {group.orderNum}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="space-y-1 divide-y divide-gray-100 pl-2">
+                                        {group.items.map((it, idx) => (
+                                          <div key={idx} className="pt-1.5 flex items-center justify-between gap-3 text-[11px]">
+                                            <div className="flex items-center space-x-2.5 min-w-0">
+                                              <div className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
+                                                {it.imageUrl?.startsWith('http') ? (
+                                                  <img src={it.imageUrl} alt={it.productName} className="w-full h-full object-cover" />
+                                                ) : (
+                                                  <div className="text-xs">{it.imageUrl || '📦'}</div>
+                                                )}
+                                              </div>
+                                              <div className="min-w-0">
+                                                <span className="font-bold text-black uppercase block truncate">{it.productName}</span>
+                                                <div className="flex flex-wrap gap-1 mt-0.5 text-[9px] text-gray-400 font-sans">
+                                                  {it.selectedSize && <span className="bg-gray-100 text-gray-600 px-1 py-0.2 rounded font-mono font-bold">Size: {it.selectedSize}</span>}
+                                                  {it.selectedColor && <span className="bg-gray-100 text-gray-600 px-1 py-0.2 rounded font-mono font-bold">Color: {it.selectedColor}</span>}
+                                                </div>
+                                              </div>
+                                            </div>
+                                            <div className="text-right shrink-0">
+                                              <span className="font-bold text-black block text-xs">{it.quantity}x @ Php {it.price.toFixed(2)}</span>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
                                     </div>
-                                    <div className="text-right shrink-0">
-                                      <span className="font-bold text-black block">{it.quantity} @ Php {it.price.toFixed(2)}</span>
-                                      <span className="font-black text-black block text-xs mt-0.5">Php {(it.quantity * it.price).toFixed(2)}</span>
-                                    </div>
-                                  </div>
-                                ))}
+                                  ));
+                                })()}
                               </div>
                             </div>
 

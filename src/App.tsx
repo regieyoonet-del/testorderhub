@@ -23,6 +23,7 @@ import LoginScreen from './components/LoginScreen';
 import AdminDashboard from './components/AdminDashboard';
 import OrderPortals from './components/OrderPortals';
 import PublicOrderPortal from './components/PublicOrderPortal';
+import { getProductUnitPrice } from './utils/pricing';
 import { Check, AlertCircle, ShoppingBag, ArrowRight, Printer, RefreshCw, LogOut, Store } from 'lucide-react';
 
 function getThemeStyles(colorHex: string) {
@@ -468,7 +469,14 @@ export default function App() {
         if (fetchedPortals && fetchedPortals.length > 0) {
           const poMap = new Map<string, OrderPortal>();
           orderPortals.forEach(p => poMap.set(p.id, p));
-          fetchedPortals.forEach(p => poMap.set(p.id, p));
+          fetchedPortals.forEach(fp => {
+            const existing = poMap.get(fp.id);
+            poMap.set(fp.id, {
+              ...fp,
+              customPrices: fp.customPrices || existing?.customPrices,
+              customVariantPrices: fp.customVariantPrices || existing?.customVariantPrices
+            });
+          });
           updatedPortalsList = Array.from(poMap.values());
           setOrderPortals(updatedPortalsList);
         }
@@ -1291,20 +1299,26 @@ export default function App() {
     setIsSubmitting(true);
     
     const itemsToProcess = checkedItems || cart;
-    const subtotal = itemsToProcess.reduce((acc, item) => acc + (Number(item.product.basePrice) * Number(item.quantity)), 0);
+    const subtotal = itemsToProcess.reduce((acc, item) => {
+      const uPrice = item.unitPrice ?? getProductUnitPrice(item.product, item.selectedSize, item.selectedColor);
+      return acc + (uPrice * Number(item.quantity));
+    }, 0);
     const shippingCost = formData.shippingCost !== undefined ? formData.shippingCost : (subtotal >= 500 ? 0 : 15.00);
     const finalAmount = subtotal + shippingCost;
 
-    const lineItems = itemsToProcess.map(item => ({
-      productId: item.product.id,
-      productName: item.product.name,
-      imageUrl: item.product.imageUrl,
-      quantity: Number(item.quantity),
-      price: Number(item.product.basePrice),
-      selectedSize: item.selectedSize,
-      selectedColor: item.selectedColor,
-      customDetails: item.customDetails
-    }));
+    const lineItems = itemsToProcess.map(item => {
+      const uPrice = item.unitPrice ?? getProductUnitPrice(item.product, item.selectedSize, item.selectedColor);
+      return {
+        productId: item.product.id,
+        productName: item.product.name,
+        imageUrl: item.product.imageUrl,
+        quantity: Number(item.quantity),
+        price: uPrice,
+        selectedSize: item.selectedSize,
+        selectedColor: item.selectedColor,
+        customDetails: item.customDetails
+      };
+    });
 
     const serial = 1000 + orders.length + 1;
     const orderNo = `${systemSettings.orderPrefix || 'ARH-2026'}-${serial}`;
@@ -1401,7 +1415,20 @@ export default function App() {
     if (!activePublicPortal) throw new Error('No active portal selected');
 
     const portalCompany = companies.find(c => c.id === activePublicPortal.companyId) || activeCompany;
-    const subtotal = orderData.items.reduce((acc, it) => acc + (it.product.basePrice * it.quantity), 0);
+    const itemsProcessed = orderData.items.map(it => {
+      const uPrice = (it as any).unitPrice ?? getProductUnitPrice(it.product, it.selectedSize, it.selectedColor, activePublicPortal);
+      return {
+        productId: it.product.id,
+        productName: it.product.name,
+        imageUrl: it.product.imageUrl,
+        quantity: it.quantity,
+        price: uPrice,
+        selectedSize: it.selectedSize,
+        selectedColor: it.selectedColor,
+        customDetails: it.customDetails
+      };
+    });
+    const subtotal = itemsProcessed.reduce((acc, it) => acc + (it.price * it.quantity), 0);
     const serial = 1000 + orders.length + 1;
     const orderNo = `${systemSettings.orderPrefix || 'ARH-2026'}-${serial}`;
 
@@ -1418,16 +1445,7 @@ export default function App() {
       notes: orderData.notes,
       portalId: activePublicPortal?.id,
       portalName: activePublicPortal?.name,
-      items: orderData.items.map(it => ({
-        productId: it.product.id,
-        productName: it.product.name,
-        imageUrl: it.product.imageUrl,
-        quantity: it.quantity,
-        price: it.product.basePrice,
-        selectedSize: it.selectedSize,
-        selectedColor: it.selectedColor,
-        customDetails: it.customDetails
-      })),
+      items: itemsProcessed,
       status: 'Pending Approval',
       totalAmount: subtotal,
       createdAt: new Date().toISOString()

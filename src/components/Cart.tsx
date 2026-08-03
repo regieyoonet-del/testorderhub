@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { CartItem, CompanyProfile, Order } from '../types';
+import { getProductUnitPrice } from '../utils/pricing';
 import { X, Trash2, ShoppingBag, Plus, Minus, AlertCircle, Send, Check } from 'lucide-react';
 
 interface CartProps {
@@ -48,7 +49,10 @@ export default function Cart({
   if (!isOpen) return null;
 
   const checkedItems = cartItems.filter(item => !uncheckedItemIds.includes(item.id));
-  const subtotal = checkedItems.reduce((acc, item) => acc + (Number(item.product.basePrice) * Number(item.quantity)), 0);
+  const subtotal = checkedItems.reduce((acc, item) => {
+    const uPrice = item.unitPrice ?? getProductUnitPrice(item.product, item.selectedSize, item.selectedColor);
+    return acc + (uPrice * Number(item.quantity));
+  }, 0);
   const shippingThreshold = 500;
   
   // Calculate shipping cost: free if subtotal >= 500, otherwise max delivery charge of checked items (or 15.00 default)
@@ -209,7 +213,7 @@ export default function Cart({
                                   {item.product.name}
                                 </h5>
                                 <span className="text-[10px] font-mono text-gray-500 block mt-0.5">
-                                  Php {item.product.basePrice.toFixed(2)} per {item.product.unit}
+                                  Php {(item.unitPrice ?? getProductUnitPrice(item.product, item.selectedSize, item.selectedColor)).toFixed(2)} per {item.product.unit}
                                 </span>
                               </div>
                             </div>

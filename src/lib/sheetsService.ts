@@ -824,6 +824,26 @@ export const sheetsService = {
             }
             return valStr.split(',').map((s: string) => s.trim()).filter(Boolean);
           })(),
+          customPrices: (() => {
+            const val = getProp(item, ['CustomPrices', 'customPrices', 'Custom Prices', 'Portal Pricing', 'Portal Prices']);
+            if (!val) return undefined;
+            if (typeof val === 'object' && !Array.isArray(val)) return val;
+            try {
+              const parsed = JSON.parse(String(val));
+              if (parsed && typeof parsed === 'object') return parsed;
+            } catch (e) {}
+            return undefined;
+          })(),
+          customVariantPrices: (() => {
+            const val = getProp(item, ['CustomVariantPrices', 'customVariantPrices', 'Custom Variant Prices', 'Variant Pricing']);
+            if (!val) return undefined;
+            if (typeof val === 'object' && !Array.isArray(val)) return val;
+            try {
+              const parsed = JSON.parse(String(val));
+              if (parsed && typeof parsed === 'object') return parsed;
+            } catch (e) {}
+            return undefined;
+          })(),
           createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
           updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString()),
           shareToken: String(getProp(item, ['ShareToken', 'shareToken', 'Share Token']) || '')

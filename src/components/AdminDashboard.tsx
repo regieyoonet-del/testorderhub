@@ -190,6 +190,7 @@ export default function AdminDashboard({
   const [filterCompany, setFilterCompany] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [orderSort, setOrderSort] = useState<'newest' | 'oldest' | 'amount_high' | 'amount_low' | 'az' | 'za'>('newest');
 
   // Selected Dashboard Company state
   const [selectedDashboardCompany, setSelectedDashboardCompany] = useState<CompanyProfile | null>(null);
@@ -481,7 +482,7 @@ export default function AdminDashboard({
   };
 
   const filteredOrders = React.useMemo(() => {
-    return orders.filter((ord) => {
+    const list = orders.filter((ord) => {
       // Search matching
       const matchesSearch = 
         ord.orderNumber.toLowerCase().includes(orderSearch.toLowerCase()) ||
@@ -532,7 +533,27 @@ export default function AdminDashboard({
 
       return true;
     });
-  }, [orders, orderSearch, filterStatus, filterCompany, filterCategory, filterDate, filterSpecificDate, products]);
+
+    return list.sort((a, b) => {
+      if (orderSort === 'oldest') {
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      }
+      if (orderSort === 'amount_high') {
+        return (b.totalAmount || 0) - (a.totalAmount || 0);
+      }
+      if (orderSort === 'amount_low') {
+        return (a.totalAmount || 0) - (b.totalAmount || 0);
+      }
+      if (orderSort === 'az') {
+        return (a.companyName || '').localeCompare(b.companyName || '') || (a.orderNumber || '').localeCompare(b.orderNumber || '');
+      }
+      if (orderSort === 'za') {
+        return (b.companyName || '').localeCompare(a.companyName || '') || (b.orderNumber || '').localeCompare(a.orderNumber || '');
+      }
+      // Default: newest first
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [orders, orderSearch, filterStatus, filterCompany, filterCategory, filterDate, filterSpecificDate, products, orderSort]);
 
   const filteredCompanies = companies.filter(
     (co) =>
@@ -1042,7 +1063,27 @@ export default function AdminDashboard({
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+                {/* Order Sorting Dropdown */}
+                <div className="space-y-1 sm:col-span-1 lg:col-span-1">
+                  <label className="block text-[9px] uppercase font-mono font-extrabold text-black flex items-center gap-1">
+                    <span>Sort By</span>
+                  </label>
+                  <select
+                    value={orderSort}
+                    onChange={(e) => setOrderSort(e.target.value as any)}
+                    className="w-full bg-white border-2 border-black focus:ring-2 focus:ring-black rounded-lg px-2.5 py-1.5 text-xs font-bold text-black focus:outline-none shadow-2xs"
+                    id="admin-order-sort-select"
+                  >
+                    <option value="newest">Newer - Older</option>
+                    <option value="oldest">Older - Newer</option>
+                    <option value="amount_high">Price: High to Low</option>
+                    <option value="amount_low">Price: Low to High</option>
+                    <option value="az">Company/Order #: A - Z</option>
+                    <option value="za">Company/Order #: Z - A</option>
+                  </select>
+                </div>
+
                 {/* Date Filter */}
                 <div className="space-y-1 sm:col-span-2 lg:col-span-2">
                   <label className="block text-[9px] uppercase font-mono font-bold text-gray-400">Date Range</label>
@@ -1953,66 +1994,174 @@ export default function AdminDashboard({
 
               {/* Order Line Items */}
               <div className="space-y-3">
-                <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-400 font-mono">Line Items Summary</h4>
-                <div className="divide-y divide-gray-100 border-y border-gray-100 divide-dashed max-h-[350px] overflow-y-auto pr-2">
-                  {selectedOrder.items.map((it, idx) => (
-                    <div key={idx} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left">
-                      <div className="flex items-start gap-3 flex-1 min-w-0">
-                        {it.imageUrl ? (
-                          it.imageUrl.startsWith('http') ? (
-                            <img
-                              src={it.imageUrl}
-                              alt="Product"
-                              className="w-10 h-10 object-cover rounded-lg shrink-0 border border-gray-100"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <span className="text-sm p-1 bg-gray-50 border border-gray-100 w-10 h-10 flex items-center justify-center select-none shrink-0 rounded-lg font-sans">
-                              {it.imageUrl}
-                            </span>
-                          )
-                        ) : (
-                          <div className="w-10 h-10 bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0 rounded-lg">
-                            <Package className="w-5 h-5 text-gray-400" />
-                          </div>
-                        )}
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-400 font-mono">Line Items Summary</h4>
+                  {selectedOrder.items.some(i => i.submitterName) && (
+                    <span className="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.5 rounded-md font-mono font-bold">
+                      📦 Batch Order (Separated by Person)
+                    </span>
+                  )}
+                </div>
 
-                        <div className="min-w-0 flex-1">
-                          <h5 className="font-bold text-xs text-black uppercase tracking-tight truncate">
-                            {it.productName}
-                          </h5>
-                          
-                          {/* Size and Color specifications */}
-                          {(it.selectedSize || it.selectedColor || (it.customDetails && Object.keys(it.customDetails).length > 0)) && (
-                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] font-mono text-gray-500 mt-1">
-                              {it.selectedSize && (
-                                <span className="bg-gray-100 px-1 py-0.5 rounded">
-                                  Size: <strong>{it.selectedSize}</strong>
+                <div className="divide-y divide-gray-100 border-y border-gray-100 divide-dashed max-h-[380px] overflow-y-auto pr-2 space-y-4">
+                  {(() => {
+                    const hasSubmitters = selectedOrder.items.some(i => i.submitterName);
+                    if (!hasSubmitters) {
+                      return selectedOrder.items.map((it, idx) => (
+                        <div key={idx} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left">
+                          <div className="flex items-start gap-3 flex-1 min-w-0">
+                            {it.imageUrl ? (
+                              it.imageUrl.startsWith('http') ? (
+                                <img
+                                  src={it.imageUrl}
+                                  alt="Product"
+                                  className="w-10 h-10 object-cover rounded-lg shrink-0 border border-gray-100"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : (
+                                <span className="text-sm p-1 bg-gray-50 border border-gray-100 w-10 h-10 flex items-center justify-center select-none shrink-0 rounded-lg font-sans">
+                                  {it.imageUrl}
                                 </span>
+                              )
+                            ) : (
+                              <div className="w-10 h-10 bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0 rounded-lg">
+                                <Package className="w-5 h-5 text-gray-400" />
+                              </div>
+                            )}
+
+                            <div className="min-w-0 flex-1">
+                              <h5 className="font-bold text-xs text-black uppercase tracking-tight truncate">
+                                {it.productName}
+                              </h5>
+                              
+                              {(it.selectedSize || it.selectedColor || (it.customDetails && Object.keys(it.customDetails).length > 0)) && (
+                                <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] font-mono text-gray-500 mt-1">
+                                  {it.selectedSize && (
+                                    <span className="bg-gray-100 px-1 py-0.5 rounded">
+                                      Size: <strong>{it.selectedSize}</strong>
+                                    </span>
+                                  )}
+                                  {it.selectedColor && (
+                                    <span className="bg-gray-100 px-1 py-0.5 rounded">
+                                      Color: <strong>{it.selectedColor}</strong>
+                                    </span>
+                                  )}
+                                  {it.customDetails && Object.entries(it.customDetails).map(([k, v]) => (
+                                    v ? (
+                                      <span key={k} className="block w-full text-[8px] text-gray-400">
+                                        {k}: {v}
+                                      </span>
+                                    ) : null
+                                  ))}
+                                </div>
                               )}
-                              {it.selectedColor && (
-                                <span className="bg-gray-100 px-1 py-0.5 rounded">
-                                  Color: <strong>{it.selectedColor}</strong>
-                                </span>
-                              )}
-                              {it.customDetails && Object.entries(it.customDetails).map(([k, v]) => (
-                                v ? (
-                                  <span key={k} className="block w-full text-[8px] text-gray-400">
-                                    {k}: {v}
-                                  </span>
-                                ) : null
-                              ))}
+                            </div>
+                          </div>
+
+                          <div className="text-left sm:text-right text-xs font-mono shrink-0">
+                            <span className="text-gray-500">{it.quantity} x Php {it.price.toFixed(2)} = </span>
+                            <span className="font-bold text-black block sm:inline-block sm:ml-1">Php {(it.quantity * it.price).toFixed(2)}</span>
+                          </div>
+                        </div>
+                      ));
+                    }
+
+                    // Group items by submitterName
+                    const groups: { [name: string]: { email?: string; phone?: string; orderNum?: string; items: typeof selectedOrder.items } } = {};
+                    selectedOrder.items.forEach(it => {
+                      const name = it.submitterName || 'General Order';
+                      if (!groups[name]) {
+                        groups[name] = {
+                          email: it.submitterEmail,
+                          phone: it.submitterPhone,
+                          orderNum: it.originalOrderNumber,
+                          items: []
+                        };
+                      }
+                      groups[name].items.push(it);
+                    });
+
+                    return Object.entries(groups).map(([name, group], gIdx) => (
+                      <div key={gIdx} className="pt-3 pb-2 space-y-2">
+                        <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-2.5 flex flex-col sm:flex-row sm:items-center justify-between text-xs font-mono">
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-amber-950 uppercase">👤 Person: {name}</span>
+                            {group.orderNum && (
+                              <span className="bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded text-[9px] font-bold">
+                                {group.orderNum}
+                              </span>
+                            )}
+                          </div>
+                          {(group.email || group.phone) && (
+                            <div className="text-[10px] text-amber-800 flex items-center gap-2">
+                              {group.email && <span>{group.email}</span>}
+                              {group.phone && <span>{group.phone}</span>}
                             </div>
                           )}
                         </div>
-                      </div>
 
-                      <div className="text-left sm:text-right text-xs font-mono shrink-0">
-                        <span className="text-gray-500">{it.quantity} x Php {it.price.toFixed(2)} = </span>
-                        <span className="font-bold text-black block sm:inline-block sm:ml-1">Php {(it.quantity * it.price).toFixed(2)}</span>
+                        <div className="pl-2 space-y-2 divide-y divide-gray-100">
+                          {group.items.map((it, idx) => (
+                            <div key={idx} className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left">
+                              <div className="flex items-start gap-3 flex-1 min-w-0">
+                                {it.imageUrl ? (
+                                  it.imageUrl.startsWith('http') ? (
+                                    <img
+                                      src={it.imageUrl}
+                                      alt="Product"
+                                      className="w-9 h-9 object-cover rounded-lg shrink-0 border border-gray-100"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  ) : (
+                                    <span className="text-sm p-1 bg-gray-50 border border-gray-100 w-9 h-9 flex items-center justify-center select-none shrink-0 rounded-lg font-sans">
+                                      {it.imageUrl}
+                                    </span>
+                                  )
+                                ) : (
+                                  <div className="w-9 h-9 bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0 rounded-lg">
+                                    <Package className="w-4 h-4 text-gray-400" />
+                                  </div>
+                                )}
+
+                                <div className="min-w-0 flex-1">
+                                  <h5 className="font-bold text-xs text-black uppercase tracking-tight truncate">
+                                    {it.productName}
+                                  </h5>
+                                  
+                                  {(it.selectedSize || it.selectedColor || (it.customDetails && Object.keys(it.customDetails).length > 0)) && (
+                                    <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] font-mono text-gray-500 mt-0.5">
+                                      {it.selectedSize && (
+                                        <span className="bg-gray-100 px-1 py-0.5 rounded">
+                                          Size: <strong>{it.selectedSize}</strong>
+                                        </span>
+                                      )}
+                                      {it.selectedColor && (
+                                        <span className="bg-gray-100 px-1 py-0.5 rounded">
+                                          Color: <strong>{it.selectedColor}</strong>
+                                        </span>
+                                      )}
+                                      {it.customDetails && Object.entries(it.customDetails).map(([k, v]) => (
+                                        v ? (
+                                          <span key={k} className="block w-full text-[8px] text-gray-400">
+                                            {k}: {v}
+                                          </span>
+                                        ) : null
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="text-left sm:text-right text-xs font-mono shrink-0">
+                                <span className="text-gray-500">{it.quantity} x Php {it.price.toFixed(2)} = </span>
+                                <span className="font-bold text-black block sm:inline-block sm:ml-1">Php {(it.quantity * it.price).toFixed(2)}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ));
+                  })()}
                 </div>
               </div>
 

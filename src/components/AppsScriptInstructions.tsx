@@ -544,7 +544,7 @@ function saveCompany(ss, company) {
 
 function savePortal(ss, portal) {
   var sheet = ss.getSheetByName("Portals");
-  var expectedHeaders = ["Portal ID", "Company ID", "Company Name", "Portal Name", "Description", "Status", "Product IDs", "Created At", "Updated At", "Share Token"];
+  var expectedHeaders = ["Portal ID", "Company ID", "Company Name", "Portal Name", "Description", "Status", "Product IDs", "Portal Pricing", "Variant Pricing", "Created At", "Updated At", "Share Token"];
   var data = ensureHeaders(sheet, expectedHeaders);
   var headers = data[0];
   
@@ -566,6 +566,8 @@ function savePortal(ss, portal) {
   }
   
   var productIdsStr = portal.productIds ? portal.productIds.join(", ") : "";
+  var portalPricingStr = portal.customPrices ? JSON.stringify(portal.customPrices) : "";
+  var variantPricingStr = portal.customVariantPrices ? JSON.stringify(portal.customVariantPrices) : "";
   
   var portalMap = {
     "Portal ID": portal.id,
@@ -575,6 +577,8 @@ function savePortal(ss, portal) {
     "Description": portal.description || "",
     "Status": portal.status || "Active",
     "Product IDs": productIdsStr,
+    "Portal Pricing": portalPricingStr,
+    "Variant Pricing": variantPricingStr,
     "Created At": portal.createdAt || new Date().toISOString(),
     "Updated At": portal.updatedAt || new Date().toISOString(),
     "Share Token": portal.shareToken || ""
@@ -882,8 +886,8 @@ function saveAdminSettings(ss, settings, adminUser, adminPass) {
     "Short Hub Name": settings.shortHubName,
     "Order Prefix": settings.orderPrefix,
     "Currency Symbol": settings.currencySymbol,
-    "Admin Username": adminUser || "",
-    "Admin Passcode": adminPass || "",
+    "Admin Username": adminUser || "admin",
+    "Admin Passcode": adminPass || "1234",
     "Color Theme": settings.colorTheme || "classic_noir",
     "Admin Email": settings.adminEmail || "",
     "App Logo URL": settings.logoUrl || ""

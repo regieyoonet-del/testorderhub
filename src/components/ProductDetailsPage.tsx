@@ -260,14 +260,22 @@ export default function ProductDetailsPage({ product, onClose, onEdit, editLabel
                   <span className="text-[9px] text-gray-400 font-mono">Selectable on checkout</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {product.sizeOptions.map((sz) => (
-                    <div
-                      key={sz}
-                      className="px-3.5 py-2 border-2 border-black text-black bg-[#fcfcfc] text-xs font-mono font-black rounded-xl select-none"
-                    >
-                      {sz}
-                    </div>
-                  ))}
+                  {product.sizeOptions.map((sz) => {
+                    const vPrice = product.variantPrices?.[sz];
+                    return (
+                      <div
+                        key={sz}
+                        className="px-3.5 py-2 border-2 border-black text-black bg-[#fcfcfc] text-xs font-mono font-black rounded-xl select-none flex items-center gap-1.5"
+                      >
+                        <span>{sz}</span>
+                        {vPrice !== undefined && (
+                          <span className="text-[10px] bg-black text-white px-1.5 py-0.5 rounded font-bold">
+                            Php {vPrice.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

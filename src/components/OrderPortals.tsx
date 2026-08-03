@@ -117,33 +117,45 @@ export default function OrderPortals({
         // Consolidate selected portal submissions into 1 single order card for Admin
         const primary = selectedOrders[0];
 
-        // Combine items & sum quantities for identical items
+        // Preserve individual order items per submitter for post-fulfillment distribution
         const consolidatedItems: OrderItem[] = [];
         selectedOrders.forEach(ord => {
+          const personName = ord.contactPerson || ord.contactEmail || 'Portal Submitter';
           (ord.items || []).forEach(item => {
-            const customStr = JSON.stringify(item.customDetails || {});
-            const existing = consolidatedItems.find(i =>
-              i.productId === item.productId &&
-              (i.selectedSize || '') === (item.selectedSize || '') &&
-              (i.selectedColor || '') === (item.selectedColor || '') &&
-              JSON.stringify(i.customDetails || {}) === customStr
-            );
-            if (existing) {
-              existing.quantity += item.quantity;
-            } else {
-              consolidatedItems.push({ ...item });
-            }
+            consolidatedItems.push({
+              ...item,
+              submitterName: personName,
+              submitterEmail: ord.contactEmail,
+              submitterPhone: ord.contactNumber,
+              originalOrderNumber: ord.orderNumber
+            });
           });
         });
 
         const totalAmount = selectedOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
 
         const orderSummaries = selectedOrders.map((o, idx) => {
-          const itemSummary = (o.items || []).map(i => `${i.productName} (x${i.quantity})`).join(', ');
-          return `${idx + 1}. ${o.orderNumber} (${o.contactPerson || o.contactEmail || 'Portal User'}): ${itemSummary}${o.notes ? ` [Notes: ${o.notes}]` : ''}`;
-        }).join('\n');
+          const itemSummary = (o.items || []).map(i => {
+            let specStr = '';
+            if (i.selectedSize) specStr += `Size: ${i.selectedSize} `;
+            if (i.selectedColor) specStr += `Color: ${i.selectedColor} `;
+            if (i.customDetails && Object.keys(i.customDetails).length > 0) {
+              specStr += `Details: ${JSON.stringify(i.customDetails)} `;
+            }
+            return `• ${i.productName} (Qty: ${i.quantity}, Price: ${systemSettings.currencySymbol || 'Php'} ${(i.price || 0).toFixed(2)}${specStr ? `, ${specStr.trim()}` : ''})`;
+          }).join('\n    ');
 
-        const combinedNotes = `📦 CONSOLIDATED BATCH ORDER (${selectedOrders.length} Portal Submissions Combined):\n${orderSummaries}`;
+          return `SUBMISSION #${idx + 1}: ${o.orderNumber}
+  - Submitter: ${o.contactPerson || 'N/A'} (${o.contactEmail || 'N/A'}, ${o.contactNumber || 'N/A'})
+  - Delivery Dept/Address: ${o.deliveryAddress || 'N/A'}
+  - PO Number: ${o.poNumber || 'N/A'}
+  - Items Ordered:
+    ${itemSummary}
+  - Subtotal: ${systemSettings.currencySymbol || 'Php'} ${(o.totalAmount || 0).toFixed(2)}
+  ${o.notes ? `  - Notes: ${o.notes}` : ''}`;
+        }).join('\n\n');
+
+        const combinedNotes = `📦 CONSOLIDATED BATCH ORDER (${selectedOrders.length} Portal Submissions Combined for ARH Admin):\n\n${orderSummaries}`;
 
         const consolidatedOrder: Order = {
           id: `ord-batch-${Date.now()}`,
@@ -220,6 +232,8 @@ export default function OrderPortals({
   const [status, setStatus] = useState<'Active' | 'Paused' | 'Closed'>('Active');
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [productSearch, setProductSearch] = useState('');
+  const [customPrices, setCustomPrices] = useState<Record<string, number>>({});
+  const [customVariantPrices, setCustomVariantPrices] = useState<Record<string, Record<string, number>>>({});
 
   // UI Toast Feedback
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -250,6 +264,8 @@ export default function OrderPortals({
     setStatus('Active');
     // Default to all available products
     setSelectedProductIds(availableProducts.map(p => p.id));
+    setCustomPrices({});
+    setCustomVariantPrices({});
     setProductSearch('');
     setIsModalOpen(true);
   };
@@ -260,6 +276,8 @@ export default function OrderPortals({
     setDescription(portal.description || '');
     setStatus(portal.status);
     setSelectedProductIds([...portal.productIds]);
+    setCustomPrices(portal.customPrices || {});
+    setCustomVariantPrices(portal.customVariantPrices || {});
     setProductSearch('');
     setIsModalOpen(true);
   };
@@ -298,6 +316,8 @@ export default function OrderPortals({
         description: description.trim(),
         status,
         productIds: selectedProductIds,
+        customPrices,
+        customVariantPrices,
         updatedAt: new Date().toISOString()
       };
       onUpdatePortal(updated);
@@ -308,7 +328,9 @@ export default function OrderPortals({
         name: name.trim(),
         description: description.trim(),
         status,
-        productIds: selectedProductIds
+        productIds: selectedProductIds,
+        customPrices,
+        customVariantPrices
       });
     }
 
@@ -488,43 +510,106 @@ export default function OrderPortals({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar">
               {filteredModalProducts.map(prod => {
                 const isSelected = selectedProductIds.includes(prod.id);
+                const customPrice = customPrices[prod.id] !== undefined ? customPrices[prod.id] : prod.basePrice;
+                const hasSizes = prod.sizeOptions && prod.sizeOptions.length > 0;
+                const prodVariantPrices = customVariantPrices[prod.id] || {};
+
                 return (
                   <div
                     key={prod.id}
-                    onClick={() => handleToggleProduct(prod.id)}
-                    className={`p-4 rounded-2xl border flex items-center justify-between gap-3 cursor-pointer transition-all ${
+                    className={`p-4 rounded-2xl border transition-all ${
                       isSelected
                         ? 'border-black bg-neutral-50 shadow-xs'
                         : 'border-gray-200 bg-white hover:border-gray-400'
                     }`}
                     id={`select-product-chip-${prod.id}`}
                   >
-                    <div className="flex items-center gap-3.5 min-w-0">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => {}} // Handled by parent div onClick
-                        className="w-4 h-4 text-black rounded border-gray-300 focus:ring-black cursor-pointer shrink-0"
-                      />
-                      {prod.imageUrl ? (
-                        <img src={prod.imageUrl} alt={prod.name} className="w-12 h-12 rounded-xl object-cover border border-gray-200 shrink-0" />
-                      ) : (
-                        <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-gray-400 shrink-0">
-                          <Package className="w-6 h-6" />
+                    <div className="flex items-center justify-between gap-3 cursor-pointer" onClick={() => handleToggleProduct(prod.id)}>
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}} // Handled by parent div onClick
+                          className="w-4 h-4 text-black rounded border-gray-300 focus:ring-black cursor-pointer shrink-0"
+                        />
+                        {prod.imageUrl ? (
+                          <img src={prod.imageUrl} alt={prod.name} className="w-12 h-12 rounded-xl object-cover border border-gray-200 shrink-0" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center text-gray-400 shrink-0">
+                            <Package className="w-6 h-6" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-black uppercase tracking-tight truncate">{prod.name}</h4>
+                          <span className="text-[10px] text-gray-500 font-mono block mt-0.5">
+                            Base: {systemSettings.currencySymbol || 'Php'} {prod.basePrice.toFixed(2)} / {prod.unit}
+                          </span>
                         </div>
-                      )}
-                      <div className="min-w-0">
-                        <h4 className="text-xs font-bold text-black uppercase tracking-tight truncate">{prod.name}</h4>
-                        <span className="text-[10px] text-gray-500 font-mono block mt-0.5">
-                          {prod.category} · {systemSettings.currencySymbol || 'Php'} {prod.basePrice.toFixed(2)} / {prod.unit}
-                        </span>
                       </div>
+
+                      {prod.minQuantity > 1 && (
+                        <span className="text-[10px] font-mono font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded-md shrink-0">
+                          MOQ: {prod.minQuantity}
+                        </span>
+                      )}
                     </div>
 
-                    {prod.minQuantity > 1 && (
-                      <span className="text-[10px] font-mono font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded-md shrink-0">
-                        MOQ: {prod.minQuantity}
-                      </span>
+                    {/* Custom Portal Price & Variant Price Overrides */}
+                    {isSelected && (
+                      <div className="mt-3 pt-3 border-t border-gray-200 space-y-2" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between gap-2">
+                          <label className="text-[10px] font-mono font-bold text-gray-700 uppercase tracking-wider">
+                            Portal Item Price (Markup):
+                          </label>
+                          <div className="flex items-center gap-1 bg-white border border-gray-300 rounded-lg px-2 py-1 w-32 focus-within:border-black">
+                            <span className="text-[10px] font-mono text-gray-400">{systemSettings.currencySymbol || 'Php'}</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={customPrice}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                setCustomPrices(prev => ({ ...prev, [prod.id]: val }));
+                              }}
+                              className="w-full text-xs font-mono font-bold text-black focus:outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        {hasSizes && (
+                          <div className="mt-2 bg-white border border-gray-200 rounded-xl p-2.5 space-y-1.5">
+                            <span className="text-[9px] font-mono font-bold text-gray-500 uppercase tracking-wider block">
+                              Variant Size Pricing Overrides:
+                            </span>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {prod.sizeOptions?.map(sz => {
+                                const vPrice = prodVariantPrices[sz] !== undefined ? prodVariantPrices[sz] : (prod.variantPrices?.[sz] ?? customPrice);
+                                return (
+                                  <div key={sz} className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-md p-1">
+                                    <span className="text-[9px] font-mono font-bold text-black w-7 truncate">{sz}:</span>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      value={vPrice}
+                                      onChange={(e) => {
+                                        const val = parseFloat(e.target.value) || 0;
+                                        setCustomVariantPrices(prev => ({
+                                          ...prev,
+                                          [prod.id]: {
+                                            ...(prev[prod.id] || {}),
+                                            [sz]: val
+                                          }
+                                        }));
+                                      }}
+                                      className="w-full text-[10px] font-mono text-black bg-transparent focus:outline-none font-bold"
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 );

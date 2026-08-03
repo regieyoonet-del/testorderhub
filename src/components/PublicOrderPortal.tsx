@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { OrderPortal, Product, CompanyProfile, Order, OrderItem, SystemSettings } from '../types';
+import { getProductUnitPrice } from '../utils/pricing';
 import ProductImageCarousel from './ProductImageCarousel';
 import {
   ShoppingBag,
@@ -110,6 +111,7 @@ export default function PublicOrderPortal({
     const selectedSize = getSize(product);
     const selectedColor = getColor(product);
     const customDetails = getCustoms(product);
+    const unitPrice = getProductUnitPrice(product, selectedSize, selectedColor, portal);
 
     const compositeId = `${product.id}_${selectedSize || ''}_${selectedColor || ''}_${JSON.stringify(customDetails)}`;
 
@@ -118,6 +120,7 @@ export default function PublicOrderPortal({
       if (existingIdx > -1) {
         const updated = [...prev];
         updated[existingIdx].quantity += qty;
+        updated[existingIdx].unitPrice = unitPrice;
         return updated;
       }
       return [
@@ -128,7 +131,8 @@ export default function PublicOrderPortal({
           quantity: qty,
           selectedSize,
           selectedColor,
-          customDetails
+          customDetails,
+          unitPrice
         }
       ];
     });
@@ -154,7 +158,7 @@ export default function PublicOrderPortal({
   };
 
   const cartSubtotal = cartItems.reduce(
-    (sum, item) => sum + item.product.basePrice * item.quantity,
+    (sum, item) => sum + (item.unitPrice ?? getProductUnitPrice(item.product, item.selectedSize, item.selectedColor, portal)) * item.quantity,
     0
   );
 
@@ -184,8 +188,9 @@ export default function PublicOrderPortal({
           quantity: item.quantity,
           selectedSize: item.selectedSize,
           selectedColor: item.selectedColor,
-          customDetails: item.customDetails
-        }))
+          customDetails: item.customDetails,
+          unitPrice: item.unitPrice ?? getProductUnitPrice(item.product, item.selectedSize, item.selectedColor, portal)
+        })) as any
       });
 
       setSubmittedOrder(createdOrder);
@@ -385,7 +390,7 @@ export default function PublicOrderPortal({
                 </h1>
                 <div className="mt-3 flex items-baseline gap-2">
                   <span className="text-2xl font-black text-black font-mono">
-                    {systemSettings.currencySymbol || 'Php'} {product.basePrice.toFixed(2)}
+                    {systemSettings.currencySymbol || 'Php'} {getProductUnitPrice(product, getSize(product), getColor(product), portal).toFixed(2)}
                   </span>
                   <span className="text-xs text-gray-500 font-mono">/ {product.unit}</span>
                 </div>
@@ -523,7 +528,7 @@ export default function PublicOrderPortal({
                     <div className="text-right font-mono">
                       <span className="text-[10px] text-gray-400 block font-bold uppercase">Subtotal</span>
                       <span className="text-lg font-black text-black">
-                        {systemSettings.currencySymbol || 'Php'} {(product.basePrice * currentQty).toFixed(2)}
+                        {systemSettings.currencySymbol || 'Php'} {(getProductUnitPrice(product, getSize(product), getColor(product), portal) * currentQty).toFixed(2)}
                       </span>
                     </div>
                   </div>
@@ -683,7 +688,7 @@ export default function PublicOrderPortal({
 
                       <div className="flex items-baseline justify-between border-t border-gray-100 pt-2">
                         <span className="text-lg font-black text-black font-mono">
-                          {systemSettings.currencySymbol || 'Php'} {product.basePrice.toFixed(2)}
+                          {systemSettings.currencySymbol || 'Php'} {getProductUnitPrice(product, getSize(product), getColor(product), portal).toFixed(2)}
                           <span className="text-[10px] text-gray-400 font-normal"> / {product.unit}</span>
                         </span>
                         {product.minQuantity > 1 ? (
@@ -824,7 +829,7 @@ export default function PublicOrderPortal({
                             </button>
                           </div>
                           <span className="text-[10px] text-gray-400 font-mono">
-                            Total: {systemSettings.currencySymbol || 'Php'} {(product.basePrice * currentQty).toFixed(2)}
+                            Total: {systemSettings.currencySymbol || 'Php'} {(getProductUnitPrice(product, getSize(product), getColor(product), portal) * currentQty).toFixed(2)}
                           </span>
                         </div>
                       </div>
@@ -929,7 +934,7 @@ export default function PublicOrderPortal({
                       </div>
 
                       <span className="font-mono font-bold text-black">
-                        {systemSettings.currencySymbol || 'Php'} {(item.product.basePrice * item.quantity).toFixed(2)}
+                        {systemSettings.currencySymbol || 'Php'} {((item.unitPrice ?? getProductUnitPrice(item.product, item.selectedSize, item.selectedColor, portal)) * item.quantity).toFixed(2)}
                       </span>
 
                       <button

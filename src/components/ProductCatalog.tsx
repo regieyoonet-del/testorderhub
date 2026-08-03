@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Product, CartItem } from '../types';
+import { getProductUnitPrice } from '../utils/pricing';
 import { Check, Plus, AlertCircle, Sparkles, SlidersHorizontal, Heart, Clock, Truck, Edit3, X, Save } from 'lucide-react';
 import ProductDetailsPage from './ProductDetailsPage';
 import ProductImageCarousel from './ProductImageCarousel';
@@ -132,12 +133,17 @@ export default function ProductCatalog({ products, onAddToCart, onUpdateProduct,
       return;
     }
 
+    const selectedSize = product.sizeOptions ? (sizes[product.id] || product.sizeOptions[0]) : undefined;
+    const selectedColor = product.colorOptions ? (colors[product.id] || product.colorOptions[0]) : undefined;
+    const unitPrice = getProductUnitPrice(product, selectedSize, selectedColor);
+
     onAddToCart({
       product,
       quantity: qty,
-      selectedSize: product.sizeOptions ? (sizes[product.id] || product.sizeOptions[0]) : undefined,
-      selectedColor: product.colorOptions ? (colors[product.id] || product.colorOptions[0]) : undefined,
-      customDetails: customDetails[product.id] || {}
+      selectedSize,
+      selectedColor,
+      customDetails: customDetails[product.id] || {},
+      unitPrice
     });
 
     // Reset configuring and show toast
