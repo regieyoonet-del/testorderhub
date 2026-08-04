@@ -356,11 +356,11 @@ export default function OrderHistory({
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 text-xs text-gray-600">
                       <div>
-                        <span className="font-bold text-black uppercase block text-[10px] font-mono">Shipping Address</span>
-                        <p className="mt-1 leading-normal font-sans text-gray-800">{order.deliveryAddress || 'No shipping address specified'}</p>
+                        <span className="font-bold text-black uppercase block text-[10px] font-mono">Address</span>
+                        <p className="mt-1 leading-normal font-sans text-gray-800">{order.deliveryAddress || 'No address specified'}</p>
                       </div>
                       <div>
-                        <span className="font-bold text-black uppercase block text-[10px] font-mono">Purchaser &amp; Delivery Details</span>
+                        <span className="font-bold text-black uppercase block text-[10px] font-mono">Purchaser &amp; Details</span>
                         <p className="mt-1 leading-normal font-sans text-gray-800">
                           <span className="font-bold text-black">Purchaser:</span> {order.contactPerson || 'Storefront Customer'}{' '}
                           {order.contactEmail && (

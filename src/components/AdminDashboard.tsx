@@ -127,8 +127,8 @@ export default function AdminDashboard({
   }, [initialTab]);
 
   // Admin Settings Tab state
-  const [adminUser, setAdminUser] = useState(() => systemSettings.adminUsername || localStorage.getItem('rp_admin_username') || 'admin');
-  const [adminPass, setAdminPass] = useState(() => systemSettings.adminPasscode || localStorage.getItem('rp_admin_passcode') || 'admin123');
+  const [adminUser, setAdminUser] = useState(() => systemSettings.adminUsername || 'admin');
+  const [adminPass, setAdminPass] = useState(() => systemSettings.adminPasscode || 'admin123');
   const [hubName, setHubName] = useState(systemSettings.hubName);
   const [shortHubName, setShortHubName] = useState(systemSettings.shortHubName);
   const [orderPrefix, setOrderPrefix] = useState(systemSettings.orderPrefix);
@@ -141,9 +141,6 @@ export default function AdminDashboard({
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
     setSettingsSuccessMsg('');
-
-    localStorage.setItem('rp_admin_username', adminUser.trim());
-    localStorage.setItem('rp_admin_passcode', adminPass.trim());
 
     onUpdateSystemSettings({
       hubName: hubName.trim(),
@@ -767,7 +764,7 @@ export default function AdminDashboard({
                 </div>
 
                 <div className="space-y-1 md:col-span-2">
-                  <label className="block text-[10px] uppercase font-mono tracking-wider font-bold text-gray-700">Standard Delivery Address</label>
+                  <label className="block text-[10px] uppercase font-mono tracking-wider font-bold text-gray-700">Standard Address</label>
                   <textarea
                     rows={2}
                     value={clientForm.deliveryAddress}
@@ -908,11 +905,11 @@ export default function AdminDashboard({
                           <img
                             src={co.logoUrl}
                             alt={co.name}
-                            className="w-12 h-12 rounded-2xl object-cover border border-gray-100"
+                            className="w-12 h-12 object-contain shrink-0"
                             referrerPolicy="no-referrer"
                           />
                         ) : (
-                          <div className="w-12 h-12 rounded-2xl bg-gray-100 border border-gray-200 flex items-center justify-center font-bold text-gray-400 uppercase font-mono text-lg">
+                          <div className="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center font-bold text-gray-400 uppercase font-mono text-lg shrink-0">
                             {co.name.substring(0, 2)}
                           </div>
                         )}
@@ -1985,7 +1982,7 @@ export default function AdminDashboard({
                     </p>
                   )}
                   <p className="text-gray-600 leading-relaxed">
-                    <span className="text-gray-400 block font-bold text-[8px] uppercase">Ship-to Address:</span>
+                    <span className="text-gray-400 block font-bold text-[8px] uppercase">Address:</span>
                     {selectedOrder.deliveryAddress}
                   </p>
                 </div>

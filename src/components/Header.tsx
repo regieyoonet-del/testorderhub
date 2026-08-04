@@ -64,11 +64,11 @@ export default function Header({
                 <img
                   src={selectedCompany.logoUrl}
                   alt={selectedCompany.name}
-                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl object-cover border border-black shadow-xs shrink-0"
+                  className="w-10 h-10 sm:w-12 sm:h-12 object-contain shrink-0"
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="bg-black text-white w-10 h-10 sm:w-12 sm:h-12 border border-black flex items-center justify-center font-bold font-mono text-base sm:text-lg tracking-tight leading-none rounded-xl shrink-0 uppercase">
+                <div className="bg-black text-white w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center font-bold font-mono text-base sm:text-lg tracking-tight leading-none rounded-xl shrink-0 uppercase">
                   {selectedCompany.name ? selectedCompany.name.slice(0, 2) : 'CO'}
                 </div>
               )}
@@ -84,11 +84,11 @@ export default function Header({
                 <img
                   src={systemSettings.logoUrl}
                   alt={systemSettings.hubName}
-                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl object-cover border border-black shadow-xs shrink-0"
+                  className="w-10 h-10 sm:w-12 sm:h-12 object-contain shrink-0"
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="bg-black text-white p-2 w-10 h-10 sm:w-12 sm:h-12 border border-black flex items-center justify-center font-bold font-mono text-lg sm:text-xl tracking-tight leading-none rounded-xl shrink-0">
+                <div className="bg-black text-white p-2 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center font-bold font-mono text-lg sm:text-xl tracking-tight leading-none rounded-xl shrink-0">
                   {systemSettings?.shortHubName || 'ARH'}
                 </div>
               )}

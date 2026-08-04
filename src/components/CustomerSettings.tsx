@@ -307,10 +307,10 @@ export default function CustomerSettings({
               </div>
             </div>
 
-            {/* Delivery Address */}
+            {/* Address */}
             <div className="sm:col-span-2">
               <label className="block text-[10px] font-mono font-bold uppercase text-gray-600 mb-1">
-                Default Delivery & Shipping Address
+                Default Address
               </label>
               <div className="relative">
                 <textarea

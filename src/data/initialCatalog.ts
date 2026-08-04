@@ -39,6 +39,8 @@ export function sanitizeCatalogProduct(p: CatalogProduct): CatalogProduct {
     ...p,
     brandingMethods,
     colors,
+    colorImages: p.colorImages || initMatch?.colorImages || {},
+    variantPrices: p.variantPrices || initMatch?.variantPrices || {},
     moq: p.moq || initMatch?.moq || 50,
     leadTime: p.leadTime || initMatch?.leadTime || '7-10 Business Days',
     specifications: p.specifications || initMatch?.specifications || '',
@@ -64,6 +66,10 @@ export const INITIAL_CATALOG_PRODUCTS: CatalogProduct[] = [
       { name: 'Natural Bamboo', hex: '#D2B48C' },
       { name: 'Onyx Black', hex: '#212121' }
     ],
+    colorImages: {
+      'Natural Bamboo': 'https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?w=600&h=600&fit=crop&q=80',
+      'Onyx Black': 'https://images.unsplash.com/photo-1585336261026-8f5786372960?w=600&h=600&fit=crop&q=80'
+    },
     status: 'Active',
     createdAt: '2026-06-01T08:00:00Z'
   },
@@ -116,6 +122,10 @@ export const INITIAL_CATALOG_PRODUCTS: CatalogProduct[] = [
       { name: 'Royal Blue', hex: '#1976D2' },
       { name: 'Slate Black', hex: '#212121' }
     ],
+    colorImages: {
+      'Khaki Beige': 'https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=600&h=600&fit=crop&q=80',
+      'Washed Navy': 'https://images.unsplash.com/photo-1521369984125-a40d58852f6d?w=600&h=600&fit=crop&q=80'
+    },
     status: 'Active',
     createdAt: '2026-06-03T08:00:00Z'
   },

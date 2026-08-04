@@ -30,6 +30,7 @@ export default function ProductCatalog({ products, onAddToCart, onUpdateProduct,
   const [editDeliveryCharge, setEditDeliveryCharge] = useState<number>(0);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   const [isSavingCard, setIsSavingCard] = useState<boolean>(false);
+  const [cardColors, setCardColors] = useState<Record<string, string>>({});
 
   const handleSaveCardEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -232,6 +233,7 @@ export default function ProductCatalog({ products, onAddToCart, onUpdateProduct,
               {/* Product Image Section with Solid Grey Background and Interactive Carousel */}
               <ProductImageCarousel
                 product={product}
+                selectedColor={cardColors[product.id] || colors[product.id]}
                 onImageClick={() => setSelectedProductForDetails(product)}
                 favorites={favorites}
                 onToggleFavorite={toggleFavorite}
@@ -357,7 +359,11 @@ export default function ProductCatalog({ products, onAddToCart, onUpdateProduct,
                           </label>
                           <select
                             value={colors[product.id] || product.colorOptions[0]}
-                            onChange={(e) => setColors(prev => ({ ...prev, [product.id]: e.target.value }))}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setColors(prev => ({ ...prev, [product.id]: val }));
+                              setCardColors(prev => ({ ...prev, [product.id]: val }));
+                            }}
                             className="w-full bg-white border border-gray-200 text-xs px-2.5 py-1.5 rounded-md font-sans text-black focus:border-black focus:outline-none"
                             id={`color-select-${product.id}`}
                           >

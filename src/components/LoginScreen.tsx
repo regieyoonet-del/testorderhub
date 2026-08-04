@@ -32,8 +32,8 @@ export default function LoginScreen({ companies, onLogin, systemSettings }: Logi
     }
 
     // Check Admin Credentials
-    const savedAdminUser = (localStorage.getItem('rp_admin_username') || systemSettings?.adminUsername || 'admin').toLowerCase();
-    const savedAdminPass = localStorage.getItem('rp_admin_passcode') || systemSettings?.adminPasscode || 'admin123';
+    const savedAdminUser = (systemSettings?.adminUsername || 'admin').toLowerCase();
+    const savedAdminPass = systemSettings?.adminPasscode || 'admin123';
 
     const isAdminUserMatch = trimmedUser === savedAdminUser || (savedAdminUser === 'admin' && trimmedUser === 'admin');
     const isAdminPassMatch = trimmedPass === savedAdminPass || (savedAdminPass === 'admin123' && (trimmedPass === 'admin123' || trimmedPass === 'admin'));
@@ -66,11 +66,11 @@ export default function LoginScreen({ companies, onLogin, systemSettings }: Logi
             <img
               src={systemSettings.logoUrl}
               alt={systemSettings.hubName}
-              className="w-16 h-16 rounded-2xl object-cover border-2 border-black mx-auto mb-4 shadow-sm shrink-0"
+              className="w-16 h-16 object-contain mx-auto mb-4 shrink-0"
               referrerPolicy="no-referrer"
             />
           ) : (
-            <div className="bg-black text-white w-14 h-14 border border-black flex items-center justify-center font-bold font-mono text-2xl tracking-tight leading-none mx-auto mb-4 select-none rounded-2xl shadow-sm">
+            <div className="bg-black text-white w-14 h-14 flex items-center justify-center font-bold font-mono text-2xl tracking-tight leading-none mx-auto mb-4 select-none rounded-2xl shadow-sm">
               {systemSettings?.shortHubName || 'ARH'}
             </div>
           )}

@@ -103,3 +103,16 @@ export function parseColorList(val: any): ColorOption[] {
     })
     .filter((c): c is ColorOption => Boolean(c && c.name));
 }
+
+export function getItemColorImage(product: { imageUrl?: string; colorImages?: Record<string, string> } | undefined, selectedColor?: string): string {
+  if (!product) return '';
+  const fallback = product.imageUrl || '';
+  if (selectedColor && product.colorImages) {
+    const keys = Object.keys(product.colorImages);
+    const matchedKey = keys.find(k => k.toLowerCase().trim() === selectedColor.toLowerCase().trim());
+    if (matchedKey && product.colorImages[matchedKey]) {
+      return product.colorImages[matchedKey];
+    }
+  }
+  return fallback;
+}

@@ -32,6 +32,7 @@ export interface Product {
   leadTime?: string;
   imageUrls?: string[];
   variantPrices?: Record<string, number>; // Specific prices for variants (e.g. { "2XL": 20.00, "Red": 16.00 })
+  colorImages?: Record<string, string>;   // Mapping of color name -> image URL
 }
 
 export interface OrderItem {
@@ -136,6 +137,7 @@ export interface CatalogProduct {
   status: 'Active' | 'Hidden';
   createdAt?: string;
   variantPrices?: Record<string, number>;
+  colorImages?: Record<string, string>;
 }
 
 export interface QuoteLineItem {

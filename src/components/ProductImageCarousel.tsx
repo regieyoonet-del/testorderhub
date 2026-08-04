@@ -8,9 +8,11 @@ interface ProductImageCarouselProps {
     name: string;
     imageUrl: string;
     imageUrls?: string[];
+    colorImages?: Record<string, string>;
     frequentlyOrdered?: boolean;
     [key: string]: any;
   };
+  selectedColor?: string;
   onImageClick?: () => void;
   favorites?: Record<string, boolean>;
   onToggleFavorite?: (productId: string, e: React.MouseEvent) => void;
@@ -22,6 +24,7 @@ interface ProductImageCarouselProps {
 
 export default function ProductImageCarousel({
   product,
+  selectedColor,
   onImageClick,
   favorites,
   onToggleFavorite,
@@ -30,8 +33,33 @@ export default function ProductImageCarousel({
   className = "",
   imageFit = "contain"
 }: ProductImageCarouselProps) {
-  const images = Array.from(new Set([product.imageUrl, ...(product.imageUrls || [])].filter(Boolean)));
+  // Collect all images including color-linked images if any
+  const colorLinkedUrls = React.useMemo(() => {
+    return product.colorImages ? Object.values(product.colorImages).filter(Boolean) : [];
+  }, [product.colorImages]);
+
+  const images = React.useMemo(() => {
+    return Array.from(new Set([product.imageUrl, ...(product.imageUrls || []), ...colorLinkedUrls].filter(Boolean)));
+  }, [product.imageUrl, product.imageUrls, colorLinkedUrls]);
+
   const [activeIdx, setActiveIdx] = useState<number>(0);
+
+  // Switch active index when selectedColor changes and has a mapped image
+  React.useEffect(() => {
+    if (selectedColor && product.colorImages) {
+      const colorKeys = Object.keys(product.colorImages);
+      const matchedKey = colorKeys.find(
+        k => k.toLowerCase().trim() === selectedColor.toLowerCase().trim()
+      );
+      if (matchedKey && product.colorImages[matchedKey]) {
+        const targetUrl = product.colorImages[matchedKey];
+        const matchIndex = images.findIndex(url => url === targetUrl);
+        if (matchIndex !== -1) {
+          setActiveIdx(matchIndex);
+        }
+      }
+    }
+  }, [selectedColor, product.colorImages, images]);
 
   const handlePrev = (e: React.MouseEvent) => {
     e.stopPropagation();

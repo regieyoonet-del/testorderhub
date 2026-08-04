@@ -58,6 +58,7 @@ export default function BrowseProducts({
   const [selectedBranding, setSelectedBranding] = useState<string>('All');
   const [selectedColor, setSelectedColor] = useState<string>('All');
   const [sortBy, setSortBy] = useState<'a-z' | 'z-a' | 'moq-asc' | 'moq-desc'>('a-z');
+  const [cardColors, setCardColors] = useState<Record<string, string>>({});
 
   // Modal States
   const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
@@ -391,6 +392,7 @@ export default function BrowseProducts({
                 {/* Product Image Section with Solid Grey Background and Interactive Carousel */}
                 <ProductImageCarousel
                   product={product}
+                  selectedColor={cardColors[product.id]}
                   onImageClick={() => handleOpenProduct(product)}
                   favorites={favorites}
                   onToggleFavorite={toggleFavorite}
@@ -429,11 +431,18 @@ export default function BrowseProducts({
                         <span className="text-[10px] font-bold text-gray-400 uppercase font-mono">Colours ({product.colors.length})</span>
                         <div className="flex items-center gap-1">
                           {product.colors.slice(0, 6).map((col, idx) => (
-                            <span
+                            <button
+                              type="button"
                               key={idx}
-                              className="w-3.5 h-3.5 rounded-full border border-gray-300 shrink-0 shadow-2xs"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCardColors(prev => ({ ...prev, [product.id]: col.name }));
+                              }}
+                              className={`w-3.5 h-3.5 rounded-full border shrink-0 transition-transform hover:scale-125 cursor-pointer ${
+                                cardColors[product.id] === col.name ? 'ring-2 ring-black border-black scale-110' : 'border-gray-300'
+                              }`}
                               style={{ backgroundColor: col.hex || '#CCCCCC' }}
-                              title={col.name}
+                              title={`View ${col.name} photo`}
                             />
                           ))}
                           {product.colors.length > 6 && (

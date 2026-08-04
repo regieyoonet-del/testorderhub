@@ -156,6 +156,8 @@ export default function ClientDashboardModal({
       frequentlyOrdered: false,
       sizeOptions: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'],
       colorOptions: ['Midnight Black', 'Slate Grey', 'Bright White', 'Navy Blue', 'Forest Green'],
+      colorImages: {},
+      variantPrices: {},
       customFields: [
         { name: 'logo_position', type: 'select', label: 'Logo Position', options: ['Left Chest', 'Right Chest', 'Sleeve', 'Back Collar'], required: true },
         { name: 'personalization', type: 'textarea', label: 'Sizes & Name Personalization (Optional)', placeholder: 'e.g. John - L - Logo only', required: false }
@@ -190,6 +192,8 @@ export default function ClientDashboardModal({
       frequentlyOrdered: !!prod.frequentlyOrdered,
       sizeOptions: prod.sizeOptions || [],
       colorOptions: prod.colorOptions || [],
+      colorImages: prod.colorImages || {},
+      variantPrices: prod.variantPrices || {},
       customFields: prod.customFields || []
     });
     setNewSizeInput('');
@@ -504,11 +508,11 @@ export default function ClientDashboardModal({
               <img
                 src={company.logoUrl}
                 alt={company.name}
-                className="w-16 h-16 rounded-[1.25rem] object-cover border-2 border-black shadow-sm"
+                className="w-16 h-16 object-contain shrink-0"
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <div className="w-16 h-16 rounded-[1.25rem] bg-black text-white border-2 border-black flex items-center justify-center font-bold font-mono text-xl shadow-sm">
+              <div className="w-16 h-16 rounded-[1.25rem] bg-black text-white flex items-center justify-center font-bold font-mono text-xl shrink-0">
                 {company.name.substring(0, 2).toUpperCase()}
               </div>
             )}
@@ -659,7 +663,7 @@ export default function ClientDashboardModal({
                     <div className="flex items-start gap-2.5">
                       <MapPin className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
                       <div>
-                        <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-mono font-bold">Standard Delivery Destination</span>
+                        <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-mono font-bold">Standard Address</span>
                         <p className="font-semibold text-black leading-snug">{company.deliveryAddress}</p>
                       </div>
                     </div>
@@ -1131,12 +1135,12 @@ export default function ClientDashboardModal({
                       )}
                     </div>
 
-                    {/* COLORS */}
+                    {/* COLORS & LINKED IMAGES */}
                     <div className="space-y-3 bg-neutral-50/50 p-4 rounded-2xl border border-gray-200/60">
                       <div className="flex justify-between items-center">
                         <div>
-                          <span className="block text-[10px] uppercase font-mono tracking-wider font-extrabold text-black">Available Corporate Color Palette</span>
-                          <span className="block text-[9px] text-gray-400 font-mono">Define brand-approved product colors</span>
+                          <span className="block text-[10px] uppercase font-mono tracking-wider font-extrabold text-black">Available Corporate Color Palette & Linked Images</span>
+                          <span className="block text-[9px] text-gray-400 font-mono">Define product colors and link uploaded image to specific color variants</span>
                         </div>
                       </div>
 
@@ -1163,11 +1167,11 @@ export default function ClientDashboardModal({
                         </button>
                       </div>
 
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {(!productForm.colorOptions || productForm.colorOptions.length === 0) ? (
-                          <span className="text-[10px] text-gray-400 italic">No color variants enabled (Single default color)</span>
-                        ) : (
-                          productForm.colorOptions.map((cl) => {
+                      {(!productForm.colorOptions || productForm.colorOptions.length === 0) ? (
+                        <span className="text-[10px] text-gray-400 italic block pt-1">No color variants enabled (Single default color)</span>
+                      ) : (
+                        <div className="space-y-2 pt-1">
+                          {productForm.colorOptions.map((cl) => {
                             // Find hex color
                             let hex = '#ccc';
                             const lower = cl.toLowerCase();
@@ -1180,23 +1184,84 @@ export default function ClientDashboardModal({
                             else if (lower.includes('gold') || lower.includes('yellow')) hex = '#eab308';
                             else if (lower.includes('orange')) hex = '#ea580c';
                             else if (lower.includes('purple')) hex = '#7c3aed';
-                            
+
+                            const linkedImg = productForm.colorImages?.[cl] || '';
+                            const availableImages = Array.from(new Set([
+                              ...(productForm.imageUrls || []),
+                              productForm.imageUrl
+                            ].filter(Boolean)));
+
                             return (
-                              <span key={cl} className="inline-flex items-center gap-1.5 px-2 py-1 bg-white border border-gray-200 rounded-lg text-[10px] font-mono font-bold text-black shadow-2xs">
-                                <span className="w-2.5 h-2.5 rounded-full border border-gray-300" style={{ backgroundColor: hex }} />
-                                {cl}
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveColor(cl)}
-                                  className="text-gray-400 hover:text-red-500 font-black ml-0.5 text-xs focus:outline-none cursor-pointer"
-                                >
-                                  &times;
-                                </button>
-                              </span>
+                              <div key={cl} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white border border-gray-200/80 rounded-xl p-2 text-xs font-mono shadow-2xs">
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className="w-3 h-3 rounded-full border border-gray-300 shadow-2xs" style={{ backgroundColor: hex }} />
+                                  <span className="font-bold text-black">{cl}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveColor(cl)}
+                                    className="text-gray-400 hover:text-red-500 font-black ml-1 text-xs focus:outline-none cursor-pointer"
+                                  >
+                                    &times;
+                                  </button>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-gray-400 font-bold uppercase font-mono shrink-0">Linked Image:</span>
+                                  {availableImages.length > 0 ? (
+                                    <select
+                                      value={linkedImg}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setProductForm({
+                                          ...productForm,
+                                          colorImages: {
+                                            ...(productForm.colorImages || {}),
+                                            [cl]: val
+                                          }
+                                        });
+                                      }}
+                                      className="p-1 border border-gray-200 rounded-lg text-[11px] font-mono bg-white focus:outline-none focus:border-black max-w-[210px] truncate"
+                                    >
+                                      <option value="">-- Main Cover Image --</option>
+                                      {availableImages.map((img, i) => (
+                                        <option key={i} value={img}>
+                                          Image #{i + 1} ({img.substring(0, 24)}...)
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <input
+                                      type="url"
+                                      placeholder="Paste image URL..."
+                                      value={linkedImg}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setProductForm({
+                                          ...productForm,
+                                          colorImages: {
+                                            ...(productForm.colorImages || {}),
+                                            [cl]: val
+                                          }
+                                        });
+                                      }}
+                                      className="p-1 border border-gray-200 rounded-lg text-[11px] font-mono bg-white focus:outline-none focus:border-black w-44"
+                                    />
+                                  )}
+
+                                  {linkedImg && (
+                                    <img
+                                      src={linkedImg}
+                                      alt={cl}
+                                      className="w-6 h-6 rounded-md object-cover border border-gray-200 shadow-2xs shrink-0"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  )}
+                                </div>
+                              </div>
                             );
-                          })
-                        )}
-                      </div>
+                          })}
+                        </div>
+                      )}
                     </div>
 
                     {/* CUSTOM FIELDS (SPECS) */}
@@ -1694,7 +1759,7 @@ export default function ClientDashboardModal({
                           <div className="px-5 pb-5 pt-1 bg-[#fafafa] border-t border-gray-100 space-y-4 text-xs font-mono">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-b border-gray-100 pb-3">
                               <div>
-                                <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold mb-1">Shipping &amp; Delivery Destination</span>
+                                <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold mb-1">Address</span>
                                 <p className="font-semibold text-black leading-snug">{ord.deliveryAddress}</p>
                               </div>
                               <div>

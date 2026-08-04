@@ -878,7 +878,7 @@ export default function OrderPortals({
                       </div>
 
                       <div>
-                        <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">Delivery Address / Dept</span>
+                        <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">Address / Dept</span>
                         <div className="font-medium text-gray-800 flex items-start gap-1.5">
                           <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
                           <span className="line-clamp-2">{ord.deliveryAddress || 'Standard Corporate Delivery'}</span>

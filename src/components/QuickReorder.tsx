@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Product, CartItem } from '../types';
+import { getItemColorImage } from '../utils/colorUtils';
 import { Check, ShoppingCart, Info, AlertTriangle, ArrowRight } from 'lucide-react';
 
 interface QuickReorderProps {
@@ -172,18 +173,24 @@ export default function QuickReorder({ products, onAddToCart }: QuickReorderProp
                 {/* Info */}
                 <div className="col-span-1 md:col-span-4 flex items-center space-x-3.5">
                   <div className="bg-gray-50 border border-gray-100 p-1 w-10 h-10 flex items-center justify-center shrink-0 overflow-hidden">
-                    {product.imageUrl && product.imageUrl.startsWith('http') ? (
-                      <img
-                        src={product.imageUrl}
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <span className="text-xl select-none">
-                        {product.imageUrl && product.imageUrl.length <= 4 ? product.imageUrl : '📦'}
-                      </span>
-                    )}
+                    {(() => {
+                      const img = getItemColorImage(product, selectedColors[product.id]);
+                      if (img && img.startsWith('http')) {
+                        return (
+                          <img
+                            src={img}
+                            alt={product.name}
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                          />
+                        );
+                      }
+                      return (
+                        <span className="text-xl select-none">
+                          {img && img.length <= 4 ? img : '📦'}
+                        </span>
+                      );
+                    })()}
                   </div>
                   <div>
                     <h4 className="font-bold text-xs text-black uppercase tracking-tight leading-tight">

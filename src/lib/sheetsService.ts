@@ -408,6 +408,16 @@ export const sheetsService = {
               console.error('Error parsing custom fields:', e);
               return undefined;
             }
+          })(),
+          variantPrices: (() => {
+            const val = getProp(item, 'VariantPrices') || getProp(item, 'variantPrices');
+            if (!val) return undefined;
+            try { return typeof val === 'object' ? val : JSON.parse(String(val)); } catch { return undefined; }
+          })(),
+          colorImages: (() => {
+            const val = getProp(item, 'ColorImages') || getProp(item, 'colorImages');
+            if (!val) return undefined;
+            try { return typeof val === 'object' ? val : JSON.parse(String(val)); } catch { return undefined; }
           })()
         }));
       }
@@ -657,6 +667,16 @@ export const sheetsService = {
               if (!val) return initMatch?.sizes;
               return String(val).split(',').map((s: string) => s.trim()).filter(Boolean);
             })(),
+            variantPrices: (() => {
+              const val = getProp(item, ['VariantPrices', 'variantPrices']);
+              if (!val) return initMatch?.variantPrices;
+              try { return typeof val === 'object' ? val : JSON.parse(String(val)); } catch { return initMatch?.variantPrices; }
+            })(),
+            colorImages: (() => {
+              const val = getProp(item, ['ColorImages', 'colorImages']);
+              if (!val) return initMatch?.colorImages;
+              try { return typeof val === 'object' ? val : JSON.parse(String(val)); } catch { return initMatch?.colorImages; }
+            })(),
             status: (getProp(item, ['Status', 'status']) || initMatch?.status || 'Active') as 'Active' | 'Hidden',
             createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || initMatch?.createdAt || new Date().toISOString())
           };
@@ -825,23 +845,51 @@ export const sheetsService = {
             return valStr.split(',').map((s: string) => s.trim()).filter(Boolean);
           })(),
           customPrices: (() => {
-            const val = getProp(item, ['CustomPrices', 'customPrices', 'Custom Prices', 'Portal Pricing', 'Portal Prices']);
+            const val = getProp(item, ['CustomPrices', 'customPrices', 'Custom Prices', 'Portal Pricing', 'Portal Prices', 'PortalPricing', 'PortalPrices', 'Storefront Display Price', 'StorefrontDisplayPrice']);
             if (!val) return undefined;
-            if (typeof val === 'object' && !Array.isArray(val)) return val;
-            try {
-              const parsed = JSON.parse(String(val));
-              if (parsed && typeof parsed === 'object') return parsed;
-            } catch (e) {}
+            let parsedObj: any = val;
+            if (typeof val === 'string') {
+              try {
+                parsedObj = JSON.parse(val);
+              } catch (e) {
+                return undefined;
+              }
+            }
+            if (parsedObj && typeof parsedObj === 'object' && !Array.isArray(parsedObj)) {
+              const res: Record<string, number> = {};
+              for (const [k, v] of Object.entries(parsedObj)) {
+                const num = Number(v);
+                if (!isNaN(num)) res[k] = num;
+              }
+              return Object.keys(res).length > 0 ? res : undefined;
+            }
             return undefined;
           })(),
           customVariantPrices: (() => {
-            const val = getProp(item, ['CustomVariantPrices', 'customVariantPrices', 'Custom Variant Prices', 'Variant Pricing']);
+            const val = getProp(item, ['CustomVariantPrices', 'customVariantPrices', 'Custom Variant Prices', 'Variant Pricing', 'VariantPricing']);
             if (!val) return undefined;
-            if (typeof val === 'object' && !Array.isArray(val)) return val;
-            try {
-              const parsed = JSON.parse(String(val));
-              if (parsed && typeof parsed === 'object') return parsed;
-            } catch (e) {}
+            let parsedObj: any = val;
+            if (typeof val === 'string') {
+              try {
+                parsedObj = JSON.parse(val);
+              } catch (e) {
+                return undefined;
+              }
+            }
+            if (parsedObj && typeof parsedObj === 'object' && !Array.isArray(parsedObj)) {
+              const res: Record<string, Record<string, number>> = {};
+              for (const [pId, vObj] of Object.entries(parsedObj)) {
+                if (vObj && typeof vObj === 'object') {
+                  const inner: Record<string, number> = {};
+                  for (const [vKey, vVal] of Object.entries(vObj)) {
+                    const num = Number(vVal);
+                    if (!isNaN(num)) inner[vKey] = num;
+                  }
+                  if (Object.keys(inner).length > 0) res[pId] = inner;
+                }
+              }
+              return Object.keys(res).length > 0 ? res : undefined;
+            }
             return undefined;
           })(),
           createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),

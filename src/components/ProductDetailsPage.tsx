@@ -36,15 +36,46 @@ export default function ProductDetailsPage({ product, onClose, onEdit, editLabel
   const retailPrice = product.originalPrice || product.basePrice * 1.8;
   const savingsPercent = Math.round(((retailPrice - product.basePrice) / retailPrice) * 100);
 
-  // Carousel Image Logic (max 5 images)
+  // Carousel Image Logic (max 8 images including color variants)
   const allImages = React.useMemo(() => {
-    if (product.imageUrls && product.imageUrls.length > 0) {
-      return product.imageUrls.filter(Boolean).slice(0, 5);
+    const base = product.imageUrls && product.imageUrls.length > 0
+      ? product.imageUrls.filter(Boolean)
+      : (product.imageUrl ? [product.imageUrl] : []);
+    const colorImgs = product.colorImages ? Object.values(product.colorImages).filter(Boolean) : [];
+    return Array.from(new Set([...base, ...colorImgs])).slice(0, 8);
+  }, [product.imageUrl, product.imageUrls, product.colorImages]);
+
+  const availableColors = React.useMemo(() => {
+    if (product.colorOptions && product.colorOptions.length > 0) {
+      return product.colorOptions;
     }
-    return product.imageUrl ? [product.imageUrl] : [];
-  }, [product.imageUrl, product.imageUrls]);
+    if ((product as any).colors && (product as any).colors.length > 0) {
+      return (product as any).colors.map((c: any) => typeof c === 'string' ? c : c.name);
+    }
+    return [];
+  }, [product.colorOptions, (product as any).colors]);
+
+  const [selectedColor, setSelectedColor] = React.useState<string | undefined>(
+    availableColors.length > 0 ? availableColors[0] : undefined
+  );
 
   const [currentImageIdx, setCurrentImageIdx] = React.useState(0);
+
+  const handleSelectColor = (col: string) => {
+    setSelectedColor(col);
+    if (product.colorImages) {
+      const keys = Object.keys(product.colorImages);
+      const matchedKey = keys.find(k => k.toLowerCase().trim() === col.toLowerCase().trim());
+      if (matchedKey && product.colorImages[matchedKey]) {
+        const linkedUrl = product.colorImages[matchedKey];
+        const foundIdx = allImages.findIndex(img => img === linkedUrl);
+        if (foundIdx !== -1) {
+          setCurrentImageIdx(foundIdx);
+        }
+      }
+    }
+  };
+
   const activeImg = allImages[currentImageIdx] || product.imageUrl;
 
   return createPortal(
@@ -281,7 +312,7 @@ export default function ProductDetailsPage({ product, onClose, onEdit, editLabel
             )}
 
             {/* Colors Section */}
-            {product.colorOptions && product.colorOptions.length > 0 && (
+            {availableColors.length > 0 && (
               <div className="space-y-3 pt-4 border-t border-gray-100">
                 <div className="flex justify-between items-center">
                   <h3 className="text-[10px] uppercase font-mono tracking-widest text-black font-extrabold flex items-center gap-1.5">
@@ -291,23 +322,42 @@ export default function ProductDetailsPage({ product, onClose, onEdit, editLabel
                   <span className="text-[9px] text-gray-400 font-mono">Matched to brand standard</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {product.colorOptions.map((col) => {
+                  {availableColors.map((col) => {
                     const colorHex = getColorHex(col);
                     const isWhite = colorHex === '#ffffff' || colorHex === '#f5f5f4';
+                    const isSelected = selectedColor === col;
+                    const matchedKey = product.colorImages ? Object.keys(product.colorImages).find(k => k.toLowerCase().trim() === col.toLowerCase().trim()) : undefined;
+                    const hasLinkedImg = matchedKey ? !!product.colorImages?.[matchedKey] : false;
+
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={col}
-                        className="flex items-center space-x-3 p-2.5 rounded-xl border border-gray-100 bg-gray-50/50"
+                        onClick={() => handleSelectColor(col)}
+                        className={`flex items-center justify-between p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-black bg-black text-white shadow-sm ring-2 ring-black/20'
+                            : 'border-gray-200 bg-white hover:border-gray-400 text-gray-800'
+                        }`}
                       >
-                        <span
-                          className={`w-6 h-6 rounded-full block border shadow-xs`}
-                          style={{
-                            backgroundColor: colorHex,
-                            borderColor: isWhite ? '#d4d4d4' : colorHex
-                          }}
-                        />
-                        <span className="text-xs font-bold text-gray-800 uppercase tracking-tight">{col}</span>
-                      </div>
+                        <div className="flex items-center space-x-3">
+                          <span
+                            className={`w-6 h-6 rounded-full block border shadow-xs shrink-0`}
+                            style={{
+                              backgroundColor: colorHex,
+                              borderColor: isWhite ? '#d4d4d4' : colorHex
+                            }}
+                          />
+                          <span className={`text-xs font-bold uppercase tracking-tight ${isSelected ? 'text-white' : 'text-gray-800'}`}>
+                            {col}
+                          </span>
+                        </div>
+                        {hasLinkedImg && (
+                          <span className={`text-[9px] font-mono px-2 py-0.5 rounded ${isSelected ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                            Photo
+                          </span>
+                        )}
+                      </button>
                     );
                   })}
                 </div>

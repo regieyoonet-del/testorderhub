@@ -127,6 +127,10 @@ export default function AdminProductCatalog({
   const [formSpecifications, setFormSpecifications] = useState('');
   const [formBranding, setFormBranding] = useState<string[]>([]);
   const [formColors, setFormColors] = useState<ColorOption[]>([]);
+  const [formSizes, setFormSizes] = useState<string[]>([]);
+  const [newSizeInput, setNewSizeInput] = useState('');
+  const [formVariantPrices, setFormVariantPrices] = useState<Record<string, number>>({});
+  const [formColorImages, setFormColorImages] = useState<Record<string, string>>({});
 
   // Color Builder Temp Input
   const [newColorName, setNewColorName] = useState('');
@@ -165,6 +169,9 @@ export default function AdminProductCatalog({
     setFormSpecifications('');
     setFormBranding(['Laser Engraving', 'Screen Printing']);
     setFormColors([PRESET_COLORS[0], PRESET_COLORS[1]]);
+    setFormSizes([]);
+    setFormVariantPrices({});
+    setFormColorImages({});
     setShowProductModal(true);
   };
 
@@ -188,6 +195,9 @@ export default function AdminProductCatalog({
     setFormSpecifications(`Branding: ${enquiry.preferredBrandingMethod || 'Standard'}\nColour: ${enquiry.preferredColor || 'As Sample'}`);
     setFormBranding(enquiry.preferredBrandingMethod ? [enquiry.preferredBrandingMethod] : ['Laser Engraving', 'Screen Printing']);
     setFormColors([PRESET_COLORS[0], PRESET_COLORS[1]]);
+    setFormSizes([]);
+    setFormVariantPrices({});
+    setFormColorImages({});
     setShowProductModal(true);
   };
 
@@ -212,6 +222,9 @@ export default function AdminProductCatalog({
     setFormSpecifications(p.specifications || '');
     setFormBranding(p.brandingMethods || []);
     setFormColors(p.colors || []);
+    setFormSizes(p.sizes || []);
+    setFormVariantPrices(p.variantPrices || {});
+    setFormColorImages(p.colorImages || {});
     setShowProductModal(true);
   };
 
@@ -239,6 +252,9 @@ export default function AdminProductCatalog({
       moq: Math.max(1, formMoq),
       brandingMethods: formBranding,
       colors: formColors,
+      sizes: formSizes,
+      variantPrices: formVariantPrices,
+      colorImages: formColorImages,
       status: formStatus,
       createdAt: editingProduct?.createdAt || new Date().toISOString()
     };
@@ -257,7 +273,10 @@ export default function AdminProductCatalog({
         minQuantity: Math.max(1, formMoq),
         unit: 'pcs',
         leadTime: '7-10 Business Days',
+        sizeOptions: formSizes,
+        variantPrices: formVariantPrices,
         colorOptions: formColors.map(c => c.name),
+        colorImages: formColorImages,
         imageUrls: imageUrlsAll,
         frequentlyOrdered: true
       };
@@ -318,7 +337,30 @@ export default function AdminProductCatalog({
 
   // Remove color option
   const handleRemoveColorOption = (index: number) => {
+    const colToRemove = formColors[index];
     setFormColors(formColors.filter((_, i) => i !== index));
+    if (colToRemove) {
+      const updatedColorImgs = { ...formColorImages };
+      delete updatedColorImgs[colToRemove.name];
+      setFormColorImages(updatedColorImgs);
+    }
+  };
+
+  // Size options helpers
+  const handleAddSizeOption = () => {
+    if (!newSizeInput.trim()) return;
+    const sz = newSizeInput.trim().toUpperCase();
+    if (!formSizes.includes(sz)) {
+      setFormSizes([...formSizes, sz]);
+    }
+    setNewSizeInput('');
+  };
+
+  const handleRemoveSizeOption = (szToRemove: string) => {
+    setFormSizes(formSizes.filter(s => s !== szToRemove));
+    const updatedPrices = { ...formVariantPrices };
+    delete updatedPrices[szToRemove];
+    setFormVariantPrices(updatedPrices);
   };
 
   // Filtered Products
@@ -1146,27 +1188,98 @@ export default function AdminProductCatalog({
                   </div>
                 </div>
 
-                {/* Colours Manager */}
+                {/* Size Variants & Pricing Manager */}
                 <div className="border-t border-gray-200 pt-4 space-y-3">
-                  <label className="block text-xs font-mono font-bold uppercase text-black">
-                    Available Colours ({formColors.length})
-                  </label>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <label className="block text-xs font-mono font-bold uppercase text-black">
+                        Size Variants & Specific Pricing ({formSizes.length})
+                      </label>
+                      <span className="block text-[10px] text-gray-400 font-mono">
+                        Add size options (e.g. S, M, L, XL, 2XL) and set custom unit price per size if applicable
+                      </span>
+                    </div>
+                  </div>
 
-                  {/* Color Swatches Grid */}
-                  <div className="flex flex-wrap gap-2">
-                    {formColors.map((col, idx) => (
-                      <div key={idx} className="flex items-center space-x-1.5 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1 text-xs font-mono">
-                        <span className="w-3.5 h-3.5 rounded-full border border-gray-300" style={{ backgroundColor: col.hex }} />
-                        <span>{col.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveColorOption(idx)}
-                          className="text-gray-400 hover:text-red-600 font-bold ml-1 cursor-pointer"
-                        >
-                          ×
-                        </button>
+                  <div className="flex items-center space-x-2 bg-gray-50 p-3 border border-gray-200 rounded-2xl">
+                    <input
+                      type="text"
+                      placeholder="Size (e.g. XL, 2XL, 100cm x 150cm)"
+                      value={newSizeInput}
+                      onChange={(e) => setNewSizeInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddSizeOption();
+                        }
+                      }}
+                      className="p-2 border border-gray-200 rounded-xl text-xs font-mono uppercase font-bold focus:border-black focus:outline-none flex-1 bg-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddSizeOption}
+                      className="bg-black text-white px-3.5 py-2 text-xs font-bold uppercase tracking-wider hover:bg-gray-800 cursor-pointer rounded-xl"
+                    >
+                      Add Size
+                    </button>
+                  </div>
+
+                  {/* Active Sizes List & Pricing Inputs */}
+                  {formSizes.length > 0 && (
+                    <div className="space-y-2 pt-1">
+                      <span className="block text-[10px] uppercase font-mono font-bold text-gray-500">
+                        Unit Price per Size Variant (Leave blank or 0 if standard base price):
+                      </span>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                        {formSizes.map((sz) => {
+                          const currentPrice = formVariantPrices[sz] !== undefined ? formVariantPrices[sz] : '';
+                          return (
+                            <div key={sz} className="bg-white border border-gray-200 rounded-xl p-2.5 space-y-1 shadow-2xs">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[11px] font-mono font-black text-black uppercase">{sz}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveSizeOption(sz)}
+                                  className="text-gray-400 hover:text-red-600 font-bold text-xs cursor-pointer"
+                                  title="Remove size"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                              <div className="flex items-center gap-1 bg-gray-50 p-1.5 rounded-lg border border-gray-100">
+                                <span className="text-[10px] font-mono text-gray-400 font-bold">{currencySymbol}</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="Price..."
+                                  value={currentPrice}
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value);
+                                    setFormVariantPrices(prev => ({
+                                      ...prev,
+                                      [sz]: isNaN(val) ? 0 : val
+                                    }));
+                                  }}
+                                  className="w-full text-xs font-mono font-bold text-black focus:outline-none bg-transparent"
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Colours & Color-Linked Images Manager */}
+                <div className="border-t border-gray-200 pt-4 space-y-3">
+                  <div>
+                    <label className="block text-xs font-mono font-bold uppercase text-black">
+                      Available Colours & Linked Image ({formColors.length})
+                    </label>
+                    <span className="block text-[10px] text-gray-400 font-mono">
+                      Link specific uploaded photo to each color variant for dynamic switching
+                    </span>
                   </div>
 
                   {/* Add Colour Inputs */}
@@ -1176,6 +1289,12 @@ export default function AdminProductCatalog({
                       placeholder="Colour Name (e.g. Navy Blue)"
                       value={newColorName}
                       onChange={(e) => setNewColorName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddColorOption();
+                        }
+                      }}
                       className="p-2 border border-gray-200 rounded-xl text-xs font-sans focus:border-black focus:outline-none flex-1 bg-white"
                     />
                     <input
@@ -1193,6 +1312,84 @@ export default function AdminProductCatalog({
                       Add Colour
                     </button>
                   </div>
+
+                  {/* Color Swatches Grid with Image Linker */}
+                  {formColors.length > 0 && (
+                    <div className="space-y-2 pt-1">
+                      {formColors.map((col, idx) => {
+                        const linkedImg = formColorImages[col.name] || '';
+                        const availableImages = Array.from(new Set([
+                          formImageUrl.trim(),
+                          ...formAdditionalImages.split('\n').map(s => s.trim())
+                        ].filter(Boolean)));
+
+                        return (
+                          <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-gray-50 border border-gray-200 rounded-2xl p-2.5 text-xs font-mono">
+                            <div className="flex items-center space-x-2 shrink-0">
+                              <span className="w-4 h-4 rounded-full border border-gray-300 shadow-2xs" style={{ backgroundColor: col.hex }} />
+                              <span className="font-bold text-black">{col.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveColorOption(idx)}
+                                className="text-gray-400 hover:text-red-600 font-bold text-sm ml-1 cursor-pointer"
+                                title="Remove color"
+                              >
+                                ×
+                              </button>
+                            </div>
+
+                            {/* Linked Image Selector */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-gray-400 font-bold uppercase font-mono shrink-0">Linked Image:</span>
+                              {availableImages.length > 0 ? (
+                                <select
+                                  value={linkedImg}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setFormColorImages(prev => ({
+                                      ...prev,
+                                      [col.name]: val
+                                    }));
+                                  }}
+                                  className="p-1.5 border border-gray-200 rounded-xl text-[11px] font-mono bg-white focus:outline-none focus:border-black max-w-[210px] truncate"
+                                >
+                                  <option value="">-- Main Default Image --</option>
+                                  {availableImages.map((img, i) => (
+                                    <option key={i} value={img}>
+                                      Image #{i + 1} ({img.substring(0, 24)}...)
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <input
+                                  type="url"
+                                  placeholder="Paste image URL..."
+                                  value={linkedImg}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setFormColorImages(prev => ({
+                                      ...prev,
+                                      [col.name]: val
+                                    }));
+                                  }}
+                                  className="p-1.5 border border-gray-200 rounded-xl text-[11px] font-mono bg-white focus:outline-none focus:border-black w-48"
+                                />
+                              )}
+
+                              {linkedImg && (
+                                <img
+                                  src={linkedImg}
+                                  alt={col.name}
+                                  className="w-7 h-7 rounded-lg object-cover border border-gray-300 shadow-2xs shrink-0"
+                                  referrerPolicy="no-referrer"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {/* Actions Footer */}

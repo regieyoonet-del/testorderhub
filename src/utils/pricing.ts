@@ -20,12 +20,23 @@ export function getProductUnitPrice(
   if (portal) {
     if (portal.customVariantPrices?.[product.id]) {
       const pVarPrices = portal.customVariantPrices[product.id];
-      if (comboKey && typeof pVarPrices[comboKey] === 'number') return pVarPrices[comboKey];
-      if (sizeKey && typeof pVarPrices[sizeKey] === 'number') return pVarPrices[sizeKey];
-      if (colorKey && typeof pVarPrices[colorKey] === 'number') return pVarPrices[colorKey];
+      const checkVal = (k?: string) => {
+        if (k && pVarPrices[k] !== undefined && pVarPrices[k] !== null && (pVarPrices[k] as any) !== '') {
+          const num = Number(pVarPrices[k]);
+          if (!isNaN(num)) return num;
+        }
+        return undefined;
+      };
+      const combo = checkVal(comboKey);
+      if (combo !== undefined) return combo;
+      const size = checkVal(sizeKey);
+      if (size !== undefined) return size;
+      const color = checkVal(colorKey);
+      if (color !== undefined) return color;
     }
-    if (portal.customPrices?.[product.id] !== undefined && typeof portal.customPrices[product.id] === 'number') {
-      return portal.customPrices[product.id];
+    if (portal.customPrices?.[product.id] !== undefined && portal.customPrices[product.id] !== null && (portal.customPrices[product.id] as any) !== '') {
+      const num = Number(portal.customPrices[product.id]);
+      if (!isNaN(num)) return num;
     }
   }
 
