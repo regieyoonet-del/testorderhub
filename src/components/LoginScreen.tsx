@@ -134,7 +134,7 @@ export default function LoginScreen({ companies, onLogin, systemSettings }: Logi
               className="w-full bg-black text-white py-3.5 rounded-xl text-xs uppercase font-extrabold tracking-widest border border-black hover:bg-white hover:text-black transition-all cursor-pointer shadow-md mt-6"
               id="login-submit-btn"
             >
-              Sign In to Catalog
+              Sign In
             </button>
           </form>
         </div>
