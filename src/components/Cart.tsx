@@ -321,7 +321,7 @@ export default function Cart({
                     {/* Contact Person */}
                     <div>
                       <label className="block text-[10px] uppercase tracking-wider text-black font-bold font-mono mb-1">
-                        Authorized Buyer Name:
+                        Name:
                       </label>
                       <input
                         type="text"
@@ -335,7 +335,7 @@ export default function Cart({
                     {/* Contact Email */}
                     <div>
                       <label className="block text-[10px] uppercase tracking-wider text-black font-bold font-mono mb-1">
-                        Confirmation &amp; Billing Email:
+                        Email:
                       </label>
                       <input
                         type="email"
@@ -363,7 +363,7 @@ export default function Cart({
                     {/* Delivery Notes */}
                     <div>
                       <label className="block text-[10px] uppercase tracking-wider text-black font-bold font-mono mb-1">
-                        Special Instructions or Pantone Code (Optional):
+                        Notes:
                       </label>
                       <textarea
                         value={notes}

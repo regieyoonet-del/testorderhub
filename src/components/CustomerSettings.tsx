@@ -233,7 +233,7 @@ export default function CustomerSettings({
             {/* Representative Name */}
             <div>
               <label className="block text-[10px] font-mono font-bold uppercase text-gray-600 mb-1">
-                Contact Person / Buyer Rep
+                Contact Person
               </label>
               <input
                 type="text"
@@ -248,7 +248,7 @@ export default function CustomerSettings({
             {/* Email */}
             <div>
               <label className="block text-[10px] font-mono font-bold uppercase text-gray-600 mb-1">
-                Contact Email *
+                Email *
               </label>
               <div className="relative flex items-center">
                 <Mail className="absolute left-3.5 w-4 h-4 text-gray-400" />
@@ -267,7 +267,7 @@ export default function CustomerSettings({
             {/* Phone */}
             <div>
               <label className="block text-[10px] font-mono font-bold uppercase text-gray-600 mb-1">
-                Contact Phone
+                Phone
               </label>
               <div className="relative flex items-center">
                 <Phone className="absolute left-3.5 w-4 h-4 text-gray-400" />
@@ -285,7 +285,7 @@ export default function CustomerSettings({
             {/* Company Logo URL */}
             <div className="sm:col-span-2">
               <label className="block text-[10px] font-mono font-bold uppercase text-gray-600 mb-1">
-                Company Logo Image URL (Optional)
+                Company Logo
               </label>
               <div className="flex gap-3 items-center">
                 <div className="relative flex-1">
@@ -310,7 +310,7 @@ export default function CustomerSettings({
             {/* Address */}
             <div className="sm:col-span-2">
               <label className="block text-[10px] font-mono font-bold uppercase text-gray-600 mb-1">
-                Default Address
+                Address
               </label>
               <div className="relative">
                 <textarea

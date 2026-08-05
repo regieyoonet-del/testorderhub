@@ -281,35 +281,41 @@ export default function ProductDetailsPage({ product, onClose, onEdit, editLabel
             </div>
 
             {/* Sizes Section */}
-            {product.sizeOptions && product.sizeOptions.length > 0 && (
-              <div className="space-y-3 pt-2 border-t border-gray-100">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-[10px] uppercase font-mono tracking-widest text-black font-extrabold flex items-center gap-1.5">
-                    <Layers className="w-4 h-4 text-gray-400" />
-                    Authorized Corporate Sizes
-                  </h3>
-                  <span className="text-[9px] text-gray-400 font-mono">Selectable on checkout</span>
+            {(() => {
+              const displaySizes = (product.sizeOptions && product.sizeOptions.length > 0)
+                ? product.sizeOptions
+                : ((product as any).sizes && (product as any).sizes.length > 0 ? (product as any).sizes : []);
+              if (displaySizes.length === 0) return null;
+              return (
+                <div className="space-y-3 pt-2 border-t border-gray-100">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-[10px] uppercase font-mono tracking-widest text-black font-extrabold flex items-center gap-1.5">
+                      <Layers className="w-4 h-4 text-gray-400" />
+                      Authorized Corporate Sizes
+                    </h3>
+                    <span className="text-[9px] text-gray-400 font-mono">Selectable on checkout</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {displaySizes.map((sz: string) => {
+                      const vPrice = product.variantPrices?.[sz];
+                      return (
+                        <div
+                          key={sz}
+                          className="px-3.5 py-2 border-2 border-black text-black bg-[#fcfcfc] text-xs font-mono font-black rounded-xl select-none flex items-center gap-1.5"
+                        >
+                          <span>{sz}</span>
+                          {vPrice !== undefined && (
+                            <span className="text-[10px] bg-black text-white px-1.5 py-0.5 rounded font-bold">
+                              Php {vPrice.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {product.sizeOptions.map((sz) => {
-                    const vPrice = product.variantPrices?.[sz];
-                    return (
-                      <div
-                        key={sz}
-                        className="px-3.5 py-2 border-2 border-black text-black bg-[#fcfcfc] text-xs font-mono font-black rounded-xl select-none flex items-center gap-1.5"
-                      >
-                        <span>{sz}</span>
-                        {vPrice !== undefined && (
-                          <span className="text-[10px] bg-black text-white px-1.5 py-0.5 rounded font-bold">
-                            Php {vPrice.toFixed(2)}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Colors Section */}
             {availableColors.length > 0 && (

@@ -602,7 +602,7 @@ export default function App() {
         }
         setIsResolvingPortal(false);
       }).catch(err => {
-        console.error('Error fetching portals and companies for share token:', err);
+        console.warn('Google Sheets portal resolution notice:', err);
         setIsResolvingPortal(false);
       });
     } else {
@@ -727,7 +727,7 @@ export default function App() {
           });
         }
 
-        // 2. Merge products from fetchedProducts and company customProducts
+        // 2. Merge master products from fetchedProducts (excluding company custom products)
         if (fetchedProducts !== null || fetchedCompanies !== null) {
           setProducts(prevProducts => {
             const map = new Map<string, Product>();
@@ -735,16 +735,8 @@ export default function App() {
             if (fetchedProducts) {
               fetchedProducts.forEach(p => map.set(p.id, p));
             }
-            if (fetchedCompanies) {
-              fetchedCompanies.forEach(c => {
-                if (Array.isArray(c.customProducts)) {
-                  c.customProducts.forEach(cp => {
-                    if (cp && cp.id) map.set(cp.id, cp);
-                  });
-                }
-              });
-            }
-            return Array.from(map.values());
+            const activeComps = fetchedCompanies || companies;
+            return sanitizeMasterProducts(Array.from(map.values()), activeComps);
           });
         }
 
@@ -831,7 +823,7 @@ export default function App() {
 
         setLastSyncedTime(new Date().toLocaleTimeString());
       } catch (err) {
-        console.error('Error syncing with Google Sheets:', err);
+        console.warn('Google Sheets sync notice:', err);
       } finally {
         setIsSyncingSheets(false);
         isSyncingRef.current = false;
@@ -893,7 +885,7 @@ export default function App() {
     const co = sanitizeCompany(newCo);
 
     if (co.enabledProductIds === undefined) {
-      co.enabledProductIds = products.map(p => p.id);
+      co.enabledProductIds = [];
     }
     setCompanies(prev => [...prev, co]);
     setSelectedCompanyId(co.id);
@@ -906,15 +898,6 @@ export default function App() {
           sheetsService.saveProduct(url, cp);
         });
       }
-    }
-
-    if (Array.isArray(co.customProducts) && co.customProducts.length > 0) {
-      setProducts(prev => {
-        const map = new Map<string, Product>();
-        prev.forEach(p => map.set(p.id, p));
-        co.customProducts!.forEach(cp => map.set(cp.id, cp));
-        return Array.from(map.values());
-      });
     }
   };
 
@@ -944,15 +927,6 @@ export default function App() {
           sheetsService.saveProduct(url, cp);
         });
       }
-    }
-
-    if (Array.isArray(sanitized.customProducts) && sanitized.customProducts.length > 0) {
-      setProducts(prev => {
-        const map = new Map<string, Product>();
-        prev.forEach(p => map.set(p.id, p));
-        sanitized.customProducts!.forEach(cp => map.set(cp.id, cp));
-        return Array.from(map.values());
-      });
     }
   };
 
@@ -1023,7 +997,7 @@ export default function App() {
       for (const oldOrd of orders) {
         const stillExists = newOrders.some(newOrd => newOrd.id === oldOrd.id);
         if (!stillExists) {
-          sheetsService.deleteOrder(url, oldOrd.id).catch(console.error);
+          sheetsService.deleteOrder(url, oldOrd.id).catch(err => console.warn('Delete order sync notice:', err));
         }
       }
 
@@ -1031,9 +1005,9 @@ export default function App() {
       for (const newOrd of newOrders) {
         const oldOrd = orders.find(o => o.id === newOrd.id);
         if (!oldOrd) {
-          sheetsService.saveOrder(url, newOrd).catch(console.error);
+          sheetsService.saveOrder(url, newOrd).catch(err => console.warn('Save order sync notice:', err));
         } else if (oldOrd.status !== newOrd.status) {
-          sheetsService.updateOrderStatus(url, newOrd.id, newOrd.status).catch(console.error);
+          sheetsService.updateOrderStatus(url, newOrd.id, newOrd.status).catch(err => console.warn('Update order status sync notice:', err));
         }
       }
     }
@@ -1083,7 +1057,7 @@ export default function App() {
           minQuantity: cp.moq || 1,
           unit: 'pcs',
           leadTime: cp.leadTime || '7-10 Business Days',
-          sizeOptions: cp.sizes,
+          sizeOptions: cp.sizes || (cp as any).sizeOptions || [],
           colorOptions: cp.colors?.map(c => typeof c === 'object' && c ? c.name : String(c)),
           imageUrls: cp.imageUrls,
           frequentlyOrdered: true
@@ -1120,7 +1094,7 @@ export default function App() {
       }
       return true;
     } catch (e) {
-      console.error('Force sync failed:', e);
+      console.warn('Force sync notice:', e);
       return false;
     }
   };
@@ -1587,19 +1561,30 @@ export default function App() {
 
     const productMap = new Map<string, Product>();
     const enabledIds = company.enabledProductIds;
-    const hasExplicitEnabledList = Array.isArray(enabledIds) && enabledIds.length > 0;
+    const hasExplicitEnabledList = Array.isArray(enabledIds);
+
+    // Collect custom product IDs belonging to ALL OTHER companies
+    const otherCompanyCustomIds = new Set<string>();
+    companies.forEach(c => {
+      if (c.id !== company.id && Array.isArray(c.customProducts)) {
+        c.customProducts.forEach(cp => {
+          if (cp && cp.id) otherCompanyCustomIds.add(cp.id);
+        });
+      }
+    });
 
     // First pass: add master products filtered by enabledProductIds if specified
     masterList.forEach(p => {
+      if (otherCompanyCustomIds.has(p.id)) return;
       if (!hasExplicitEnabledList || enabledIds!.includes(p.id)) {
         productMap.set(p.id, p);
       }
     });
 
-    // Second pass: add/override with company custom products
+    // Second pass: add/override with THIS company's custom products
     if (Array.isArray(company.customProducts) && company.customProducts.length > 0) {
       company.customProducts.forEach(cp => {
-        if (!hasExplicitEnabledList || enabledIds!.includes(cp.id) || company.customProducts?.some(c => c.id === cp.id)) {
+        if (cp && cp.id) {
           productMap.set(cp.id, cp);
         }
       });
@@ -1632,7 +1617,7 @@ export default function App() {
           minQuantity: cp.moq || 1,
           unit: 'pcs',
           leadTime: cp.leadTime || '7-10 Business Days',
-          sizeOptions: cp.sizes,
+          sizeOptions: cp.sizes || (cp as any).sizeOptions || [],
           colorOptions: cp.colors?.map(c => typeof c === 'object' && c ? c.name : String(c)),
           imageUrls: cp.imageUrls,
           frequentlyOrdered: true
@@ -1678,7 +1663,7 @@ export default function App() {
           minQuantity: cp.moq || cp.minQuantity || 1,
           unit: 'pcs',
           leadTime: cp.leadTime,
-          sizeOptions: cp.sizes,
+          sizeOptions: cp.sizes || (cp as any).sizeOptions || [],
           colorOptions: cp.colors?.map(c => typeof c === 'object' && c ? c.name : String(c)),
           imageUrls: cp.imageUrls,
           frequentlyOrdered: true
@@ -1730,15 +1715,42 @@ export default function App() {
 
   // If URL has ?portal=... parameter and we are currently loading/resolving
   if (urlPortalToken && isResolvingPortal) {
+    const tokenClean = urlPortalToken.trim().toLowerCase();
+    const matchedPortal = activePublicPortal || orderPortals.find(p =>
+      p.shareToken?.toLowerCase() === tokenClean ||
+      p.id?.toLowerCase() === tokenClean ||
+      p.companyId?.toLowerCase() === tokenClean
+    );
+
+    const matchedCompany = companies.find(c => c.id === matchedPortal?.companyId) ||
+      companies.find(c =>
+        c.id.toLowerCase() === tokenClean ||
+        c.username?.toLowerCase() === tokenClean ||
+        c.name?.toLowerCase() === tokenClean ||
+        tokenClean.includes(c.id.toLowerCase()) ||
+        tokenClean.includes((c.username || '').toLowerCase())
+      );
+
+    const logo = matchedCompany?.logoUrl || systemSettings.logoUrl;
+    const name = matchedCompany?.name || matchedPortal?.companyName || '';
+
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6 font-sans">
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 font-sans">
         <style dangerouslySetInnerHTML={{ __html: getThemeStyles(systemSettings.colorTheme || 'classic_noir') }} />
-        <div className="bg-white border border-gray-200 rounded-3xl p-8 max-w-md w-full text-center shadow-xl space-y-4 animate-fade-in">
-          <div className="w-12 h-12 rounded-2xl bg-black text-white flex items-center justify-center mx-auto animate-pulse">
-            <Store className="w-6 h-6" />
-          </div>
-          <h2 className="text-lg font-black text-black uppercase tracking-tight">Loading Company Storefront...</h2>
-          <p className="text-xs text-gray-500 font-mono">Retrieving custom product listings and access rights.</p>
+        <div className="flex flex-col items-center justify-center space-y-6 animate-fade-in">
+          {logo ? (
+            <img
+              src={logo}
+              alt={name || 'Company Logo'}
+              className="max-h-20 max-w-[240px] object-contain animate-pulse"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-2xl bg-black text-white font-black text-2xl flex items-center justify-center uppercase shadow-md animate-pulse">
+              {name ? name.slice(0, 2) : 'CO'}
+            </div>
+          )}
+          <div className="w-5 h-5 border-2 border-black/15 border-t-black rounded-full animate-spin" />
         </div>
       </div>
     );

@@ -157,7 +157,7 @@ export const sheetsService = {
       // With no-cors, the response status is 0, which is normal and indicates success in sending the payload.
       return true;
     } catch (error) {
-      console.error('Error saving order to Google Sheets:', error);
+      console.warn('Google Sheets sync notice (saveOrder):', error);
       return false;
     }
   },
@@ -236,7 +236,7 @@ export const sheetsService = {
     }
       return null;
     } catch (error) {
-      console.error('Error fetching orders from Google Sheets:', error);
+      console.warn('Google Sheets sync notice (fetchOrders):', error);
       return null;
     }
   },
@@ -256,7 +256,7 @@ export const sheetsService = {
       });
       return true;
     } catch (error) {
-      console.error('Error saving product to Google Sheets:', error);
+      console.warn('Google Sheets sync notice (saveProduct):', error);
       return false;
     }
   },
@@ -276,7 +276,7 @@ export const sheetsService = {
       });
       return true;
     } catch (error) {
-      console.error('Error deleting product from Google Sheets:', error);
+      console.warn('Google Sheets sync notice (deleteProduct):', error);
       return false;
     }
   },
@@ -296,7 +296,7 @@ export const sheetsService = {
       });
       return true;
     } catch (error) {
-      console.error('Error saving company to Google Sheets:', error);
+      console.warn('Google Sheets sync notice (saveCompany):', error);
       return false;
     }
   },
@@ -316,7 +316,7 @@ export const sheetsService = {
       });
       return true;
     } catch (error) {
-      console.error('Error deleting company from Google Sheets:', error);
+      console.warn('Google Sheets sync notice (deleteCompany):', error);
       return false;
     }
   },
@@ -336,7 +336,7 @@ export const sheetsService = {
       });
       return true;
     } catch (error) {
-      console.error('Error updating order status in Google Sheets:', error);
+      console.warn('Google Sheets sync notice (updateOrderStatus):', error);
       return false;
     }
   },
@@ -356,7 +356,7 @@ export const sheetsService = {
       });
       return true;
     } catch (error) {
-      console.error('Error deleting order from Google Sheets:', error);
+      console.warn('Google Sheets sync notice (deleteOrder):', error);
       return false;
     }
   },
@@ -423,7 +423,7 @@ export const sheetsService = {
       }
       return null;
     } catch (error) {
-      console.error('Error fetching products from Google Sheets:', error);
+      console.warn('Google Sheets sync notice (fetchProducts):', error);
       return null;
     }
   },
@@ -475,7 +475,7 @@ export const sheetsService = {
       }
       return null;
     } catch (error) {
-      console.error('Error fetching companies from Google Sheets:', error);
+      console.warn('Google Sheets sync notice (fetchCompanies):', error);
       return null;
     }
   },
@@ -512,7 +512,7 @@ export const sheetsService = {
       }
       return null;
     } catch (error) {
-      console.error('Error fetching admin settings from Google Sheets:', error);
+      console.warn('Google Sheets sync notice (fetchAdminSettings):', error);
       return null;
     }
   },
@@ -537,7 +537,7 @@ export const sheetsService = {
       });
       return true;
     } catch (error) {
-      console.error('Error saving admin settings to Google Sheets:', error);
+      console.warn('Google Sheets sync notice (saveAdminSettings):', error);
       return false;
     }
   },
@@ -557,7 +557,7 @@ export const sheetsService = {
       });
       return true;
     } catch (error) {
-      console.error('Error saving catalog product to Google Sheets:', error);
+      console.warn('Google Sheets sync notice (saveCatalogProduct):', error);
       return false;
     }
   },
@@ -577,7 +577,7 @@ export const sheetsService = {
       });
       return true;
     } catch (error) {
-      console.error('Error deleting catalog product from Google Sheets:', error);
+      console.warn('Google Sheets sync notice (deleteCatalogProduct):', error);
       return false;
     }
   },
@@ -684,7 +684,7 @@ export const sheetsService = {
       }
       return null;
     } catch (error) {
-      console.error('Error fetching catalog products from Google Sheets:', error);
+      console.warn('Google Sheets sync notice (fetchCatalogProducts):', error);
       return null;
     }
   },
@@ -704,7 +704,7 @@ export const sheetsService = {
       });
       return true;
     } catch (error) {
-      console.error('Error saving quote enquiry to Google Sheets:', error);
+      console.warn('Google Sheets sync notice (saveQuoteEnquiry):', error);
       return false;
     }
   },
@@ -737,6 +737,7 @@ export const sheetsService = {
           quantity: Number(getProp(item, ['Quantity', 'quantity', 'Qty']) || 1),
           preferredBrandingMethod: String(getProp(item, ['PreferredBrandingMethod', 'preferredBrandingMethod', 'Preferred Branding Method', 'Branding Method', 'Branding']) || ''),
           preferredColor: String(getProp(item, ['PreferredColor', 'preferredColor', 'Preferred Color', 'Color', 'Colour']) || ''),
+          preferredSize: String(getProp(item, ['PreferredSize', 'preferredSize', 'Preferred Size', 'Size', 'Variant']) || ''),
           notes: String(getProp(item, ['Notes', 'notes', 'Customization Notes', 'CustomizationNotes', 'Remark', 'Remarks', 'Comments', 'Comment', 'Project Notes', 'Note']) || ''),
           status: (getProp(item, ['Status', 'status']) || 'New') as any,
           createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At', 'Date']) || new Date().toISOString()),
@@ -766,7 +767,7 @@ export const sheetsService = {
       }
       return null;
     } catch (error) {
-      console.error('Error fetching quote enquiries from Google Sheets:', error);
+      console.warn('Google Sheets sync notice (fetchQuoteEnquiries):', error);
       return null;
     }
   },
@@ -786,7 +787,7 @@ export const sheetsService = {
       });
       return true;
     } catch (error) {
-      console.error('Error deleting quote enquiry from Google Sheets:', error);
+      console.warn('Google Sheets sync notice (deleteQuoteEnquiry):', error);
       return false;
     }
   },
@@ -806,7 +807,7 @@ export const sheetsService = {
       });
       return true;
     } catch (error) {
-      console.error('Error updating quote status in Google Sheets:', error);
+      console.warn('Google Sheets sync notice (updateQuoteEnquiryStatus):', error);
       return false;
     }
   },
@@ -899,7 +900,7 @@ export const sheetsService = {
       }
       return null;
     } catch (error) {
-      console.error('Error fetching portals from Google Sheets:', error);
+      console.warn('Google Sheets sync notice (fetchPortals):', error);
       return null;
     }
   },
@@ -919,7 +920,7 @@ export const sheetsService = {
       });
       return true;
     } catch (error) {
-      console.error('Error saving portal to Google Sheets:', error);
+      console.warn('Google Sheets sync notice (savePortal):', error);
       return false;
     }
   },
@@ -939,7 +940,7 @@ export const sheetsService = {
       });
       return true;
     } catch (error) {
-      console.error('Error deleting portal from Google Sheets:', error);
+      console.warn('Google Sheets sync notice (deletePortal):', error);
       return false;
     }
   }

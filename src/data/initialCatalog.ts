@@ -35,10 +35,22 @@ export function sanitizeCatalogProduct(p: CatalogProduct): CatalogProduct {
     ];
   }
 
+  let sizes = (p.sizes && p.sizes.length > 0)
+    ? p.sizes
+    : (p.sizeOptions && p.sizeOptions.length > 0
+        ? p.sizeOptions
+        : (initMatch?.sizes && initMatch.sizes.length > 0
+            ? [...initMatch.sizes]
+            : (initMatch?.sizeOptions && initMatch.sizeOptions.length > 0
+                ? [...initMatch.sizeOptions]
+                : [])));
+
   return {
     ...p,
     brandingMethods,
     colors,
+    sizes,
+    sizeOptions: sizes,
     colorImages: p.colorImages || initMatch?.colorImages || {},
     variantPrices: p.variantPrices || initMatch?.variantPrices || {},
     moq: p.moq || initMatch?.moq || 50,

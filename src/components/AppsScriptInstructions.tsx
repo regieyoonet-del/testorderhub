@@ -226,7 +226,7 @@ function initSheets(ss) {
     "Companies": ["Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Delivery Address", "Username", "Passcode", "PO Required", "Logo URL", "Approved Products", "Custom Products"],
     "Portals": ["Portal ID", "Company ID", "Company Name", "Portal Name", "Description", "Status", "Product IDs", "Portal Pricing", "Variant Pricing", "Created At", "Updated At", "Share Token"],
     "Admin": ["Hub Name", "Short Hub Name", "Order Prefix", "Currency Symbol", "Admin Username", "Admin Passcode", "Color Theme", "Admin Email", "App Logo URL"],
-    "Quotes": ["Enquiry ID", "Enquiry Number", "Product ID", "Product Name", "Product Category", "Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Quantity", "Preferred Branding Method", "Preferred Color", "Notes", "Status", "Created At", "Quoted Unit Price", "Quoted Total Price", "Quoted Tax", "Quoted Shipping", "Quote Notes", "Quoted Valid Until", "Quoted At", "Quoted Line Items", "Requested Product Addition", "Requested Product Addition At", "Requested Product Notes"]
+    "Quotes": ["Enquiry ID", "Enquiry Number", "Product ID", "Product Name", "Product Category", "Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Quantity", "Preferred Branding Method", "Preferred Color", "Preferred Size", "Notes", "Status", "Created At", "Quoted Unit Price", "Quoted Total Price", "Quoted Tax", "Quoted Shipping", "Quote Notes", "Quoted Valid Until", "Quoted At", "Quoted Line Items", "Requested Product Addition", "Requested Product Addition At", "Requested Product Notes"]
   };
   
   for (var i = 0; i < sheets.length; i++) {
@@ -772,7 +772,7 @@ function saveCatalogProduct(ss, product) {
 
 function saveQuoteEnquiry(ss, enquiry) {
   var sheet = ss.getSheetByName("Quotes");
-  var expectedHeaders = ["Enquiry ID", "Enquiry Number", "Product ID", "Product Name", "Product Category", "Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Quantity", "Preferred Branding Method", "Preferred Color", "Notes", "Status", "Created At", "Quoted Unit Price", "Quoted Total Price", "Quoted Tax", "Quoted Shipping", "Quote Notes", "Quoted Valid Until", "Quoted At", "Quoted Line Items", "Requested Product Addition", "Requested Product Addition At", "Requested Product Notes"];
+  var expectedHeaders = ["Enquiry ID", "Enquiry Number", "Product ID", "Product Name", "Product Category", "Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Quantity", "Preferred Branding Method", "Preferred Color", "Preferred Size", "Notes", "Status", "Created At", "Quoted Unit Price", "Quoted Total Price", "Quoted Tax", "Quoted Shipping", "Quote Notes", "Quoted Valid Until", "Quoted At", "Quoted Line Items", "Requested Product Addition", "Requested Product Addition At", "Requested Product Notes"];
   var data = ensureHeaders(sheet, expectedHeaders);
   var headers = data[0];
   
@@ -809,6 +809,7 @@ function saveQuoteEnquiry(ss, enquiry) {
     "Quantity": enquiry.quantity || 1,
     "Preferred Branding Method": enquiry.preferredBrandingMethod || "",
     "Preferred Color": enquiry.preferredColor || "",
+    "Preferred Size": enquiry.preferredSize || "",
     "Notes": enquiry.notes || "",
     "Status": enquiry.status || "New",
     "Created At": enquiry.createdAt || new Date().toISOString(),
@@ -1093,11 +1094,11 @@ function getJsonOutput(obj) {
               </div>
             </div>
 
-            {/* Sheet 5: AdminSettings */}
+            {/* Sheet 6: AdminSettings */}
             <div className="border border-gray-200 bg-gray-50 p-3 space-y-2 rounded-xl">
               <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
                 <span className="font-mono text-[11px] font-bold text-black bg-white px-2 py-0.5 border border-black rounded-md">
-                  ⚙️ Tab 5: Admin
+                  ⚙️ Tab 6: Admin
                 </span>
                 <span className="text-[10px] text-gray-400 font-mono">Global Admin portal configurations</span>
               </div>
@@ -1105,6 +1106,26 @@ function getJsonOutput(obj) {
                 <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
                 <div className="flex flex-wrap gap-1">
                   {["Hub Name", "Short Hub Name", "Order Prefix", "Currency Symbol", "Admin Username", "Admin Passcode", "Color Theme"].map(col => (
+                    <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
+                      {col}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sheet 7: Quotes */}
+            <div className="border border-gray-200 bg-gray-50 p-3 space-y-2 rounded-xl">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                <span className="font-mono text-[11px] font-bold text-black bg-white px-2 py-0.5 border border-black rounded-md">
+                  📄 Tab 7: Quotes
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono">Quote enquiry requests and quotations</span>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
+                <div className="flex flex-wrap gap-1">
+                  {["Enquiry ID", "Enquiry Number", "Product ID", "Product Name", "Product Category", "Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Quantity", "Preferred Branding Method", "Preferred Color", "Preferred Size", "Notes", "Status", "Created At"].map(col => (
                     <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
                       {col}
                     </span>

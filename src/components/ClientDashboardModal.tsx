@@ -324,7 +324,7 @@ export default function ClientDashboardModal({
       // Enable this product for the current company
       const currentList = company.enabledProductIds
         ? [...company.enabledProductIds, newProd.id]
-        : [...masterProducts.map(p => p.id), newProd.id];
+        : [newProd.id];
 
       updatedCompany.enabledProductIds = currentList;
     }
@@ -420,10 +420,10 @@ export default function ClientDashboardModal({
       }
     });
 
-    // Second pass: company custom products
+    // Second pass: company custom products belonging strictly to THIS company
     if (company.customProducts && company.customProducts.length > 0) {
       company.customProducts.forEach(cp => {
-        if (!hasExplicitEnabledList || enabledIds.includes(cp.id) || company.customProducts?.some(c => c.id === cp.id)) {
+        if (cp && cp.id) {
           productMap.set(cp.id, cp);
         }
       });
@@ -478,7 +478,7 @@ export default function ClientDashboardModal({
 
   // Toggle single allocation directly within the dashboard
   const handleToggleAllocation = (productId: string) => {
-    let currentList = company.enabledProductIds || masterProducts.map(p => p.id);
+    let currentList = company.enabledProductIds || [];
     if (currentList.includes(productId)) {
       currentList = currentList.filter(id => id !== productId);
     } else {
@@ -645,7 +645,7 @@ export default function ClientDashboardModal({
                     <div className="flex items-start gap-2.5">
                       <Mail className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
                       <div>
-                        <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-mono font-bold">Buyer Contact Email</span>
+                        <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-mono font-bold">Email</span>
                         <a href={`mailto:${company.contactEmail}`} className="font-bold text-black underline hover:text-gray-700 font-mono">
                           {company.contactEmail}
                         </a>
@@ -655,7 +655,7 @@ export default function ClientDashboardModal({
                     <div className="flex items-start gap-2.5">
                       <Phone className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
                       <div>
-                        <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-mono font-bold">Office Hotline</span>
+                        <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-mono font-bold">Phone</span>
                         <span className="font-bold text-black font-mono">{company.contactPhone}</span>
                       </div>
                     </div>
@@ -663,7 +663,7 @@ export default function ClientDashboardModal({
                     <div className="flex items-start gap-2.5">
                       <MapPin className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
                       <div>
-                        <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-mono font-bold">Standard Address</span>
+                        <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-mono font-bold">Address</span>
                         <p className="font-semibold text-black leading-snug">{company.deliveryAddress}</p>
                       </div>
                     </div>
@@ -1513,6 +1513,24 @@ export default function ClientDashboardModal({
                                   <span>Delivery: <strong className="text-black">{p.shippingFee && p.shippingFee > 0 ? `Php ${p.shippingFee.toFixed(2)}` : 'Free Delivery'}</strong></span>
                                 </div>
                               </div>
+
+                              {/* Size Variants Badges */}
+                              {(() => {
+                                const sizeArr = (p.sizeOptions && p.sizeOptions.length > 0)
+                                  ? p.sizeOptions
+                                  : ((p as any).sizes && (p as any).sizes.length > 0 ? (p as any).sizes : []);
+                                if (sizeArr.length === 0) return null;
+                                return (
+                                  <div className="flex flex-wrap items-center gap-1 text-[9px] font-mono pt-1">
+                                    <span className="text-gray-400 uppercase font-bold mr-1">Sizes:</span>
+                                    {sizeArr.map((sz: string, idx: number) => (
+                                      <span key={idx} className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded-md font-bold text-gray-800">
+                                        {sz}
+                                      </span>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
                             </div>
 
                             {/* Admin Specs & Allocation Toolbar */}
@@ -1590,6 +1608,24 @@ export default function ClientDashboardModal({
                               <p className="text-[10px] text-gray-500 font-mono mt-0.5">
                                 Price: <span className="font-bold text-black">Php {p.basePrice.toFixed(2)}</span> / MOQ: {p.minQuantity} {p.unit}
                               </p>
+
+                              {/* Size Variants in Compact View */}
+                              {(() => {
+                                const sizeArr = (p.sizeOptions && p.sizeOptions.length > 0)
+                                  ? p.sizeOptions
+                                  : ((p as any).sizes && (p as any).sizes.length > 0 ? (p as any).sizes : []);
+                                if (sizeArr.length === 0) return null;
+                                return (
+                                  <div className="flex flex-wrap items-center gap-1 text-[8px] font-mono mt-1">
+                                    <span className="text-gray-400 font-bold">Sizes:</span>
+                                    {sizeArr.map((sz: string, idx: number) => (
+                                      <span key={idx} className="px-1 bg-gray-100 border border-gray-200 rounded font-bold text-gray-700">
+                                        {sz}
+                                      </span>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
 

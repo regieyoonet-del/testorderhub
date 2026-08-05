@@ -192,10 +192,10 @@ export default function AdminProductCatalog({
     setFormImageUrl('');
     setFormAdditionalImages('');
     setFormDescription(enquiry.notes ? `Quoted for ${enquiry.companyName}. Notes: ${enquiry.notes}` : `Quoted product for ${enquiry.companyName}`);
-    setFormSpecifications(`Branding: ${enquiry.preferredBrandingMethod || 'Standard'}\nColour: ${enquiry.preferredColor || 'As Sample'}`);
+    setFormSpecifications(`Branding: ${enquiry.preferredBrandingMethod || 'Standard'}\nColour: ${enquiry.preferredColor || 'As Sample'}${enquiry.preferredSize ? `\nSize: ${enquiry.preferredSize}` : ''}`);
     setFormBranding(enquiry.preferredBrandingMethod ? [enquiry.preferredBrandingMethod] : ['Laser Engraving', 'Screen Printing']);
     setFormColors([PRESET_COLORS[0], PRESET_COLORS[1]]);
-    setFormSizes([]);
+    setFormSizes(enquiry.preferredSize ? [enquiry.preferredSize] : []);
     setFormVariantPrices({});
     setFormColorImages({});
     setShowProductModal(true);
@@ -525,6 +525,7 @@ export default function AdminProductCatalog({
                     <th className="p-3">MOQ</th>
                     <th className="p-3">Branding Methods</th>
                     <th className="p-3">Colours</th>
+                    <th className="p-3">Sizes</th>
                     <th className="p-3 text-center">Status</th>
                     <th className="p-3 text-right">Actions</th>
                   </tr>
@@ -608,6 +609,24 @@ export default function AdminProductCatalog({
                                   +{cols.length - 5}
                                 </span>
                               )}
+                            </div>
+                          );
+                        })()}
+                      </td>
+
+                      {/* Sizes */}
+                      <td className="p-3">
+                        {(() => {
+                          const sanitizedP = sanitizeCatalogProduct(p);
+                          const szs = sanitizedP.sizes || (sanitizedP as any).sizeOptions || [];
+                          if (szs.length === 0) return <span className="text-[10px] text-gray-400 font-mono italic">None</span>;
+                          return (
+                            <div className="flex flex-wrap gap-1 items-center max-w-xs">
+                              {szs.map((sz: string, idx: number) => (
+                                <span key={idx} className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 text-gray-800 text-[9px] font-mono font-bold rounded">
+                                  {sz}
+                                </span>
+                              ))}
                             </div>
                           );
                         })()}
@@ -773,12 +792,9 @@ export default function AdminProductCatalog({
                       <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
                         <div><span className="text-gray-500">Quantity:</span> <span className="font-bold text-black">{enquiry.quantity} units</span></div>
                         <div><span className="text-gray-500">Category:</span> <span className="font-bold text-black">{enquiry.productCategory}</span></div>
-                        {enquiry.preferredBrandingMethod && (
-                          <div><span className="text-gray-500">Branding:</span> <span className="font-bold text-black">{enquiry.preferredBrandingMethod}</span></div>
-                        )}
-                        {enquiry.preferredColor && (
-                          <div><span className="text-gray-500">Colour:</span> <span className="font-bold text-black">{enquiry.preferredColor}</span></div>
-                        )}
+                        <div><span className="text-gray-500">Branding:</span> <span className="font-bold text-black">{enquiry.preferredBrandingMethod || 'Standard'}</span></div>
+                        <div><span className="text-gray-500">Colour:</span> <span className="font-bold text-black">{enquiry.preferredColor || 'As Sample'}</span></div>
+                        <div><span className="text-gray-500">Size / Variant:</span> <span className="font-bold text-black">{enquiry.preferredSize || 'Standard / One Size'}</span></div>
                       </div>
                       <div className="border-t border-gray-200 pt-2">
                         <span className="text-gray-500 font-mono text-[10px] font-bold uppercase block mb-0.5">Notes & Customization Instructions:</span>

@@ -166,7 +166,7 @@ export default function PublicOrderPortal({
   const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!shopperName.trim() || !shopperPhone.trim() || !shopperEmail.trim() || !deliveryDept.trim()) {
-      alert('Please fill out all required order details (Customer Name, Contact Number, Corporate Email, and Address).');
+      alert('Please fill out all required order details (Name, Contact Number, Email, and Address).');
       return;
     }
     if (cartItems.length === 0) {
@@ -977,12 +977,12 @@ export default function PublicOrderPortal({
 
             {/* Shopper Details Form */}
             <form onSubmit={handleCheckoutSubmit} className="space-y-4 pt-2 border-t border-gray-100">
-              <h4 className="text-xs font-mono font-bold uppercase text-gray-400">Shopper & Address Details</h4>
+              <h4 className="text-xs font-mono font-bold uppercase text-gray-400">Customer Details</h4>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="block text-[10px] uppercase font-mono font-bold text-gray-700">
-                    Customer Name <span className="text-red-500">*</span>
+                    Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -997,7 +997,7 @@ export default function PublicOrderPortal({
 
                 <div className="space-y-1">
                   <label className="block text-[10px] uppercase font-mono font-bold text-gray-700">
-                    Contact Number <span className="text-red-500">*</span>
+                    Phone <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="tel"
@@ -1028,7 +1028,7 @@ export default function PublicOrderPortal({
 
                 <div className="space-y-1">
                   <label className="block text-[10px] uppercase font-mono font-bold text-gray-700">
-                    Corporate Email <span className="text-red-500">*</span>
+                    Email <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="email"
@@ -1044,7 +1044,7 @@ export default function PublicOrderPortal({
 
               <div className="space-y-1">
                 <label className="block text-[10px] uppercase font-mono font-bold text-gray-700">
-                  Department / Address <span className="text-red-500">*</span>
+                  Address <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -1060,7 +1060,7 @@ export default function PublicOrderPortal({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="block text-[10px] uppercase font-mono font-bold text-gray-700">
-                    PO / Cost Center # (Optional)
+                    PO / Cost Center
                   </label>
                   <input
                     type="text"
@@ -1074,7 +1074,7 @@ export default function PublicOrderPortal({
 
                 <div className="space-y-1">
                   <label className="block text-[10px] uppercase font-mono font-bold text-gray-700">
-                    Special Notes
+                    Notes
                   </label>
                   <input
                     type="text"

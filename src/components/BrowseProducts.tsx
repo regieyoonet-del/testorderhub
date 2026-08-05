@@ -84,6 +84,7 @@ export default function BrowseProducts({
   const [quoteQuantity, setQuoteQuantity] = useState<number>(100);
   const [quoteBranding, setQuoteBranding] = useState<string>('');
   const [quoteColor, setQuoteColor] = useState<string>('');
+  const [quoteSize, setQuoteSize] = useState<string>('');
   const [quoteNotes, setQuoteNotes] = useState<string>('');
   const [contactPerson, setContactPerson] = useState<string>(currentCompany?.contactPerson || '');
   const [contactEmail, setContactEmail] = useState<string>(currentCompany?.contactEmail || '');
@@ -168,6 +169,10 @@ export default function BrowseProducts({
     setQuoteQuantity(product.moq);
     setQuoteBranding(product.brandingMethods && product.brandingMethods.length > 0 ? product.brandingMethods[0] : '');
     setQuoteColor(product.colors && product.colors.length > 0 ? product.colors[0].name : '');
+    const pSizes = (product.sizes && product.sizes.length > 0)
+      ? product.sizes
+      : ((product as any).sizeOptions && (product as any).sizeOptions.length > 0 ? (product as any).sizeOptions : []);
+    setQuoteSize(pSizes.length > 0 ? pSizes[0] : '');
     setQuoteNotes('');
     setCompanyName(currentCompany?.name || '');
     setContactPerson(currentCompany?.contactPerson || '');
@@ -178,6 +183,14 @@ export default function BrowseProducts({
 
   // Open quote modal from detail page
   const handleOpenQuoteModal = () => {
+    if (selectedProduct) {
+      const pSizes = (selectedProduct.sizes && selectedProduct.sizes.length > 0)
+        ? selectedProduct.sizes
+        : ((selectedProduct as any).sizeOptions && (selectedProduct as any).sizeOptions.length > 0 ? (selectedProduct as any).sizeOptions : []);
+      if (!quoteSize && pSizes.length > 0) {
+        setQuoteSize(pSizes[0]);
+      }
+    }
     setShowQuoteModal(true);
     setIsSubmitted(false);
   };
@@ -199,6 +212,7 @@ export default function BrowseProducts({
       quantity: Number(quoteQuantity) || selectedProduct.moq,
       preferredBrandingMethod: quoteBranding,
       preferredColor: quoteColor,
+      preferredSize: quoteSize,
       notes: quoteNotes
     };
 
@@ -452,6 +466,29 @@ export default function BrowseProducts({
                       </div>
                     )}
 
+                    {/* Available Sizes / Variants */}
+                    {(() => {
+                      const sizeArr = (product.sizes && product.sizes.length > 0)
+                        ? product.sizes
+                        : ((product as any).sizeOptions && (product as any).sizeOptions.length > 0 ? (product as any).sizeOptions : []);
+                      if (sizeArr.length === 0) return null;
+                      return (
+                        <div className="pt-1.5 border-t border-gray-200/60 space-y-1">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase font-mono block">Sizes ({sizeArr.length})</span>
+                          <div className="flex flex-wrap gap-1">
+                            {sizeArr.map((sz: string, idx: number) => (
+                              <span
+                                key={idx}
+                                className="bg-white text-gray-800 border border-gray-200 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded shadow-2xs"
+                              >
+                                {sz}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* Available Branding Methods */}
                     {product.brandingMethods && product.brandingMethods.length > 0 && (
                       <div className="pt-1.5 border-t border-gray-200/60 space-y-1">
@@ -639,6 +676,29 @@ export default function BrowseProducts({
                     </div>
                   )}
 
+                  {/* Available Sizes */}
+                  {(() => {
+                    const sizeArr = (selectedProduct.sizes && selectedProduct.sizes.length > 0)
+                      ? selectedProduct.sizes
+                      : ((selectedProduct as any).sizeOptions && (selectedProduct as any).sizeOptions.length > 0 ? (selectedProduct as any).sizeOptions : []);
+                    if (sizeArr.length === 0) return null;
+                    return (
+                      <div className="space-y-2 pt-2">
+                        <h4 className="text-xs font-mono font-bold uppercase text-black">Available Sizes ({sizeArr.length})</h4>
+                        <div className="flex flex-wrap gap-2 items-center">
+                          {sizeArr.map((sz: string, idx: number) => (
+                            <div
+                              key={idx}
+                              className="px-3.5 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-mono font-bold text-black shadow-2xs"
+                            >
+                              {sz}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Request a Quote Action */}
                   <div className="border-t border-gray-200 pt-6 space-y-2">
                     <button
@@ -742,6 +802,7 @@ export default function BrowseProducts({
                     <div><span className="text-gray-500">Quantity:</span> <span className="font-bold text-black">{quoteQuantity} units</span></div>
                     {quoteBranding && <div><span className="text-gray-500">Branding:</span> <span className="font-bold text-black">{quoteBranding}</span></div>}
                     {quoteColor && <div><span className="text-gray-500">Colour:</span> <span className="font-bold text-black">{quoteColor}</span></div>}
+                    {quoteSize && <div><span className="text-gray-500">Size / Variant:</span> <span className="font-bold text-black">{quoteSize}</span></div>}
                     <div><span className="text-gray-500">Company:</span> <span className="font-bold text-black">{companyName}</span></div>
                     <div><span className="text-gray-500">Contact Person:</span> <span className="font-bold text-black">{contactPerson}</span></div>
                     <div><span className="text-gray-500">Contact Email:</span> <span className="font-bold text-black">{contactEmail}</span></div>
@@ -818,25 +879,72 @@ export default function BrowseProducts({
                     </div>
                   </div>
 
-                  {/* Colour Selection */}
-                  {selectedProduct.colors && selectedProduct.colors.length > 0 && (
-                    <div>
-                      <label className="block text-xs font-mono font-bold uppercase text-black mb-1">
-                        Preferred Colour
-                      </label>
-                      <select
-                        value={quoteColor}
-                        onChange={(e) => setQuoteColor(e.target.value)}
-                        className="w-full p-2.5 border border-gray-200 text-xs font-sans focus:border-black focus:outline-none bg-white rounded-xl cursor-pointer"
-                        id="quote-color-select"
-                      >
-                        <option value="">-- Select Colour --</option>
-                        {selectedProduct.colors.map(col => (
-                          <option key={col.name} value={col.name}>{col.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                  {/* Colour & Size Selection Row */}
+                  {(() => {
+                    const pSizes = (selectedProduct.sizes && selectedProduct.sizes.length > 0)
+                      ? selectedProduct.sizes
+                      : ((selectedProduct as any).sizeOptions && (selectedProduct as any).sizeOptions.length > 0 ? (selectedProduct as any).sizeOptions : []);
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-mono font-bold uppercase text-black mb-1">
+                            Preferred Colour
+                          </label>
+                          {selectedProduct.colors && selectedProduct.colors.length > 0 ? (
+                            <select
+                              value={quoteColor}
+                              onChange={(e) => setQuoteColor(e.target.value)}
+                              className="w-full p-2.5 border border-gray-200 text-xs font-sans focus:border-black focus:outline-none bg-white rounded-xl cursor-pointer"
+                              id="quote-color-select"
+                            >
+                              <option value="">-- Select Colour --</option>
+                              {selectedProduct.colors.map(col => (
+                                <option key={col.name} value={col.name}>{col.name}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              placeholder="e.g. Orange, Black, Custom"
+                              value={quoteColor}
+                              onChange={(e) => setQuoteColor(e.target.value)}
+                              className="w-full p-2.5 border border-gray-200 text-xs font-sans focus:border-black focus:outline-none rounded-xl"
+                              id="quote-color-input"
+                            />
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-mono font-bold uppercase text-black mb-1">
+                            Preferred Size / Variant
+                          </label>
+                          {pSizes.length > 0 ? (
+                            <select
+                              value={quoteSize}
+                              onChange={(e) => setQuoteSize(e.target.value)}
+                              className="w-full p-2.5 border border-gray-200 text-xs font-sans focus:border-black focus:outline-none bg-white rounded-xl cursor-pointer"
+                              id="quote-size-select"
+                            >
+                              <option value="">-- Select Size --</option>
+                              {pSizes.map((sz: string) => (
+                                <option key={sz} value={sz}>{sz}</option>
+                              ))}
+                              <option value="Assorted / Mixed Sizes">Assorted / Mixed Sizes</option>
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              placeholder="e.g. S, M, L, XL, 500ml, Standard"
+                              value={quoteSize}
+                              onChange={(e) => setQuoteSize(e.target.value)}
+                              className="w-full p-2.5 border border-gray-200 text-xs font-sans focus:border-black focus:outline-none rounded-xl"
+                              id="quote-size-input"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Notes / Special Instructions */}
                   <div>

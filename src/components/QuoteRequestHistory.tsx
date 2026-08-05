@@ -251,6 +251,10 @@ export default function QuoteRequestHistory({
                       <span className="text-gray-500 block text-[10px]">Preferred Colour:</span>
                       <span className="font-bold text-black">{enquiry.preferredColor || 'As Sample'}</span>
                     </div>
+                    <div>
+                      <span className="text-gray-500 block text-[10px]">Preferred Size / Variant:</span>
+                      <span className="font-bold text-black">{enquiry.preferredSize || 'Standard / One Size'}</span>
+                    </div>
                   </div>
 
                   {/* Notes / Special Instructions - ALWAYS SHOWN */}

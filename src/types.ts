@@ -134,6 +134,7 @@ export interface CatalogProduct {
   brandingMethods: string[];
   colors: ColorOption[];
   sizes?: string[];
+  sizeOptions?: string[];
   status: 'Active' | 'Hidden';
   createdAt?: string;
   variantPrices?: Record<string, number>;
@@ -162,6 +163,7 @@ export interface QuoteEnquiry {
   quantity: number;
   preferredBrandingMethod?: string;
   preferredColor?: string;
+  preferredSize?: string;
   notes?: string;
   status: 'New' | 'In Review' | 'Quoted' | 'Declined' | 'Closed' | 'Product Requested' | 'Product Added';
   createdAt: string;

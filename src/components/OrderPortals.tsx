@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { OrderPortal, Product, CompanyProfile, SystemSettings, Order } from '../types';
 import {
   Store,
@@ -213,46 +213,57 @@ export default function OrderPortals({
     });
   };
 
+  // Helper to determine if an order belongs specifically to a given portal link
+  const isOrderForPortal = useCallback((order: Order, portal: OrderPortal) => {
+    if (!portal) return false;
+
+    const pId = (portal.id || '').trim().toLowerCase();
+    const pToken = (portal.shareToken || '').trim().toLowerCase();
+    const pName = (portal.name || '').trim().toLowerCase();
+    const pCompName = (portal.companyName || activeCompany?.name || '').trim().toLowerCase();
+
+    const oPortalId = (order.portalId || '').trim().toLowerCase();
+    const oPortalName = (order.portalName || '').trim().toLowerCase();
+    const oNotes = (order.notes || '').toLowerCase();
+    const oComp = (order.companyName || '').trim().toLowerCase();
+
+    // 1. Explicit portal ID / shareToken match
+    if (oPortalId) {
+      return oPortalId === pId || (Boolean(pToken) && oPortalId === pToken);
+    }
+
+    // 2. Explicit portal name match
+    if (oPortalName) {
+      return Boolean(pName) && oPortalName === pName;
+    }
+
+    // 3. Notes contains "[order portal: <name>]"
+    if (pName && oNotes.includes(`[order portal: ${pName}`)) {
+      return true;
+    }
+
+    // If order notes explicitly tags a DIFFERENT portal name, do not match
+    if (oNotes.includes('[order portal:')) {
+      return false;
+    }
+
+    // 4. Fallback ONLY if order has NO explicit portalId, portalName, or note tag
+    // AND the company has only ONE storefront portal link
+    const isPortalOrderType = order.id.startsWith('ord-portal-') || order.status === 'Pending Approval';
+    if (isPortalOrderType && companyPortals.length === 1) {
+      if (oComp && pCompName && oComp === pCompName) {
+        return true;
+      }
+    }
+
+    return false;
+  }, [activeCompany, companyPortals.length]);
+
   // Compute orders belonging specifically to the currently selected portal
   const editingPortalOrders = useMemo(() => {
     if (!editingPortal) return [];
-    const pId = (editingPortal.id || '').trim().toLowerCase();
-    const pToken = (editingPortal.shareToken || '').trim().toLowerCase();
-    const pName = (editingPortal.name || '').trim().toLowerCase();
-    const pCompName = (editingPortal.companyName || activeCompany?.name || '').trim().toLowerCase();
-
-    return orders.filter(o => {
-      const oPortalId = (o.portalId || '').trim().toLowerCase();
-      const oPortalName = (o.portalName || '').trim().toLowerCase();
-      const oNotes = (o.notes || '').toLowerCase();
-
-      // 1. Match portal ID or shareToken
-      if (oPortalId && (oPortalId === pId || (pToken && oPortalId === pToken))) {
-        return true;
-      }
-
-      // 2. Match portal name (case-insensitive)
-      if (oPortalName && pName && oPortalName === pName) {
-        return true;
-      }
-
-      // 3. Notes contains "[order portal: <name>]"
-      if (pName && oNotes.includes(`[order portal: ${pName}`)) {
-        return true;
-      }
-
-      // 4. Fallback for portal orders belonging to the active company
-      const isPortalOrder = o.id.startsWith('ord-portal-') || o.status === 'Pending Approval' || Boolean(o.portalId) || Boolean(o.portalName) || oNotes.includes('[order portal:');
-      if (isPortalOrder) {
-        const oComp = (o.companyName || '').trim().toLowerCase();
-        if (oComp && pCompName && oComp === pCompName) {
-          return true;
-        }
-      }
-
-      return false;
-    });
-  }, [orders, editingPortal, activeCompany]);
+    return orders.filter(o => isOrderForPortal(o, editingPortal));
+  }, [orders, editingPortal, isOrderForPortal]);
 
   const filteredAndSortedPortalOrders = useMemo(() => {
     const list = editingPortalOrders.filter(o => {
@@ -1082,11 +1093,7 @@ export default function OrderPortals({
             const portalUrl = getPortalUrl(portal);
 
             // Calculate total orders for this portal card
-            const portalOrderCount = orders.filter(o =>
-              o.portalId === portal.id ||
-              o.portalName === portal.name ||
-              (portal.shareToken && o.portalId === portal.shareToken)
-            ).length;
+            const portalOrderCount = orders.filter(o => isOrderForPortal(o, portal)).length;
 
             return (
               <div

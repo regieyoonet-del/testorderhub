@@ -52,6 +52,16 @@ export default function QuoteBuilderModal({
   const [copied, setCopied] = useState(false);
 
   // Line Items State
+  const buildItemDesc = (enq: QuoteEnquiry) => {
+    let desc = enq.productName;
+    const parts: string[] = [];
+    if (enq.preferredBrandingMethod) parts.push(`Branding: ${enq.preferredBrandingMethod}`);
+    if (enq.preferredColor) parts.push(`Color: ${enq.preferredColor}`);
+    if (enq.preferredSize) parts.push(`Size: ${enq.preferredSize}`);
+    if (parts.length > 0) desc += ` (${parts.join(' • ')})`;
+    return desc;
+  };
+
   const [lineItems, setLineItems] = useState<QuoteLineItem[]>(() => {
     if (enquiry.quotedLineItems && enquiry.quotedLineItems.length > 0) {
       return enquiry.quotedLineItems;
@@ -61,7 +71,7 @@ export default function QuoteBuilderModal({
     return [
       {
         id: 'main-item',
-        description: `${enquiry.productName}${enquiry.preferredBrandingMethod ? ` (${enquiry.preferredBrandingMethod})` : ''}${enquiry.preferredColor ? ` - ${enquiry.preferredColor}` : ''}`,
+        description: buildItemDesc(enquiry),
         quantity: initialQty,
         unitPrice: initialUnitPrice,
         total: initialQty * initialUnitPrice
@@ -109,7 +119,7 @@ export default function QuoteBuilderModal({
         setLineItems([
           {
             id: 'main-item',
-            description: `${enquiry.productName}${enquiry.preferredBrandingMethod ? ` (${enquiry.preferredBrandingMethod})` : ''}${enquiry.preferredColor ? ` - ${enquiry.preferredColor}` : ''}`,
+            description: buildItemDesc(enquiry),
             quantity: qQty,
             unitPrice: uPrice,
             total: qQty * uPrice
@@ -314,11 +324,13 @@ ${quoteNotes}
                 <div className="font-mono text-[11px] text-gray-600">
                   Qty: <strong className="text-black">{enquiry.quantity} pcs</strong> | Category: {enquiry.productCategory}
                 </div>
-                {(enquiry.preferredBrandingMethod || enquiry.preferredColor) && (
+                {(enquiry.preferredBrandingMethod || enquiry.preferredColor || enquiry.preferredSize) && (
                   <div className="font-mono text-[11px] text-gray-500 mt-0.5">
-                    {enquiry.preferredBrandingMethod && `Branding: ${enquiry.preferredBrandingMethod}`}
-                    {enquiry.preferredBrandingMethod && enquiry.preferredColor && ' • '}
-                    {enquiry.preferredColor && `Color: ${enquiry.preferredColor}`}
+                    {[
+                      enquiry.preferredBrandingMethod ? `Branding: ${enquiry.preferredBrandingMethod}` : null,
+                      enquiry.preferredColor ? `Color: ${enquiry.preferredColor}` : null,
+                      enquiry.preferredSize ? `Size: ${enquiry.preferredSize}` : null
+                    ].filter(Boolean).join(' • ')}
                   </div>
                 )}
               </div>
