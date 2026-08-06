@@ -1262,10 +1262,6 @@ export default function App() {
 
   const handleLogin = (role: 'admin' | 'client', companyId?: string) => {
     setLoggedInUser({ role, companyId });
-    // Immediately pull latest company profiles, orders, and catalog data from Google Sheets upon login
-    setTimeout(() => {
-      syncWithSheets(true);
-    }, 100);
   };
 
   const handleLogout = () => {

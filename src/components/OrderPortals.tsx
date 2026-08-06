@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { OrderPortal, Product, CompanyProfile, SystemSettings, Order, getDisplayPurchaserName, getDisplayDeliveryAddress } from '../types';
+import { OrderPortal, Product, CompanyProfile, SystemSettings, Order, getDisplayPurchaserName } from '../types';
 import {
   Store,
   Plus,
@@ -907,15 +907,15 @@ export default function OrderPortals({
                         <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">Address / Dept</span>
                         <div className="font-medium text-gray-800 flex items-start gap-1.5">
                           <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
-                          <span className="break-words font-sans leading-snug">{getDisplayDeliveryAddress(ord)}</span>
+                          <span className="line-clamp-2">{ord.deliveryAddress || 'No address specified'}</span>
                         </div>
                       </div>
 
                       <div>
                         <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">PO Number &amp; Notes</span>
-                        <div className="font-mono text-gray-800 space-y-1">
+                        <div className="font-mono text-gray-800 space-y-0.5">
                           {ord.poNumber && <div className="font-bold text-black">PO: {ord.poNumber}</div>}
-                          {ord.notes && <div className="text-[11px] italic text-gray-700 leading-snug break-words bg-white p-1.5 rounded border border-gray-200">"{ord.notes}"</div>}
+                          {ord.notes && <div className="text-[11px] italic text-gray-600 leading-snug">"{ord.notes}"</div>}
                           {!ord.poNumber && !ord.notes && <span className="text-gray-400">None provided</span>}
                         </div>
                       </div>
