@@ -493,16 +493,17 @@ export default function App() {
         customVariantPrices: urlCustomVariantPrices || match.customVariantPrices
       };
       setActivePublicPortal(mergedMatch);
-      // If NOT connected to Sheets, we are done. If connected, we continue to fetch live Sheets data to get latest updates!
+      setIsResolvingPortal(false);
+      // If NOT connected to Sheets, we are done. If connected, we fetch live Sheets data in background silently without blocking the UI!
       if (!appsScriptConfig.isConnected || !appsScriptConfig.webAppUrl) {
-        setIsResolvingPortal(false);
         return;
       }
+    } else {
+      setIsResolvingPortal(true);
     }
 
-    // 3. If connected to Sheets, fetch live data from Google Sheets to ensure device consistency
+    // 3. If connected to Sheets, fetch live data from Google Sheets in background
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
-      setIsResolvingPortal(true);
       const url = appsScriptConfig.webAppUrl;
       Promise.all([
         sheetsService.fetchPortals(url),
@@ -1787,10 +1788,9 @@ export default function App() {
                  (cUser !== '' && cUser.includes(tokenNormalized)) ||
                  cName.includes(tokenNormalized)
                ));
-      }) ||
-      (allCompanies.length > 0 ? allCompanies[0] : null);
+      });
 
-    const logo = matchedCompany?.logoUrl || matchedPortal?.bannerImageUrl || systemSettings.logoUrl;
+    const logo = matchedCompany?.logoUrl || matchedPortal?.bannerImageUrl || (matchedCompany?.name ? systemSettings.logoUrl : undefined);
     const companyName = matchedCompany?.name || matchedPortal?.companyName || matchedPortal?.name || 'Corporate Storefront';
 
     return (
@@ -1798,35 +1798,18 @@ export default function App() {
         <style dangerouslySetInnerHTML={{ __html: getThemeStyles(systemSettings.colorTheme || 'classic_noir') }} />
         <div className="flex flex-col items-center justify-center space-y-6 animate-fade-in">
           {logo ? (
-            <div className="flex flex-col items-center justify-center space-y-3 text-center">
-              <img
-                src={logo}
-                alt={companyName || 'Company Logo'}
-                className="max-h-24 max-w-[280px] object-contain animate-pulse"
-                referrerPolicy="no-referrer"
-              />
-              {companyName && (
-                <span className="text-[11px] font-mono font-extrabold uppercase tracking-widest text-black/70">
-                  {companyName} Storefront
-                </span>
-              )}
-            </div>
+            <img
+              src={logo}
+              alt={companyName || 'Company Logo'}
+              className="max-h-24 max-w-[280px] object-contain animate-pulse"
+              referrerPolicy="no-referrer"
+            />
           ) : (
-            <div className="flex flex-col items-center justify-center space-y-3 text-center">
-              <div className="w-20 h-20 rounded-2xl bg-black text-white font-black text-2xl flex items-center justify-center uppercase shadow-md animate-pulse">
-                {companyName ? companyName.slice(0, 2) : 'CO'}
-              </div>
-              {companyName && (
-                <span className="text-[11px] font-mono font-extrabold uppercase tracking-widest text-black/70">
-                  {companyName} Storefront
-                </span>
-              )}
+            <div className="w-16 h-16 rounded-2xl bg-white border border-gray-200 flex items-center justify-center text-gray-800 shadow-sm animate-pulse">
+              <Store className="w-8 h-8 text-black" />
             </div>
           )}
-          <div className="flex items-center gap-2 text-xs font-mono font-medium text-gray-500 pt-2">
-            <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-            <span>Loading Storefront...</span>
-          </div>
+          <div className="w-5 h-5 border-2 border-black/20 border-t-black rounded-full animate-spin" />
         </div>
       </div>
     );

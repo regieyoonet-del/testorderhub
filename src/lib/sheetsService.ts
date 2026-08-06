@@ -1050,11 +1050,15 @@ export const sheetsService = {
     const cleanedUrl = resolveUrl(url);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
+
       const response = await fetch(`${cleanedUrl}?action=getAllData`, {
         method: 'GET',
         mode: 'cors',
-        headers: { 'Accept': 'application/json' }
-      });
+        headers: { 'Accept': 'application/json' },
+        signal: controller.signal
+      }).finally(() => clearTimeout(timeoutId));
 
       if (!response.ok) return null;
       const text = await response.text();
@@ -1070,23 +1074,23 @@ export const sheetsService = {
       let products: Product[] | null = null;
       if (Array.isArray(raw.products)) {
         products = raw.products.map((item: any) => ({
-          id: String(getProp(item, 'ProductID') || getProp(item, 'id') || `prod-${Date.now()}`),
-          name: String(getProp(item, 'Name') || getProp(item, 'name') || 'Unnamed Product'),
-          category: String(getProp(item, 'Category') || getProp(item, 'category') || 'Apparel') as any,
-          description: String(getProp(item, 'Description') || getProp(item, 'description') || ''),
-          imageUrl: String(getProp(item, 'ImageURL') || getProp(item, 'imageUrl') || ''),
+          id: String(getProp(item, ['ProductID', 'Product ID', 'id']) || `prod-${Date.now()}`),
+          name: String(getProp(item, ['Name', 'ProductName', 'Product Name', 'name']) || ''),
+          category: String(getProp(item, ['Category', 'category']) || 'Apparel') as any,
+          description: String(getProp(item, ['Description', 'description']) || ''),
+          imageUrl: String(getProp(item, ['ImageURL', 'Image URL', 'imageUrl']) || ''),
           imageUrls: (() => {
-            const val = getProp(item, 'ImageURLs') || getProp(item, 'imageUrls');
+            const val = getProp(item, ['ImageURLs', 'Image URLs', 'imageUrls']);
             if (Array.isArray(val)) return val.map(String);
             if (typeof val === 'string' && val.trim()) return val.split(';||;').map(s => s.trim()).filter(Boolean);
             return undefined;
           })(),
-          basePrice: Number(getProp(item, 'BasePrice') || getProp(item, 'basePrice') || 0),
-          minQuantity: Number(getProp(item, 'MOQ') || getProp(item, 'minQuantity') || 1),
-          unit: String(getProp(item, 'Unit') || getProp(item, 'unit') || 'pcs'),
-          leadTime: String(getProp(item, 'LeadTime') || getProp(item, 'leadTime') || '5-7 Days'),
-          sizeOptions: parseArrayProp(getProp(item, 'Sizes') || getProp(item, 'sizeOptions')),
-          colorOptions: parseArrayProp(getProp(item, 'Colors') || getProp(item, 'colorOptions')),
+          basePrice: Number(getProp(item, ['BasePrice', 'Base Price', 'basePrice']) || 0),
+          minQuantity: Number(getProp(item, ['MOQ', 'minQuantity', 'MinQuantity']) || 1),
+          unit: String(getProp(item, ['Unit', 'unit']) || 'pcs'),
+          leadTime: String(getProp(item, ['LeadTime', 'Lead Time', 'leadTime']) || '5-7 Days'),
+          sizeOptions: parseArrayProp(getProp(item, ['Sizes', 'sizeOptions', 'SizeOptions'])),
+          colorOptions: parseArrayProp(getProp(item, ['Colors', 'colorOptions', 'ColorOptions'])),
           frequentlyOrdered: true
         }));
       }
@@ -1095,17 +1099,33 @@ export const sheetsService = {
       let companies: CompanyProfile[] | null = null;
       if (Array.isArray(raw.companies)) {
         companies = raw.companies.map((item: any) => ({
-          id: String(getProp(item, 'CompanyID') || getProp(item, 'id') || `co-${Date.now()}`),
-          name: String(getProp(item, 'Name') || getProp(item, 'name') || 'Unnamed Company'),
-          logoUrl: String(getProp(item, 'LogoURL') || getProp(item, 'logoUrl') || ''),
-          contactPerson: String(getProp(item, 'ContactPerson') || getProp(item, 'contactPerson') || ''),
-          contactEmail: String(getProp(item, 'ContactEmail') || getProp(item, 'contactEmail') || ''),
-          contactPhone: String(getProp(item, 'ContactPhone') || getProp(item, 'contactPhone') || ''),
-          deliveryAddress: String(getProp(item, 'DeliveryAddress') || getProp(item, 'deliveryAddress') || ''),
-          assignedPriceLevel: String(getProp(item, 'PriceLevel') || getProp(item, 'assignedPriceLevel') || 'tier_standard'),
-          username: String(getProp(item, 'Username') || getProp(item, 'username') || ''),
-          passcode: String(getProp(item, 'Passcode') || getProp(item, 'passcode') || ''),
-          customProducts: []
+          id: String(getProp(item, ['CompanyID', 'Company ID', 'id']) || `co-${Date.now()}`),
+          name: String(getProp(item, ['CompanyName', 'Company Name', 'Name', 'name']) || ''),
+          logoUrl: String(getProp(item, ['LogoURL', 'Logo URL', 'logoUrl']) || ''),
+          contactPerson: String(getProp(item, ['ContactPerson', 'Contact Person', 'contactPerson']) || ''),
+          contactEmail: String(getProp(item, ['ContactEmail', 'Contact Email', 'contactEmail']) || ''),
+          contactPhone: String(getProp(item, ['ContactPhone', 'Contact Phone', 'contactPhone']) || ''),
+          deliveryAddress: String(getProp(item, ['DeliveryAddress', 'Delivery Address', 'deliveryAddress']) || ''),
+          assignedPriceLevel: String(getProp(item, ['PriceLevel', 'Price Level', 'assignedPriceLevel']) || 'tier_standard'),
+          username: String(getProp(item, ['Username', 'username']) || ''),
+          passcode: String(getProp(item, ['Passcode', 'passcode']) || ''),
+          poRequired: getProp(item, ['PORequired', 'PO Required']) === 'TRUE' || getProp(item, ['PORequired', 'PO Required']) === true || String(getProp(item, ['PORequired', 'PO Required'])).toUpperCase() === 'TRUE',
+          enabledProductIds: (() => {
+            const val = getProp(item, ['ApprovedProducts', 'Approved Products', 'enabledProductIds', 'EnabledProductIDs']);
+            if (val === undefined || val === null || String(val).trim() === '') return undefined;
+            const trimmed = String(val).trim();
+            if (trimmed.toUpperCase() === 'NONE') return [];
+            return trimmed.split(',').map((s: string) => s.trim()).filter(Boolean);
+          })(),
+          customProducts: (() => {
+            const val = getProp(item, ['CustomProducts', 'Custom Products', 'customProducts']);
+            if (!val) return undefined;
+            try {
+              return typeof val === 'string' ? JSON.parse(val) : val;
+            } catch (e) {
+              return undefined;
+            }
+          })()
         }));
       }
 
