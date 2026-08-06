@@ -6,7 +6,7 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { CompanyProfile, Order, Product, getDisplayPurchaserName } from '../types';
+import { CompanyProfile, Order, Product, getDisplayPurchaserName, getDisplayDeliveryAddress } from '../types';
 import ProductDetailsPage from './ProductDetailsPage';
 import ProductImageCarousel from './ProductImageCarousel';
 import {
@@ -1813,7 +1813,7 @@ export default function ClientDashboardModal({
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-b border-gray-100 pb-3">
                               <div>
                                 <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold mb-1">Address / Dept</span>
-                                <p className="font-semibold text-black leading-snug">{ord.deliveryAddress || company.deliveryAddress || 'No address specified'}</p>
+                                <p className="font-semibold text-black leading-snug">{getDisplayDeliveryAddress(ord)}</p>
                               </div>
                               <div>
                                 <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold mb-1">Purchasing Rep / Customer Details</span>

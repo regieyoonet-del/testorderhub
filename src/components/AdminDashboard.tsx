@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Product, CompanyProfile, Order, SystemSettings, AppsScriptConfig, CatalogProduct, QuoteEnquiry, getDisplayPurchaserName } from '../types';
+import { Product, CompanyProfile, Order, SystemSettings, AppsScriptConfig, CatalogProduct, QuoteEnquiry, getDisplayPurchaserName, getDisplayDeliveryAddress } from '../types';
 import AppsScriptInstructions from './AppsScriptInstructions';
 import SettingsPanel from './SettingsPanel';
 import AdminProductCatalog from './AdminProductCatalog';
@@ -1924,7 +1924,7 @@ export default function AdminDashboard({
                   )}
                   <p className="text-gray-600 leading-relaxed">
                     <span className="text-gray-400 block font-bold text-[8px] uppercase">Address:</span>
-                    {selectedOrder.deliveryAddress || 'No address specified'}
+                    {getDisplayDeliveryAddress(selectedOrder)}
                   </p>
                 </div>
               </div>

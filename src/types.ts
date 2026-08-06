@@ -209,33 +209,47 @@ export interface OrderPortal {
   customVariantPrices?: Record<string, Record<string, number>>; // Map of productId -> (variantKey -> custom price)
 }
 
+export function getDisplayDeliveryAddress(
+  order?: { deliveryAddress?: string }
+): string {
+  const addr = order?.deliveryAddress?.trim();
+  if (addr && addr.toLowerCase() !== 'no address specified') {
+    return addr;
+  }
+  return 'No address specified';
+}
+
 export function getDisplayPurchaserName(
-  order: {
+  order?: {
     contactPerson?: string;
     contactEmail?: string;
-    items?: Array<{ submitterName?: string }>;
+    items?: Array<{ submitterName?: string; submitterEmail?: string }>;
   },
   fallbackCompanyContact?: string
 ): string {
   const isGeneric = (str?: string) => {
     if (!str) return true;
     const s = str.trim().toLowerCase();
+    if (!s) return true;
     return (
-      !s ||
       s === 'n/a' ||
       s === 'storefront customer' ||
       s === 'storefront purchaser' ||
       s === 'guest user' ||
       s === 'company representative' ||
-      s === 'customer'
+      s === 'customer' ||
+      s === 'manager representative'
     );
   };
 
   const rawPerson = order?.contactPerson?.trim();
+
+  // 1. If contactPerson is a valid non-generic name AND NOT an email address
   if (rawPerson && !isGeneric(rawPerson) && !rawPerson.includes('@')) {
     return rawPerson;
   }
 
+  // 2. If item submitterName is a valid non-generic name AND NOT an email address
   if (Array.isArray(order?.items)) {
     const itemSubmitter = order.items.find(
       i => i?.submitterName && !isGeneric(i.submitterName) && !i.submitterName.includes('@')
@@ -245,22 +259,25 @@ export function getDisplayPurchaserName(
     }
   }
 
+  // 3. If fallback company contact is a valid non-generic name AND NOT an email address
   const companyContact = fallbackCompanyContact?.trim();
   if (companyContact && !isGeneric(companyContact) && !companyContact.includes('@')) {
     return companyContact;
   }
 
-  const emailCandidate = (rawPerson && rawPerson.includes('@')) ? rawPerson : order?.contactEmail?.trim();
+  // 4. Fallback: Extract email handle (everything before @) from rawPerson, contactEmail, item submitters, or companyContact
+  const emailCandidate = 
+    (rawPerson && rawPerson.includes('@') ? rawPerson : '') ||
+    order?.contactEmail?.trim() ||
+    order?.items?.find(i => i?.submitterName?.includes('@'))?.submitterName?.trim() ||
+    order?.items?.find(i => i?.submitterEmail?.includes('@'))?.submitterEmail?.trim() ||
+    (companyContact && companyContact.includes('@') ? companyContact : '') ||
+    '';
+
   if (emailCandidate && emailCandidate.includes('@')) {
     const handle = emailCandidate.split('@')[0].trim();
     if (handle) {
-      const formatted = handle
-        .replace(/[._\-+]/g, ' ')
-        .split(' ')
-        .filter(Boolean)
-        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-        .join(' ');
-      if (formatted) return formatted;
+      return handle;
     }
   }
 
