@@ -858,31 +858,7 @@ export default function PublicOrderPortal({
         )}
       </main>
 
-      {/* Floating Bottom Bar if cart has items */}
-      {cartItems.length > 0 && !isCheckoutOpen && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-xl w-[90%] bg-black text-white p-4 rounded-3xl shadow-2xl border border-neutral-800 flex items-center justify-between gap-4 animate-slide-up">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-white text-black flex items-center justify-center font-bold font-mono text-sm shrink-0">
-              {cartItems.reduce((sum, item) => sum + item.quantity, 0)}
-            </div>
-            <div>
-              <span className="text-xs font-mono text-gray-400 block">Total Order Subtotal</span>
-              <span className="text-base font-black font-mono text-white">
-                {systemSettings.currencySymbol || 'Php'} {cartSubtotal.toFixed(2)}
-              </span>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setIsCheckoutOpen(true)}
-            className="bg-white text-black hover:bg-gray-100 font-extrabold text-xs uppercase tracking-wider py-3 px-6 rounded-2xl transition-all cursor-pointer flex items-center gap-2 shrink-0"
-            id="floating-checkout-btn"
-          >
-            <span>Complete Order</span>
-            <Send className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
+    
 
       {/* Order Checkout Modal */}
       {isCheckoutOpen && (
