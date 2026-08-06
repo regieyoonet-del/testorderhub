@@ -3,13 +3,110 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Order, Product, CompanyProfile, CatalogProduct, QuoteEnquiry, ColorOption, OrderPortal } from '../types';
+import { Order, Product, CompanyProfile, CatalogProduct, QuoteEnquiry, ColorOption, OrderPortal, OrderItem } from '../types';
 import { INITIAL_CATALOG_PRODUCTS } from '../data/initialCatalog';
 import { parseColorList, resolveColorHex } from '../utils/colorUtils';
 import { DEFAULT_QUOTE_NOTES } from '../constants/quoteDefaults';
 import { EMBEDDED_APPS_SCRIPT_URL } from '../config';
 
 export { parseColorList, resolveColorHex };
+
+export interface AllSheetsData {
+  products: Product[] | null;
+  companies: CompanyProfile[] | null;
+  orders: Order[] | null;
+  adminSettings: any | null;
+  quoteEnquiries: QuoteEnquiry[] | null;
+  catalogProducts: CatalogProduct[] | null;
+  portals: OrderPortal[] | null;
+}
+
+function parseArrayProp(val: any): string[] | undefined {
+  if (!val) return undefined;
+  if (Array.isArray(val)) return val.map(String);
+  const str = String(val).trim();
+  if (!str) return undefined;
+  if (str.includes(';||;')) return str.split(';||;').map(s => s.trim()).filter(Boolean);
+  if (str.includes(',')) return str.split(',').map(s => s.trim()).filter(Boolean);
+  return [str];
+}
+
+function parseObjectProp(val: any): Record<string, any> | undefined {
+  if (!val) return undefined;
+  if (typeof val === 'object' && !Array.isArray(val)) return val;
+  try {
+    return JSON.parse(String(val));
+  } catch {
+    return undefined;
+  }
+}
+
+function parseVariantPrices(val: any): Record<string, number> | undefined {
+  const parsed = parseObjectProp(val);
+  if (!parsed) return undefined;
+  const res: Record<string, number> = {};
+  for (const [k, v] of Object.entries(parsed)) {
+    res[k] = Number(v) || 0;
+  }
+  return res;
+}
+
+function parseColorImages(val: any): Record<string, string> | undefined {
+  const parsed = parseObjectProp(val);
+  if (!parsed) return undefined;
+  const res: Record<string, string> = {};
+  for (const [k, v] of Object.entries(parsed)) {
+    res[k] = String(v);
+  }
+  return res;
+}
+
+function parseColors(val: any): ColorOption[] | undefined {
+  if (!val) return undefined;
+  if (Array.isArray(val)) return val as ColorOption[];
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      return val.split(',').map(c => ({ name: c.trim(), hex: '#000000' }));
+    }
+  }
+  return undefined;
+}
+
+function parseOrderItems(val: any): OrderItem[] {
+  if (!val) return [];
+  if (Array.isArray(val)) {
+    return val.map((it: any) => {
+      const unitPrice = Number(getProp(it, ['UnitPrice', 'unitPrice', 'Price', 'price']) || 0);
+      return {
+        productId: String(getProp(it, ['ProductID', 'productId', 'id']) || ''),
+        productName: String(getProp(it, ['ProductName', 'productName', 'Name', 'name']) || ''),
+        imageUrl: String(getProp(it, ['ImageUrl', 'imageUrl', 'ImageURL', 'imageURL']) || ''),
+        quantity: Number(getProp(it, ['Quantity', 'quantity', 'Qty', 'qty']) || 1),
+        price: unitPrice,
+        unitPrice: unitPrice,
+        selectedSize: getProp(it, ['SelectedSize', 'selectedSize', 'Size', 'size']) ? String(getProp(it, ['SelectedSize', 'selectedSize', 'Size', 'size'])) : undefined,
+        selectedColor: getProp(it, ['SelectedColor', 'selectedColor', 'Color', 'color']) ? String(getProp(it, ['SelectedColor', 'selectedColor', 'Color', 'color'])) : undefined,
+        submitterName: getProp(it, ['SubmitterName', 'submitterName', 'Name', 'CustomerName']) ? String(getProp(it, ['SubmitterName', 'submitterName', 'Name', 'CustomerName'])) : undefined,
+        submitterEmail: getProp(it, ['SubmitterEmail', 'submitterEmail', 'Email', 'CustomerEmail']) ? String(getProp(it, ['SubmitterEmail', 'submitterEmail', 'Email', 'CustomerEmail'])) : undefined,
+        submitterPhone: getProp(it, ['SubmitterPhone', 'submitterPhone', 'Phone']) ? String(getProp(it, ['SubmitterPhone', 'submitterPhone', 'Phone'])) : undefined
+      };
+    });
+  }
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) {
+        return parseOrderItems(parsed);
+      }
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
 
 function levenshteinDistance(a: string, b: string): number {
   if (a.length === 0) return b.length;
@@ -201,18 +298,18 @@ export const sheetsService = {
 
           return {
             id: orderId,
-            orderNumber: String(getProp(item, ['OrderNumber', 'Order Number', 'orderNumber']) || ''),
-            companyName: String(getProp(item, ['CompanyName', 'Company Name', 'companyName']) || ''),
-            contactEmail: String(getProp(item, ['ContactEmail', 'Contact Email', 'contactEmail', 'Email', 'CustomerEmail']) || ''),
-            contactPerson: String(getProp(item, ['ContactPerson', 'Contact Person', 'contactPerson', 'ContactPeron', 'CustomerName', 'Purchaser']) || ''),
-            contactNumber: String(getProp(item, ['ContactNumber', 'Contact Number', 'contactNumber', 'Phone', 'ContactPhone', 'CustomerPhone', 'Mobile']) || ''),
-            fbMessengerLink: String(getProp(item, ['FBMessengerLink', 'FB Messenger Link', 'fbMessengerLink', 'FacebookMessengerLink', 'FBMessenger', 'Messenger']) || ''),
-            deliveryAddress: String(getProp(item, ['DeliveryAddress', 'Delivery Address', 'deliveryAddress', 'DeliveryAddre', 'Address', 'DeliveryDept']) || ''),
-            poNumber: String(getProp(item, ['PONumber', 'PO Number', 'poNumber']) || ''),
-            totalAmount: Number(getProp(item, ['TotalAmount', 'Total Amount', 'totalAmount']) || 0),
+            orderNumber: String(getProp(item, ['OrderNumber', 'Order Number', 'orderNumber', 'Order #', 'OrderNo', 'Order No']) || ''),
+            companyName: String(getProp(item, ['CompanyName', 'Company Name', 'companyName', 'Company', 'Client', 'Client Name', 'ClientName']) || ''),
+            contactEmail: String(getProp(item, ['ContactEmail', 'Contact Email', 'contactEmail', 'Email', 'CustomerEmail', 'SubmitterEmail', 'BuyerEmail', 'CorporateEmail', 'Buyer Corporate Email', 'Customer Email', 'Purchaser Email']) || ''),
+            contactPerson: String(getProp(item, ['ContactPerson', 'Contact Person', 'contactPerson', 'ContactPeron', 'CustomerName', 'Customer Name', 'Purchaser', 'Purchaser Name', 'Purchaser / Submitter', 'SubmitterName', 'Submitter Name', 'Submitter', 'Name', 'ShopperName', 'Shopper Name', 'Shopper', 'BuyerName', 'Buyer Name', 'Buyer', 'Customer', 'Ordering Customer']) || ''),
+            contactNumber: String(getProp(item, ['ContactNumber', 'Contact Number', 'contactNumber', 'Phone', 'ContactPhone', 'CustomerPhone', 'Mobile', 'ShopperPhone', 'Shopper Phone', 'ContactNo', 'Contact No', 'Phone Number', 'Phone #', 'Mobile Number']) || ''),
+            fbMessengerLink: String(getProp(item, ['FBMessengerLink', 'FB Messenger Link', 'fbMessengerLink', 'FacebookMessengerLink', 'FBMessenger', 'Messenger', 'Facebook Messenger Link', 'FB Messenger', 'MessengerLink', 'Messenger Link', 'Facebook Link']) || ''),
+            deliveryAddress: String(getProp(item, ['DeliveryAddress', 'Delivery Address', 'deliveryAddress', 'DeliveryAddre', 'Address', 'DeliveryDept', 'Department / Address', 'Address / Dept', 'ShippingAddress', 'StandardAddress', 'Standard Address', 'Delivery Address / Dept', 'Shipping Address', 'Dept / Address', 'Location']) || ''),
+            poNumber: String(getProp(item, ['PONumber', 'PO Number', 'poNumber', 'PO / Cost Center', 'PO / Cost Center #', 'POCostCenter', 'PO', 'CostCenter', 'PO #', 'Cost Center']) || ''),
+            totalAmount: Number(getProp(item, ['TotalAmount', 'Total Amount', 'totalAmount', 'Amount', 'Total']) || 0),
             status: status,
-            createdAt: String(getProp(item, ['CreatedAt', 'Created At', 'createdAt']) || new Date().toISOString()),
-            notes: String(getProp(item, ['Notes', 'notes', 'SpecialNotes', 'OrderNotes']) || ''),
+            createdAt: String(getProp(item, ['CreatedAt', 'Created At', 'createdAt', 'Date', 'SubmittedAt']) || new Date().toISOString()),
+            notes: String(getProp(item, ['Notes', 'notes', 'SpecialNotes', 'OrderNotes', 'Special Notes', 'Purchaser Remarks & Notes', 'Remarks', 'Order Notes', 'Comments', 'Note', 'Order Remarks', 'Customer Notes', 'Purchaser Notes']) || ''),
             portalId: portalId,
             portalName: portalName,
             items: (() => {
@@ -942,6 +1039,204 @@ export const sheetsService = {
     } catch (error) {
       console.warn('Google Sheets sync notice (deletePortal):', error);
       return false;
+    }
+  },
+
+  /**
+   * Single-roundtrip bulk fetch of all database tables from Apps Script for fast sign-in & initial load sync.
+   */
+  async fetchAllData(url: string): Promise<AllSheetsData | null> {
+    if (!url) return null;
+    const cleanedUrl = resolveUrl(url);
+
+    try {
+      const response = await fetch(`${cleanedUrl}?action=getAllData`, {
+        method: 'GET',
+        mode: 'cors',
+        headers: { 'Accept': 'application/json' }
+      });
+
+      if (!response.ok) return null;
+      const text = await response.text();
+      let raw: any;
+      try {
+        raw = JSON.parse(text);
+      } catch {
+        return null;
+      }
+      if (!raw || typeof raw !== 'object' || raw.status === 'error') return null;
+
+      // Extract products
+      let products: Product[] | null = null;
+      if (Array.isArray(raw.products)) {
+        products = raw.products.map((item: any) => ({
+          id: String(getProp(item, 'ProductID') || getProp(item, 'id') || `prod-${Date.now()}`),
+          name: String(getProp(item, 'Name') || getProp(item, 'name') || 'Unnamed Product'),
+          category: String(getProp(item, 'Category') || getProp(item, 'category') || 'Apparel') as any,
+          description: String(getProp(item, 'Description') || getProp(item, 'description') || ''),
+          imageUrl: String(getProp(item, 'ImageURL') || getProp(item, 'imageUrl') || ''),
+          imageUrls: (() => {
+            const val = getProp(item, 'ImageURLs') || getProp(item, 'imageUrls');
+            if (Array.isArray(val)) return val.map(String);
+            if (typeof val === 'string' && val.trim()) return val.split(';||;').map(s => s.trim()).filter(Boolean);
+            return undefined;
+          })(),
+          basePrice: Number(getProp(item, 'BasePrice') || getProp(item, 'basePrice') || 0),
+          minQuantity: Number(getProp(item, 'MOQ') || getProp(item, 'minQuantity') || 1),
+          unit: String(getProp(item, 'Unit') || getProp(item, 'unit') || 'pcs'),
+          leadTime: String(getProp(item, 'LeadTime') || getProp(item, 'leadTime') || '5-7 Days'),
+          sizeOptions: parseArrayProp(getProp(item, 'Sizes') || getProp(item, 'sizeOptions')),
+          colorOptions: parseArrayProp(getProp(item, 'Colors') || getProp(item, 'colorOptions')),
+          frequentlyOrdered: true
+        }));
+      }
+
+      // Extract companies
+      let companies: CompanyProfile[] | null = null;
+      if (Array.isArray(raw.companies)) {
+        companies = raw.companies.map((item: any) => ({
+          id: String(getProp(item, 'CompanyID') || getProp(item, 'id') || `co-${Date.now()}`),
+          name: String(getProp(item, 'Name') || getProp(item, 'name') || 'Unnamed Company'),
+          logoUrl: String(getProp(item, 'LogoURL') || getProp(item, 'logoUrl') || ''),
+          contactPerson: String(getProp(item, 'ContactPerson') || getProp(item, 'contactPerson') || ''),
+          contactEmail: String(getProp(item, 'ContactEmail') || getProp(item, 'contactEmail') || ''),
+          contactPhone: String(getProp(item, 'ContactPhone') || getProp(item, 'contactPhone') || ''),
+          deliveryAddress: String(getProp(item, 'DeliveryAddress') || getProp(item, 'deliveryAddress') || ''),
+          assignedPriceLevel: String(getProp(item, 'PriceLevel') || getProp(item, 'assignedPriceLevel') || 'tier_standard'),
+          username: String(getProp(item, 'Username') || getProp(item, 'username') || ''),
+          passcode: String(getProp(item, 'Passcode') || getProp(item, 'passcode') || ''),
+          customProducts: []
+        }));
+      }
+
+      // Extract orders
+      let orders: Order[] | null = null;
+      if (Array.isArray(raw.orders)) {
+        orders = raw.orders.map((item: any) => {
+          const orderId = String(getProp(item, ['OrderID', 'Order ID', 'id']) || `ord-${Date.now()}`);
+          const rawStatus = String(getProp(item, ['Status', 'status']) || 'Pending Approval');
+          let status: any = 'Pending Approval';
+          if (rawStatus.toLowerCase().includes('approve')) status = 'Approved';
+          else if (rawStatus.toLowerCase().includes('reject')) status = 'Rejected';
+          else if (rawStatus.toLowerCase().includes('production') || rawStatus.toLowerCase().includes('print')) status = 'In Production';
+          else if (rawStatus.toLowerCase().includes('dispatch') || rawStatus.toLowerCase().includes('shipped') || rawStatus.toLowerCase().includes('deliv')) status = 'Dispatched';
+
+          return {
+            id: orderId,
+            orderNumber: String(getProp(item, ['OrderNumber', 'Order Number', 'orderNumber', 'Order #', 'OrderNo']) || ''),
+            companyName: String(getProp(item, ['CompanyName', 'Company Name', 'companyName', 'Company', 'Client']) || ''),
+            contactEmail: String(getProp(item, ['ContactEmail', 'Contact Email', 'contactEmail', 'Email', 'CustomerEmail', 'SubmitterEmail']) || ''),
+            contactPerson: String(getProp(item, ['ContactPerson', 'Contact Person', 'contactPerson', 'CustomerName', 'Purchaser', 'SubmitterName', 'Name']) || ''),
+            contactNumber: String(getProp(item, ['ContactNumber', 'Contact Number', 'contactNumber', 'Phone', 'ContactPhone', 'Mobile']) || ''),
+            fbMessengerLink: String(getProp(item, ['FBMessengerLink', 'FB Messenger Link', 'fbMessengerLink', 'Messenger']) || ''),
+            deliveryAddress: String(getProp(item, ['DeliveryAddress', 'Delivery Address', 'deliveryAddress', 'Address']) || ''),
+            poNumber: String(getProp(item, ['PONumber', 'PO Number', 'poNumber', 'PO']) || ''),
+            totalAmount: Number(getProp(item, ['TotalAmount', 'Total Amount', 'totalAmount', 'Amount']) || 0),
+            status: status,
+            createdAt: String(getProp(item, ['CreatedAt', 'Created At', 'createdAt', 'Date']) || new Date().toISOString()),
+            notes: String(getProp(item, ['Notes', 'notes', 'SpecialNotes', 'Remarks']) || ''),
+            portalId: String(getProp(item, ['PortalID', 'Portal ID', 'portalId']) || ''),
+            portalName: String(getProp(item, ['PortalName', 'Portal Name', 'portalName']) || ''),
+            items: parseOrderItems(getProp(item, 'items') || getProp(item, 'Items') || getProp(item, 'OrderItems'))
+          };
+        });
+      }
+
+      // Extract admin settings
+      let adminSettings: any | null = null;
+      if (raw.adminSettings && typeof raw.adminSettings === 'object') {
+        const item = raw.adminSettings;
+        adminSettings = {
+          hubName: getProp(item, 'HubName') || getProp(item, 'hubName'),
+          shortHubName: getProp(item, 'ShortHubName') || getProp(item, 'shortHubName'),
+          orderPrefix: getProp(item, 'OrderPrefix') || getProp(item, 'orderPrefix'),
+          currencySymbol: getProp(item, 'CurrencySymbol') || getProp(item, 'currencySymbol'),
+          colorTheme: getProp(item, 'ColorTheme') || getProp(item, 'colorTheme'),
+          adminEmail: getProp(item, 'AdminEmail') || getProp(item, 'adminEmail'),
+          logoUrl: getProp(item, 'LogoURL') || getProp(item, 'logoUrl'),
+          adminUsername: getProp(item, 'AdminUsername') || getProp(item, 'adminUsername'),
+          adminPasscode: getProp(item, 'AdminPasscode') || getProp(item, 'adminPasscode')
+        };
+      }
+
+      // Extract quote enquiries
+      let quoteEnquiries: QuoteEnquiry[] | null = null;
+      if (Array.isArray(raw.quotes)) {
+        quoteEnquiries = raw.quotes.map((item: any) => ({
+          id: String(getProp(item, 'EnquiryID') || getProp(item, 'id') || `quote-${Date.now()}`),
+          companyName: String(getProp(item, 'CompanyName') || getProp(item, 'companyName') || ''),
+          contactPerson: String(getProp(item, 'ContactPerson') || getProp(item, 'contactPerson') || ''),
+          contactEmail: String(getProp(item, 'ContactEmail') || getProp(item, 'contactEmail') || ''),
+          contactNumber: String(getProp(item, 'ContactNumber') || getProp(item, 'contactNumber') || ''),
+          productName: String(getProp(item, 'ProductName') || getProp(item, 'productName') || ''),
+          quantity: Number(getProp(item, 'Quantity') || getProp(item, 'quantity') || 1),
+          specs: String(getProp(item, 'Specs') || getProp(item, 'specs') || ''),
+          status: String(getProp(item, 'Status') || getProp(item, 'status') || 'New Quote Request') as any,
+          createdAt: String(getProp(item, 'CreatedAt') || getProp(item, 'createdAt') || new Date().toISOString()),
+          quotedUnitPrice: getProp(item, 'QuotedUnitPrice') ? Number(getProp(item, 'QuotedUnitPrice')) : undefined,
+          quoteNotes: String(getProp(item, 'QuoteNotes') || getProp(item, 'quoteNotes') || ''),
+          companyId: getProp(item, 'CompanyID') ? String(getProp(item, 'CompanyID')) : undefined
+        }));
+      }
+
+      // Extract catalog products
+      let catalogProducts: CatalogProduct[] | null = null;
+      if (Array.isArray(raw.catalogProducts)) {
+        catalogProducts = raw.catalogProducts.map((item: any) => ({
+          id: String(getProp(item, 'ProductID') || getProp(item, 'id') || `cat-${Date.now()}`),
+          name: String(getProp(item, 'Name') || getProp(item, 'name') || 'Unnamed Catalog Item'),
+          category: String(getProp(item, 'Category') || getProp(item, 'category') || 'Apparel'),
+          description: String(getProp(item, 'Description') || getProp(item, 'description') || ''),
+          specifications: String(getProp(item, 'Specifications') || getProp(item, 'specifications') || ''),
+          imageUrl: String(getProp(item, 'ImageURL') || getProp(item, 'imageUrl') || ''),
+          imageUrls: (() => {
+            const val = getProp(item, ['ImageURLs', 'imageUrls', 'Image URLs']);
+            if (Array.isArray(val)) return val.map(String);
+            if (typeof val === 'string' && val.trim()) return val.split(';||;').map(s => s.trim()).filter(Boolean);
+            return undefined;
+          })(),
+          moq: Number(getProp(item, 'MOQ') || getProp(item, 'moq') || 10),
+          brandingMethods: parseArrayProp(getProp(item, 'BrandingMethods') || getProp(item, 'brandingMethods')),
+          colors: parseColors(getProp(item, 'Colors') || getProp(item, 'colors')),
+          sizes: parseArrayProp(getProp(item, 'Sizes') || getProp(item, 'sizes')),
+          variantPrices: parseVariantPrices(getProp(item, 'VariantPrices') || getProp(item, 'variantPrices')),
+          colorImages: parseColorImages(getProp(item, 'ColorImages') || getProp(item, 'colorImages')),
+          status: String(getProp(item, 'Status') || getProp(item, 'status') || 'Active') as any,
+          createdAt: String(getProp(item, 'CreatedAt') || getProp(item, 'createdAt') || new Date().toISOString())
+        }));
+      }
+
+      // Extract portals
+      let portals: OrderPortal[] | null = null;
+      if (Array.isArray(raw.portals)) {
+        portals = raw.portals.map((item: any) => ({
+          id: String(getProp(item, 'PortalID') || getProp(item, 'id') || `portal-${Date.now()}`),
+          token: String(getProp(item, 'Token') || getProp(item, 'token') || ''),
+          title: String(getProp(item, 'Title') || getProp(item, 'title') || 'Ordering Portal'),
+          companyId: String(getProp(item, 'CompanyID') || getProp(item, 'companyId') || ''),
+          companyName: String(getProp(item, 'CompanyName') || getProp(item, 'companyName') || ''),
+          productIds: parseArrayProp(getProp(item, 'ProductIDs') || getProp(item, 'productIds')),
+          customPrices: parseObjectProp(getProp(item, 'CustomPrices') || getProp(item, 'customPrices')),
+          customVariantPrices: parseObjectProp(getProp(item, 'CustomVariantPrices') || getProp(item, 'customVariantPrices')),
+          active: String(getProp(item, 'Active') || getProp(item, 'active') || 'true') !== 'false',
+          createdAt: String(getProp(item, 'CreatedAt') || getProp(item, 'createdAt') || new Date().toISOString()),
+          bannerImageUrl: getProp(item, 'BannerImageUrl') ? String(getProp(item, 'BannerImageUrl')) : undefined,
+          welcomeMessage: getProp(item, 'WelcomeMessage') ? String(getProp(item, 'WelcomeMessage')) : undefined
+        }));
+      }
+
+      return {
+        products,
+        companies,
+        orders,
+        adminSettings,
+        quoteEnquiries,
+        catalogProducts,
+        portals
+      };
+    } catch (err) {
+      console.warn('Google Sheets fetchAllData notice:', err);
+      return null;
     }
   }
 };

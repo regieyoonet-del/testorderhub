@@ -209,3 +209,61 @@ export interface OrderPortal {
   customVariantPrices?: Record<string, Record<string, number>>; // Map of productId -> (variantKey -> custom price)
 }
 
+export function getDisplayPurchaserName(
+  order: {
+    contactPerson?: string;
+    contactEmail?: string;
+    items?: Array<{ submitterName?: string }>;
+  },
+  fallbackCompanyContact?: string
+): string {
+  const isGeneric = (str?: string) => {
+    if (!str) return true;
+    const s = str.trim().toLowerCase();
+    return (
+      !s ||
+      s === 'n/a' ||
+      s === 'storefront customer' ||
+      s === 'storefront purchaser' ||
+      s === 'guest user' ||
+      s === 'company representative' ||
+      s === 'customer'
+    );
+  };
+
+  const rawPerson = order?.contactPerson?.trim();
+  if (rawPerson && !isGeneric(rawPerson) && !rawPerson.includes('@')) {
+    return rawPerson;
+  }
+
+  if (Array.isArray(order?.items)) {
+    const itemSubmitter = order.items.find(
+      i => i?.submitterName && !isGeneric(i.submitterName) && !i.submitterName.includes('@')
+    )?.submitterName?.trim();
+    if (itemSubmitter) {
+      return itemSubmitter;
+    }
+  }
+
+  const companyContact = fallbackCompanyContact?.trim();
+  if (companyContact && !isGeneric(companyContact) && !companyContact.includes('@')) {
+    return companyContact;
+  }
+
+  const emailCandidate = (rawPerson && rawPerson.includes('@')) ? rawPerson : order?.contactEmail?.trim();
+  if (emailCandidate && emailCandidate.includes('@')) {
+    const handle = emailCandidate.split('@')[0].trim();
+    if (handle) {
+      const formatted = handle
+        .replace(/[._\-+]/g, ' ')
+        .split(' ')
+        .filter(Boolean)
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ');
+      if (formatted) return formatted;
+    }
+  }
+
+  return 'Storefront Customer';
+}
+

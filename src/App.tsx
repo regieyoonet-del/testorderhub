@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Product, CompanyProfile, Order, CartItem, AppsScriptConfig, SystemSettings, CatalogProduct, QuoteEnquiry, OrderPortal } from './types';
+import { Product, CompanyProfile, Order, CartItem, AppsScriptConfig, SystemSettings, CatalogProduct, QuoteEnquiry, OrderPortal, getDisplayPurchaserName } from './types';
 import { INITIAL_PRODUCTS, INITIAL_COMPANIES, INITIAL_ORDERS, INITIAL_PORTALS } from './data/mockData';
 import { INITIAL_CATALOG_PRODUCTS, INITIAL_QUOTE_ENQUIRIES, sanitizeCatalogProduct } from './data/initialCatalog';
 import { DEFAULT_QUOTE_NOTES } from './constants/quoteDefaults';
@@ -674,24 +674,37 @@ export default function App() {
       }
       
       try {
-        // Parallelize all requests to make syncing as fast as possible (~300ms)
-        const [
-          fetchedProducts,
-          fetchedCompanies,
-          fetchedOrders,
-          fetchedSettings,
-          fetchedQuotes,
-          fetchedCatalogProducts,
-          fetchedPortals
-        ] = await Promise.all([
-          sheetsService.fetchProducts(url).catch(() => null),
-          sheetsService.fetchCompanies(url).catch(() => null),
-          sheetsService.fetchOrders(url).catch(() => null),
-          sheetsService.fetchAdminSettings(url).catch(() => null),
-          sheetsService.fetchQuoteEnquiries(url).catch(() => null),
-          sheetsService.fetchCatalogProducts(url).catch(() => null),
-          sheetsService.fetchPortals(url).catch(() => null)
-        ]);
+        // Try single-roundtrip bulk fetch first for maximum sync speed (~150ms)
+        const allData = await sheetsService.fetchAllData(url);
+
+        let fetchedProducts = allData?.products ?? null;
+        let fetchedCompanies = allData?.companies ?? null;
+        let fetchedOrders = allData?.orders ?? null;
+        let fetchedSettings = allData?.adminSettings ?? null;
+        let fetchedQuotes = allData?.quoteEnquiries ?? null;
+        let fetchedCatalogProducts = allData?.catalogProducts ?? null;
+        let fetchedPortals = allData?.portals ?? null;
+
+        // Fallback to parallel fetches if bulk endpoint was not available or empty
+        if (!allData) {
+          [
+            fetchedProducts,
+            fetchedCompanies,
+            fetchedOrders,
+            fetchedSettings,
+            fetchedQuotes,
+            fetchedCatalogProducts,
+            fetchedPortals
+          ] = await Promise.all([
+            sheetsService.fetchProducts(url).catch(() => null),
+            sheetsService.fetchCompanies(url).catch(() => null),
+            sheetsService.fetchOrders(url).catch(() => null),
+            sheetsService.fetchAdminSettings(url).catch(() => null),
+            sheetsService.fetchQuoteEnquiries(url).catch(() => null),
+            sheetsService.fetchCatalogProducts(url).catch(() => null),
+            sheetsService.fetchPortals(url).catch(() => null)
+          ]);
+        }
 
         // 1. Process companies
         if (fetchedCompanies !== null && fetchedCompanies.length > 0) {
@@ -1643,7 +1656,9 @@ export default function App() {
 
   // Render public order portal if active or opened via share link
   if (activePublicPortal) {
-    const portalCompany = companies.find(c => c.id === activePublicPortal.companyId) || activeCompany;
+    const portalCompany = companies.find(c => c.id.toLowerCase() === activePublicPortal.companyId?.toLowerCase()) ||
+      companies.find(c => c.name?.toLowerCase() === activePublicPortal.companyName?.toLowerCase()) ||
+      activeCompany;
     
     // Aggregate master products, company custom products, and catalog products
     const productMap = new Map<string, Product>();
@@ -1716,41 +1731,102 @@ export default function App() {
   // If URL has ?portal=... parameter and we are currently loading/resolving
   if (urlPortalToken && isResolvingPortal) {
     const tokenClean = urlPortalToken.trim().toLowerCase();
-    const matchedPortal = activePublicPortal || orderPortals.find(p =>
-      p.shareToken?.toLowerCase() === tokenClean ||
-      p.id?.toLowerCase() === tokenClean ||
-      p.companyId?.toLowerCase() === tokenClean
-    );
+    const tokenNormalized = tokenClean.replace(/^portal-/, '').replace(/^co-/, '');
 
-    const matchedCompany = companies.find(c => c.id === matchedPortal?.companyId) ||
-      companies.find(c =>
-        c.id.toLowerCase() === tokenClean ||
-        c.username?.toLowerCase() === tokenClean ||
-        c.name?.toLowerCase() === tokenClean ||
-        tokenClean.includes(c.id.toLowerCase()) ||
-        tokenClean.includes((c.username || '').toLowerCase())
-      );
+    // 1. Search in activePublicPortal, state orderPortals, localStorage cached portals, and INITIAL_PORTALS
+    let cachedPortals: OrderPortal[] = [];
+    try {
+      const pStr = localStorage.getItem('rp_order_portals');
+      if (pStr) cachedPortals = JSON.parse(pStr);
+    } catch (e) {}
 
-    const logo = matchedCompany?.logoUrl || systemSettings.logoUrl;
-    const name = matchedCompany?.name || matchedPortal?.companyName || '';
+    const allPortals = [...orderPortals, ...cachedPortals, ...INITIAL_PORTALS];
+
+    const matchedPortal = activePublicPortal || allPortals.find(p => {
+      const pToken = (p.shareToken || '').toLowerCase();
+      const pId = (p.id || '').toLowerCase();
+      const pCoId = (p.companyId || '').toLowerCase();
+      const pCoName = (p.companyName || '').toLowerCase();
+      const pName = (p.name || '').toLowerCase();
+      return pToken === tokenClean ||
+             pId === tokenClean ||
+             pCoId === tokenClean ||
+             (tokenNormalized !== '' && (
+               pToken.includes(tokenNormalized) ||
+               pId.includes(tokenNormalized) ||
+               pCoId.includes(tokenNormalized) ||
+               pCoName.includes(tokenNormalized) ||
+               pName.includes(tokenNormalized)
+             ));
+    });
+
+    // 2. Search in state companies, localStorage cached companies, and INITIAL_COMPANIES
+    let cachedCompanies: CompanyProfile[] = [];
+    try {
+      const cStr = localStorage.getItem('rp_companies');
+      if (cStr) cachedCompanies = JSON.parse(cStr);
+    } catch (e) {}
+
+    const allCompanies = [...companies, ...cachedCompanies, ...INITIAL_COMPANIES];
+
+    const targetCompanyId = matchedPortal?.companyId?.toLowerCase();
+    const targetCompanyName = matchedPortal?.companyName?.toLowerCase();
+
+    const matchedCompany = (targetCompanyId ? allCompanies.find(c => (c.id || '').toLowerCase() === targetCompanyId) : null) ||
+      (targetCompanyName ? allCompanies.find(c => (c.name || '').toLowerCase() === targetCompanyName) : null) ||
+      allCompanies.find(c => {
+        const cId = (c.id || '').toLowerCase();
+        const cUser = (c.username || '').toLowerCase();
+        const cName = (c.name || '').toLowerCase();
+        return cId === tokenClean ||
+               cUser === tokenClean ||
+               cName === tokenClean ||
+               (tokenClean !== '' && (tokenClean.includes(cId) || (cUser !== '' && tokenClean.includes(cUser)))) ||
+               (tokenNormalized !== '' && (
+                 cId.includes(tokenNormalized) ||
+                 (cUser !== '' && cUser.includes(tokenNormalized)) ||
+                 cName.includes(tokenNormalized)
+               ));
+      }) ||
+      (allCompanies.length > 0 ? allCompanies[0] : null);
+
+    const logo = matchedCompany?.logoUrl || matchedPortal?.bannerImageUrl || systemSettings.logoUrl;
+    const companyName = matchedCompany?.name || matchedPortal?.companyName || matchedPortal?.name || 'Corporate Storefront';
 
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 font-sans">
         <style dangerouslySetInnerHTML={{ __html: getThemeStyles(systemSettings.colorTheme || 'classic_noir') }} />
         <div className="flex flex-col items-center justify-center space-y-6 animate-fade-in">
           {logo ? (
-            <img
-              src={logo}
-              alt={name || 'Company Logo'}
-              className="max-h-20 max-w-[240px] object-contain animate-pulse"
-              referrerPolicy="no-referrer"
-            />
+            <div className="flex flex-col items-center justify-center space-y-3 text-center">
+              <img
+                src={logo}
+                alt={companyName || 'Company Logo'}
+                className="max-h-24 max-w-[280px] object-contain animate-pulse"
+                referrerPolicy="no-referrer"
+              />
+              {companyName && (
+                <span className="text-[11px] font-mono font-extrabold uppercase tracking-widest text-black/70">
+                  {companyName} Storefront
+                </span>
+              )}
+            </div>
           ) : (
-            <div className="w-20 h-20 rounded-2xl bg-black text-white font-black text-2xl flex items-center justify-center uppercase shadow-md animate-pulse">
-              {name ? name.slice(0, 2) : 'CO'}
+            <div className="flex flex-col items-center justify-center space-y-3 text-center">
+              <div className="w-20 h-20 rounded-2xl bg-black text-white font-black text-2xl flex items-center justify-center uppercase shadow-md animate-pulse">
+                {companyName ? companyName.slice(0, 2) : 'CO'}
+              </div>
+              {companyName && (
+                <span className="text-[11px] font-mono font-extrabold uppercase tracking-widest text-black/70">
+                  {companyName} Storefront
+                </span>
+              )}
             </div>
           )}
-          <div className="w-5 h-5 border-2 border-black/15 border-t-black rounded-full animate-spin" />
+          <div className="flex items-center gap-2 text-xs font-mono font-medium text-gray-500 pt-2">
+            <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+            <span>Loading Storefront...</span>
+          </div>
         </div>
       </div>
     );
@@ -1794,6 +1870,9 @@ export default function App() {
           companies={companies}
           onLogin={handleLogin}
           systemSettings={systemSettings}
+          onSyncSheets={syncWithSheets}
+          isSyncingSheets={isSyncingSheets}
+          lastSyncedTime={lastSyncedTime}
         />
       </>
     );
@@ -1999,7 +2078,7 @@ export default function App() {
                 )}
                 <div className="flex justify-between">
                   <span className="text-gray-400">Buyer Rep:</span>
-                  <span className="font-bold text-black">{successOrder.contactPerson}</span>
+                  <span className="font-bold text-black">{getDisplayPurchaserName(successOrder)}</span>
                 </div>
                 <div className="flex justify-between border-t border-gray-200 pt-2 text-black font-bold">
                   <span>Total Amount:</span>

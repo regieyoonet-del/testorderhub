@@ -33,6 +33,20 @@ function doGet(e) {
   // Create sheets if they do not exist
   initSheets(sheet);
   
+  if (action === "getAllData" || action === "syncAll" || action === "getInitialData") {
+    var adminData = getTableData(sheet, "Admin");
+    return getJsonOutput({
+      status: "success",
+      products: getTableData(sheet, "Products"),
+      catalogProducts: getTableData(sheet, "CatalogProducts"),
+      quotes: getTableData(sheet, "Quotes"),
+      companies: getTableData(sheet, "Companies"),
+      portals: getTableData(sheet, "Portals"),
+      orders: getOrdersWithItems(sheet),
+      adminSettings: adminData.length > 0 ? adminData[0] : {}
+    });
+  }
+
   if (action === "getProducts") {
     return getJsonOutput(getTableData(sheet, "Products"));
   }
@@ -283,18 +297,18 @@ function getOrdersWithItems(ss) {
     
     return {
       id: orderId,
-      orderNumber: order.OrderNumber || order["Order Number"],
-      companyName: order.CompanyName || order["Company Name"],
-      contactEmail: order.ContactEmail || order["Contact Email"],
-      contactPerson: order.ContactPerson || order["Contact Person"],
-      contactNumber: order.ContactNumber || order["Contact Number"] || "",
-      fbMessengerLink: order.FBMessengerLink || order["FB Messenger Link"] || "",
-      deliveryAddress: order.DeliveryAddress || order["Delivery Address"],
-      poNumber: order.PONumber || order["PO Number"] || "",
-      totalAmount: Number(order.TotalAmount || order["Total Amount"]),
+      orderNumber: order.OrderNumber || order["Order Number"] || order.OrderNo || order["Order #"] || order.id || "",
+      companyName: order.CompanyName || order["Company Name"] || order.Company || order.Client || "",
+      contactEmail: order.ContactEmail || order["Contact Email"] || order.Email || order.SubmitterEmail || order["Submitter Email"] || order.CustomerEmail || "",
+      contactPerson: order.ContactPerson || order["Contact Person"] || order.Purchaser || order["Purchaser / Submitter"] || order.CustomerName || order["Customer Name"] || order.SubmitterName || order["Submitter Name"] || order.Name || order["Shopper Name"] || "",
+      contactNumber: order.ContactNumber || order["Contact Number"] || order.ContactPhone || order.Phone || order.Mobile || "",
+      fbMessengerLink: order.FBMessengerLink || order["FB Messenger Link"] || order.Messenger || order["Facebook Messenger Link"] || "",
+      deliveryAddress: order.DeliveryAddress || order["Delivery Address"] || order.Address || order["Address / Dept"] || order["Department / Address"] || order.DeliveryDept || "",
+      poNumber: order.PONumber || order["PO Number"] || order["PO / Cost Center"] || order.POCostCenter || "",
+      totalAmount: Number(order.TotalAmount || order["Total Amount"] || order.Amount || 0),
       status: order.Status || "Pending Approval",
-      createdAt: order.CreatedAt || order["Created At"],
-      notes: order.Notes || "",
+      createdAt: order.CreatedAt || order["Created At"] || order.Date || new Date().toISOString(),
+      notes: order.Notes || order.SpecialNotes || order["Order Notes"] || order.Remarks || "",
       portalId: order.PortalID || order["Portal ID"] || order.portalId || "",
       portalName: order.PortalName || order["Portal Name"] || order.portalName || "",
       items: orderItems

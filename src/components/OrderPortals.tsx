@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { OrderPortal, Product, CompanyProfile, SystemSettings, Order } from '../types';
+import { OrderPortal, Product, CompanyProfile, SystemSettings, Order, getDisplayPurchaserName } from '../types';
 import {
   Store,
   Plus,
@@ -274,9 +274,11 @@ export default function OrderPortals({
         const q = orderSearch.toLowerCase();
         const matchesNum = (o.orderNumber || '').toLowerCase().includes(q) || (o.id || '').toLowerCase().includes(q);
         const matchesPO = (o.poNumber || '').toLowerCase().includes(q);
-        const matchesPerson = (o.contactPerson || '').toLowerCase().includes(q);
+        const matchesPerson = (o.contactPerson || '').toLowerCase().includes(q) || o.items.some(i => (i.submitterName || '').toLowerCase().includes(q));
         const matchesEmail = (o.contactEmail || '').toLowerCase().includes(q);
-        return matchesNum || matchesPO || matchesPerson || matchesEmail;
+        const matchesAddr = (o.deliveryAddress || '').toLowerCase().includes(q);
+        const matchesNotes = (o.notes || '').toLowerCase().includes(q);
+        return matchesNum || matchesPO || matchesPerson || matchesEmail || matchesAddr || matchesNotes;
       }
       return true;
     });
@@ -865,12 +867,12 @@ export default function OrderPortals({
                         <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">Purchaser / Submitter</span>
                         <div className="font-extrabold text-black flex items-center gap-1.5">
                           <User className="w-3.5 h-3.5 text-gray-400" />
-                          <span>{ord.contactPerson || 'N/A'}</span>
+                          <span>{getDisplayPurchaserName(ord)}</span>
                         </div>
                       </div>
 
                       <div>
-                        <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">Email / Phone</span>
+                        <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">Email / Phone / Messenger</span>
                         <div className="font-medium text-gray-800 space-y-0.5">
                           {ord.contactEmail && (
                             <div className="flex items-center gap-1 truncate">
@@ -884,7 +886,20 @@ export default function OrderPortals({
                               <span>{ord.contactNumber}</span>
                             </div>
                           )}
-                          {!ord.contactEmail && !ord.contactNumber && <span className="text-gray-400">N/A</span>}
+                          {ord.fbMessengerLink && (
+                            <div className="flex items-center gap-1 truncate pt-0.5">
+                              <a
+                                href={ord.fbMessengerLink.startsWith('http') ? ord.fbMessengerLink : `https://${ord.fbMessengerLink}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] text-blue-600 font-bold hover:underline inline-flex items-center gap-1"
+                              >
+                                <span>💬 FB Messenger Link</span>
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            </div>
+                          )}
+                          {!ord.contactEmail && !ord.contactNumber && !ord.fbMessengerLink && <span className="text-gray-400">N/A</span>}
                         </div>
                       </div>
 
@@ -892,7 +907,7 @@ export default function OrderPortals({
                         <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">Address / Dept</span>
                         <div className="font-medium text-gray-800 flex items-start gap-1.5">
                           <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
-                          <span className="line-clamp-2">{ord.deliveryAddress || 'Standard Corporate Delivery'}</span>
+                          <span className="line-clamp-2">{ord.deliveryAddress || 'No address specified'}</span>
                         </div>
                       </div>
 
@@ -900,7 +915,7 @@ export default function OrderPortals({
                         <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">PO Number &amp; Notes</span>
                         <div className="font-mono text-gray-800 space-y-0.5">
                           {ord.poNumber && <div className="font-bold text-black">PO: {ord.poNumber}</div>}
-                          {ord.notes && <div className="text-[11px] italic text-gray-600 line-clamp-2">"{ord.notes}"</div>}
+                          {ord.notes && <div className="text-[11px] italic text-gray-600 leading-snug">"{ord.notes}"</div>}
                           {!ord.poNumber && !ord.notes && <span className="text-gray-400">None provided</span>}
                         </div>
                       </div>

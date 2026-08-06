@@ -3,23 +3,41 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CompanyProfile, SystemSettings } from '../types';
-import { KeyRound, User, ShieldCheck, Building, HelpCircle, Eye, EyeOff } from 'lucide-react';
+import { KeyRound, User, ShieldCheck, Building, HelpCircle, Eye, EyeOff, RefreshCw, CheckCircle2 } from 'lucide-react';
 
 interface LoginScreenProps {
   companies: CompanyProfile[];
   onLogin: (role: 'admin' | 'client', companyId?: string) => void;
   systemSettings: SystemSettings;
+  onSyncSheets?: () => Promise<void>;
+  isSyncingSheets?: boolean;
+  lastSyncedTime?: string | null;
 }
 
-export default function LoginScreen({ companies, onLogin, systemSettings }: LoginScreenProps) {
+export default function LoginScreen({
+  companies,
+  onLogin,
+  systemSettings,
+  onSyncSheets,
+  isSyncingSheets,
+  lastSyncedTime
+}: LoginScreenProps) {
   const [username, setUsername] = useState('');
   const [passcode, setPasscode] = useState('');
   const [showPasscode, setShowPasscode] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Trigger fast background sync as soon as sign-in screen mounts on a new device
+  useEffect(() => {
+    if (onSyncSheets) {
+      onSyncSheets().catch(() => {});
+    }
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -31,30 +49,56 @@ export default function LoginScreen({ companies, onLogin, systemSettings }: Logi
       return;
     }
 
-    // Check Admin Credentials
-    const savedAdminUser = (systemSettings?.adminUsername || 'admin').toLowerCase();
-    const savedAdminPass = systemSettings?.adminPasscode || 'admin123';
+    const verifyCredentials = () => {
+      // Check Admin Credentials
+      const savedAdminUser = (systemSettings?.adminUsername || 'admin').toLowerCase();
+      const savedAdminPass = systemSettings?.adminPasscode || 'admin123';
 
-    const isAdminUserMatch = trimmedUser === savedAdminUser || (savedAdminUser === 'admin' && trimmedUser === 'admin');
-    const isAdminPassMatch = trimmedPass === savedAdminPass || (savedAdminPass === 'admin123' && (trimmedPass === 'admin123' || trimmedPass === 'admin'));
+      const isAdminUserMatch = trimmedUser === savedAdminUser || (savedAdminUser === 'admin' && trimmedUser === 'admin');
+      const isAdminPassMatch = trimmedPass === savedAdminPass || (savedAdminPass === 'admin123' && (trimmedPass === 'admin123' || trimmedPass === 'admin'));
 
-    if (isAdminUserMatch && isAdminPassMatch) {
-      onLogin('admin');
+      if (isAdminUserMatch && isAdminPassMatch) {
+        onLogin('admin');
+        return true;
+      }
+
+      // Check Client Credentials
+      const foundCo = companies.find(
+        (co) =>
+          co.username?.toLowerCase() === trimmedUser &&
+          co.passcode === trimmedPass
+      );
+
+      if (foundCo) {
+        onLogin('client', foundCo.id);
+        return true;
+      }
+
+      return false;
+    };
+
+    // First attempt with current loaded state
+    if (verifyCredentials()) {
       return;
     }
 
-    // Check Client Credentials
-    const foundCo = companies.find(
-      (co) =>
-        co.username?.toLowerCase() === trimmedUser &&
-        co.passcode === trimmedPass
-    );
-
-    if (foundCo) {
-      onLogin('client', foundCo.id);
-    } else {
-      setError('Invalid username or passcode. Please check your credentials and try again.');
+    // If initial check fails, perform an immediate fast live sync from Google Sheets in case credentials were updated on another device
+    if (onSyncSheets) {
+      setIsVerifying(true);
+      try {
+        await onSyncSheets();
+        // Retry verification with freshly synced credentials
+        if (verifyCredentials()) {
+          return;
+        }
+      } catch (err) {
+        console.warn('Live sync verification notice:', err);
+      } finally {
+        setIsVerifying(false);
+      }
     }
+
+    setError('Invalid username or passcode. Please check your credentials and try again.');
   };
 
   return (
@@ -90,7 +134,7 @@ export default function LoginScreen({ companies, onLogin, systemSettings }: Logi
 
             <div className="space-y-1">
               <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-mono font-bold">
-                Username
+                B2B Username
               </label>
               <div className="relative flex items-center">
                 <User className="absolute left-3.5 w-4 h-4 text-gray-400" />
@@ -99,7 +143,8 @@ export default function LoginScreen({ companies, onLogin, systemSettings }: Logi
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="e.g. acme"
-                  className="w-full bg-gray-50 border border-gray-200 focus:border-black focus:bg-white text-sm pl-11 pr-4 py-3 rounded-xl focus:outline-none transition-all text-black font-semibold"
+                  disabled={isVerifying}
+                  className="w-full bg-gray-50 border border-gray-200 focus:border-black focus:bg-white text-sm pl-11 pr-4 py-3 rounded-xl focus:outline-none transition-all text-black font-semibold disabled:opacity-70"
                   id="login-username-input"
                 />
               </div>
@@ -107,7 +152,7 @@ export default function LoginScreen({ companies, onLogin, systemSettings }: Logi
 
             <div className="space-y-1">
               <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-mono font-bold">
-                Passcode
+                Portal Passcode
               </label>
               <div className="relative flex items-center">
                 <KeyRound className="absolute left-3.5 w-4 h-4 text-gray-400" />
@@ -116,7 +161,8 @@ export default function LoginScreen({ companies, onLogin, systemSettings }: Logi
                   value={passcode}
                   onChange={(e) => setPasscode(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-gray-50 border border-gray-200 focus:border-black focus:bg-white text-sm pl-11 pr-11 py-3 rounded-xl focus:outline-none transition-all text-black font-semibold font-mono"
+                  disabled={isVerifying}
+                  className="w-full bg-gray-50 border border-gray-200 focus:border-black focus:bg-white text-sm pl-11 pr-11 py-3 rounded-xl focus:outline-none transition-all text-black font-semibold font-mono disabled:opacity-70"
                   id="login-passcode-input"
                 />
                 <button
@@ -131,12 +177,29 @@ export default function LoginScreen({ companies, onLogin, systemSettings }: Logi
 
             <button
               type="submit"
-              className="w-full bg-black text-white py-3.5 rounded-xl text-xs uppercase font-extrabold tracking-widest border border-black hover:bg-white hover:text-black transition-all cursor-pointer shadow-md mt-6"
+              disabled={isVerifying}
+              className="w-full bg-black text-white py-3.5 rounded-xl text-xs uppercase font-extrabold tracking-widest border border-black hover:bg-white hover:text-black transition-all cursor-pointer shadow-md mt-6 disabled:opacity-70 flex items-center justify-center gap-2"
               id="login-submit-btn"
             >
-              Sign In
+              {isVerifying && <RefreshCw className="w-4 h-4 animate-spin" />}
+              <span>{isVerifying ? 'Verifying with Cloud...' : 'Sign In to Catalog'}</span>
             </button>
           </form>
+        </div>
+
+        {/* Live Sync Indicator (Muted & Bottom of Screen) */}
+        <div className="text-center pt-2">
+          {isSyncingSheets || isVerifying ? (
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-mono text-gray-400 opacity-75">
+              <RefreshCw className="w-3 h-3 animate-spin text-gray-400" />
+              <span>CCS Syncing...</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-mono text-gray-400 opacity-70">
+              <CheckCircle2 className="w-3 h-3 text-gray-400" />
+              <span>CCS {lastSyncedTime ? `(${lastSyncedTime})` : 'Synced'}</span>
+            </span>
+          )}
         </div>
       </div>
     </div>

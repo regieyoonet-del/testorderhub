@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Order, CartItem } from '../types';
+import { Order, CartItem, getDisplayPurchaserName } from '../types';
 import { Calendar, RefreshCw, ChevronDown, ChevronUp, Clock, Package, CheckCircle2, Truck, ArrowRight, Store, Layers, ExternalLink } from 'lucide-react';
 
 interface OrderHistoryProps {
@@ -267,7 +267,7 @@ export default function OrderHistory({
                         <Calendar className="w-3.5 h-3.5" /> {formattedDate}
                       </span>
                       <span>·</span>
-                      <span>By <strong className="text-black font-semibold">{order.contactPerson || order.contactEmail || 'Storefront Purchaser'}</strong></span>
+                      <span>By <strong className="text-black font-semibold">{getDisplayPurchaserName(order)}</strong></span>
                       <span>·</span>
                       <span className="font-bold text-black">{order.items.length} items</span>
                     </div>
@@ -362,7 +362,7 @@ export default function OrderHistory({
                       <div>
                         <span className="font-bold text-black uppercase block text-[10px] font-mono">Purchaser &amp; Details</span>
                         <p className="mt-1 leading-normal font-sans text-gray-800">
-                          <span className="font-bold text-black">Purchaser:</span> {order.contactPerson || 'Storefront Customer'}{' '}
+                          <span className="font-bold text-black">Purchaser:</span> {getDisplayPurchaserName(order)}{' '}
                           {order.contactEmail && (
                             <span className="text-gray-600 font-mono text-[11px]">(<a href={`mailto:${order.contactEmail}`} className="underline text-blue-600">{order.contactEmail}</a>)</span>
                           )}
@@ -380,13 +380,18 @@ export default function OrderHistory({
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline bg-blue-50 px-2 py-0.5 rounded border border-blue-200 text-[11px]"
                             >
-                              <span>💬 FB Messenger</span>
+                              <span>💬 FB Messenger Link</span>
                               <ExternalLink className="w-3 h-3" />
                             </a>
                           </p>
                         )}
+                        {order.poNumber && (
+                          <p className="mt-1 text-gray-800 font-mono text-[11px] font-bold">
+                            PO #: {order.poNumber}
+                          </p>
+                        )}
                         {order.notes && (
-                          <p className="mt-2 text-gray-500 italic bg-white p-2 border border-gray-100 font-mono text-[11px]">
+                          <p className="mt-2 text-gray-700 italic bg-white p-2 border border-gray-200 rounded font-mono text-[11px] leading-relaxed">
                             Notes: "{order.notes}"
                           </p>
                         )}

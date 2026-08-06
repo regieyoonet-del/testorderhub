@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Product, CompanyProfile, Order, SystemSettings, AppsScriptConfig, CatalogProduct, QuoteEnquiry } from '../types';
+import { Product, CompanyProfile, Order, SystemSettings, AppsScriptConfig, CatalogProduct, QuoteEnquiry, getDisplayPurchaserName } from '../types';
 import AppsScriptInstructions from './AppsScriptInstructions';
 import SettingsPanel from './SettingsPanel';
 import AdminProductCatalog from './AdminProductCatalog';
@@ -1176,7 +1176,7 @@ export default function AdminDashboard({
                               {ord.companyName}
                             </h5>
                             <div className="text-[10px] text-gray-500 font-mono mt-0.5 space-y-0.5">
-                              <span className="font-semibold block text-neutral-800">Customer: {ord.contactPerson}</span>
+                              <span className="font-semibold block text-neutral-800">Customer: {getDisplayPurchaserName(ord)}</span>
                               {ord.contactNumber && (
                                 <span className="text-gray-700 font-bold block">Phone: {ord.contactNumber}</span>
                               )}
@@ -1885,7 +1885,7 @@ export default function AdminDashboard({
                 <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 space-y-2">
                   <span className="text-[9px] uppercase tracking-wider text-gray-400 font-bold block">Client Account &amp; Customer Details</span>
                   <p className="font-extrabold text-sm text-black uppercase">{selectedOrder.companyName}</p>
-                  <p className="text-gray-900 font-bold">Customer: {selectedOrder.contactPerson}</p>
+                  <p className="text-gray-900 font-bold">Customer: {getDisplayPurchaserName(selectedOrder)}</p>
                   {selectedOrder.contactNumber && (
                     <p className="text-gray-700 font-bold">Phone: {selectedOrder.contactNumber}</p>
                   )}
@@ -1897,7 +1897,7 @@ export default function AdminDashboard({
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 font-bold text-blue-600 hover:underline bg-blue-50 px-2 py-0.5 rounded border border-blue-200 text-xs"
                       >
-                        <span>FB Messenger Profile</span>
+                        <span>FB Messenger Link</span>
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     </p>
@@ -1924,7 +1924,7 @@ export default function AdminDashboard({
                   )}
                   <p className="text-gray-600 leading-relaxed">
                     <span className="text-gray-400 block font-bold text-[8px] uppercase">Address:</span>
-                    {selectedOrder.deliveryAddress}
+                    {selectedOrder.deliveryAddress || 'No address specified'}
                   </p>
                 </div>
               </div>

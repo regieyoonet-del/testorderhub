@@ -36,13 +36,13 @@ export default function ProductDetailsPage({ product, onClose, onEdit, editLabel
   const retailPrice = product.originalPrice || product.basePrice * 1.8;
   const savingsPercent = Math.round(((retailPrice - product.basePrice) / retailPrice) * 100);
 
-  // Carousel Image Logic (max 8 images including color variants)
+  // Carousel Image Logic (max 15 images including color variants)
   const allImages = React.useMemo(() => {
     const base = product.imageUrls && product.imageUrls.length > 0
       ? product.imageUrls.filter(Boolean)
       : (product.imageUrl ? [product.imageUrl] : []);
     const colorImgs = product.colorImages ? Object.values(product.colorImages).filter(Boolean) : [];
-    return Array.from(new Set([...base, ...colorImgs])).slice(0, 8);
+    return Array.from(new Set([...base, ...colorImgs])).slice(0, 15);
   }, [product.imageUrl, product.imageUrls, product.colorImages]);
 
   const availableColors = React.useMemo(() => {
