@@ -258,6 +258,7 @@ function initSheets(ss) {
 
 function getTableData(ss, sheetName) {
   var s = ss.getSheetByName(sheetName);
+  if (!s) return [];
   var values = s.getDataRange().getValues();
   if (values.length <= 1) return [];
   
@@ -267,7 +268,11 @@ function getTableData(ss, sheetName) {
     var row = values[r];
     var obj = {};
     for (var c = 0; c < headers.length; c++) {
-      obj[headers[c].replace(/\s+/g, "")] = row[c];
+      var rawH = String(headers[c] || "").trim();
+      if (!rawH) continue;
+      obj[rawH] = row[c];
+      obj[rawH.replace(/\s+/g, "")] = row[c];
+      obj[rawH.toLowerCase().replace(/[^a-z0-9]/g, "")] = row[c];
     }
     list.push(obj);
   }

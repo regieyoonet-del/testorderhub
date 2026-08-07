@@ -205,7 +205,7 @@ export default function PublicOrderPortal({
         contactEmail: shopperEmail.trim(),
         deliveryAddress: deliveryDept.trim(),
         poNumber: poNumber.trim() || undefined,
-        notes: `[Order Portal: ${portal.name}] ${orderNotes.trim()}`.trim(),
+        notes: orderNotes.trim() || undefined,
         items: cartItems.map(item => ({
           product: item.product,
           quantity: item.quantity,

@@ -250,8 +250,16 @@ export function getDisplayPurchaserName(
     return companyContact;
   }
 
-  if (rawPerson && rawPerson.length > 0) {
+  if (rawPerson && rawPerson.length > 0 && rawPerson.toLowerCase() !== 'n/a') {
     return rawPerson;
+  }
+
+  if (order?.contactEmail && order.contactEmail.includes('@')) {
+    const parts = order.contactEmail.split('@')[0].trim();
+    if (parts && parts.length > 0) {
+      const formatted = parts.charAt(0).toUpperCase() + parts.slice(1);
+      return formatted;
+    }
   }
 
   return 'Storefront Customer';
