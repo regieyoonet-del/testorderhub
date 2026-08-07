@@ -1783,9 +1783,37 @@ export default function ClientDashboardModal({
                                   {ord.status === 'Pending Approval' ? '⏳ Pending Review' : ord.status}
                                 </span>
                               </div>
-                              <span className="text-[10px] text-gray-400 block font-mono mt-0.5">
-                                Ordered: {new Date(ord.createdAt).toLocaleString()} • Purchaser: {getDisplayPurchaserName(ord, company.contactPerson)} • {ord.items.length} item(s)
+                              <span className="text-[10px] text-gray-500 block font-mono mt-0.5">
+                                Ordered: {new Date(ord.createdAt).toLocaleString()} • Customer: <strong className="text-black font-extrabold">{getDisplayPurchaserName(ord, company.contactPerson)}</strong> • {ord.items.length} item(s)
                               </span>
+                              <div className="flex flex-wrap items-center gap-2 mt-1">
+                                <span className="inline-flex items-center gap-1 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded text-[10px] text-gray-700 font-medium">
+                                  <MapPin className="w-3 h-3 text-gray-500 shrink-0" />
+                                  <span className="truncate max-w-[240px] font-sans">{ord.deliveryAddress || company.deliveryAddress || 'No address specified'}</span>
+                                </span>
+
+                                {ord.fbMessengerLink ? (
+                                  <a
+                                    href={ord.fbMessengerLink.startsWith('http') ? ord.fbMessengerLink : `https://${ord.fbMessengerLink}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="inline-flex items-center gap-1 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold transition-colors"
+                                  >
+                                    <span>💬 FB Messenger</span>
+                                    <ExternalLink className="w-2.5 h-2.5 text-blue-500" />
+                                  </a>
+                                ) : (
+                                  <span className="text-[10px] text-gray-400 font-mono">FB Messenger: Not provided</span>
+                                )}
+
+                                {ord.notes && (
+                                  <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-[10px] text-amber-900 font-medium italic">
+                                    <span className="font-mono text-[8px] font-bold uppercase not-italic text-amber-700">Notes:</span>
+                                    <span className="truncate max-w-[200px]">"{ord.notes}"</span>
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
 

@@ -862,61 +862,72 @@ export default function OrderPortals({
                     </div>
 
                     {/* Customer / Submitter Details Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 border border-gray-100 rounded-2xl p-4 text-xs font-sans">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50/80 border border-gray-200 rounded-2xl p-4 text-xs font-sans">
                       <div>
-                        <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">Purchaser / Submitter</span>
-                        <div className="font-extrabold text-black flex items-center gap-1.5">
-                          <User className="w-3.5 h-3.5 text-gray-400" />
+                        <span className="text-[10px] font-mono uppercase font-bold text-gray-500 block mb-1">Customer / Submitter Name</span>
+                        <div className="font-extrabold text-black text-sm flex items-center gap-1.5">
+                          <User className="w-4 h-4 text-gray-500 shrink-0" />
                           <span>{getDisplayPurchaserName(ord)}</span>
                         </div>
                       </div>
 
                       <div>
-                        <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">Email / Phone / Messenger</span>
-                        <div className="font-medium text-gray-800 space-y-0.5">
+                        <span className="text-[10px] font-mono uppercase font-bold text-gray-500 block mb-1">Email / Phone / Messenger</span>
+                        <div className="font-medium text-gray-800 space-y-1">
                           {ord.contactEmail && (
-                            <div className="flex items-center gap-1 truncate">
-                              <Mail className="w-3 h-3 text-gray-400" />
-                              <span>{ord.contactEmail}</span>
+                            <div className="flex items-center gap-1.5 text-xs truncate">
+                              <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                              <span className="truncate">{ord.contactEmail}</span>
                             </div>
                           )}
                           {ord.contactNumber && (
-                            <div className="flex items-center gap-1">
-                              <Phone className="w-3 h-3 text-gray-400" />
+                            <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-gray-900">
+                              <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                               <span>{ord.contactNumber}</span>
                             </div>
                           )}
-                          {ord.fbMessengerLink && (
-                            <div className="flex items-center gap-1 truncate pt-0.5">
+                          {ord.fbMessengerLink ? (
+                            <div className="pt-0.5">
                               <a
                                 href={ord.fbMessengerLink.startsWith('http') ? ord.fbMessengerLink : `https://${ord.fbMessengerLink}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-[10px] text-blue-600 font-bold hover:underline inline-flex items-center gap-1"
+                                className="inline-flex items-center gap-1 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 px-2.5 py-1 rounded-md text-xs font-bold transition-colors cursor-pointer shadow-2xs"
                               >
                                 <span>💬 FB Messenger Link</span>
-                                <ExternalLink className="w-2.5 h-2.5" />
+                                <ExternalLink className="w-3 h-3 text-blue-500" />
                               </a>
                             </div>
+                          ) : (
+                            <span className="text-gray-400 text-[10px] block">FB Messenger: Not provided</span>
                           )}
-                          {!ord.contactEmail && !ord.contactNumber && !ord.fbMessengerLink && <span className="text-gray-400">N/A</span>}
                         </div>
                       </div>
 
                       <div>
-                        <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">Address / Dept</span>
-                        <div className="font-medium text-gray-800 flex items-start gap-1.5">
-                          <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
-                          <span className="line-clamp-2">{ord.deliveryAddress || 'No address specified'}</span>
+                        <span className="text-[10px] font-mono uppercase font-bold text-gray-500 block mb-1">Address / Dept</span>
+                        <div className="font-medium text-black flex items-start gap-1.5 bg-white border border-gray-200 rounded-xl p-2.5">
+                          <MapPin className="w-4 h-4 text-gray-500 shrink-0 mt-0.5" />
+                          <span className="leading-snug font-semibold text-xs">{ord.deliveryAddress || 'No address specified'}</span>
                         </div>
                       </div>
 
                       <div>
-                        <span className="text-[10px] font-mono uppercase font-bold text-gray-400 block mb-0.5">PO Number &amp; Notes</span>
-                        <div className="font-mono text-gray-800 space-y-0.5">
-                          {ord.poNumber && <div className="font-bold text-black">PO: {ord.poNumber}</div>}
-                          {ord.notes && <div className="text-[11px] italic text-gray-600 leading-snug">"{ord.notes}"</div>}
-                          {!ord.poNumber && !ord.notes && <span className="text-gray-400">None provided</span>}
+                        <span className="text-[10px] font-mono uppercase font-bold text-gray-500 block mb-1">PO Number &amp; Notes</span>
+                        <div className="space-y-1.5 font-mono">
+                          {ord.poNumber && (
+                            <div className="font-bold text-black text-xs bg-gray-100 border border-gray-200 px-2 py-0.5 rounded inline-block">
+                              PO: {ord.poNumber}
+                            </div>
+                          )}
+                          {ord.notes ? (
+                            <div className="bg-amber-50 border border-amber-200 p-2 rounded-xl text-xs text-amber-950 font-sans italic font-medium leading-relaxed">
+                              <strong className="font-mono text-[9px] uppercase font-extrabold text-amber-800 not-italic block mb-0.5">Notes:</strong>
+                              "{ord.notes}"
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 text-[10px] block">Notes: None provided</span>
+                          )}
                         </div>
                       </div>
                     </div>

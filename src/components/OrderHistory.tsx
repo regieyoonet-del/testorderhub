@@ -5,7 +5,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Order, CartItem, getDisplayPurchaserName } from '../types';
-import { Calendar, RefreshCw, ChevronDown, ChevronUp, Clock, Package, CheckCircle2, Truck, ArrowRight, Store, Layers, ExternalLink } from 'lucide-react';
+import { Calendar, RefreshCw, ChevronDown, ChevronUp, Clock, Package, CheckCircle2, Truck, ArrowRight, Store, Layers, ExternalLink, User, MapPin, MessageCircle } from 'lucide-react';
 
 interface OrderHistoryProps {
   orders: Order[];
@@ -262,14 +262,51 @@ export default function OrderHistory({
                       ) : null}
                       {getStatusBadge(order.status)}
                     </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5" /> {formattedDate}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
+                      <span className="flex items-center gap-1 font-mono text-[11px] text-gray-500">
+                        <Calendar className="w-3.5 h-3.5 text-gray-400" /> {formattedDate}
                       </span>
                       <span>·</span>
-                      <span>By <strong className="text-black font-semibold">{getDisplayPurchaserName(order)}</strong></span>
+                      <span className="flex items-center gap-1">
+                        <User className="w-3.5 h-3.5 text-gray-500" />
+                        <span className="text-gray-500">Customer:</span> <strong className="text-black font-extrabold">{getDisplayPurchaserName(order)}</strong>
+                      </span>
                       <span>·</span>
-                      <span className="font-bold text-black">{order.items.length} items</span>
+                      <span className="font-bold text-black font-mono">{order.items.length} items</span>
+                    </div>
+
+                    {/* Customer Address, FB Messenger Link, and Notes Badges */}
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <span className="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-md text-xs text-gray-700 font-medium" title={order.deliveryAddress}>
+                        <MapPin className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                        <span className="font-bold text-black mr-0.5">Address:</span>
+                        <span className="truncate max-w-[320px] font-sans">{order.deliveryAddress || 'No address specified'}</span>
+                      </span>
+
+                      {order.fbMessengerLink ? (
+                        <a
+                          href={order.fbMessengerLink.startsWith('http') ? order.fbMessengerLink : `https://${order.fbMessengerLink}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 px-2.5 py-1 rounded-md text-xs font-bold transition-colors cursor-pointer"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                          <span>FB Messenger</span>
+                          <ExternalLink className="w-3 h-3 text-blue-500" />
+                        </a>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 px-2 py-1 rounded-md text-xs text-gray-400 font-mono">
+                          FB Messenger: Not provided
+                        </span>
+                      )}
+
+                      {order.notes && (
+                        <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-md text-xs text-amber-950 font-medium">
+                          <span className="font-mono text-[10px] font-bold text-amber-800 uppercase mr-0.5">Notes:</span>
+                          <span className="italic max-w-[300px] truncate">"{order.notes}"</span>
+                        </span>
+                      )}
                     </div>
                   </div>
 

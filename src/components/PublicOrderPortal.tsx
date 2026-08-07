@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { OrderPortal, Product, CompanyProfile, Order, OrderItem, SystemSettings } from '../types';
+import { OrderPortal, Product, CompanyProfile, Order, OrderItem, SystemSettings, getDisplayPurchaserName } from '../types';
 import { getProductUnitPrice } from '../utils/pricing';
 import { getItemColorImage } from '../utils/colorUtils';
 import ProductImageCarousel from './ProductImageCarousel';
@@ -25,7 +25,8 @@ import {
   Building,
   Info,
   Check,
-  AlertCircle
+  AlertCircle,
+  ExternalLink
 } from 'lucide-react';
 
 interface PublicOrderPortalProps {
@@ -253,26 +254,54 @@ export default function PublicOrderPortal({
           </div>
 
           {/* Details Grid */}
-          <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 space-y-4 text-xs font-mono">
+          <div className="bg-gray-50 border border-gray-200 rounded-2xl p-5 space-y-3 text-xs font-mono">
             <div className="flex justify-between border-b border-gray-200 pb-2">
               <span className="text-gray-500">Order Reference #:</span>
               <span className="font-extrabold text-black">{submittedOrder.orderNumber}</span>
             </div>
             <div className="flex justify-between border-b border-gray-200 pb-2">
-              <span className="text-gray-500">Shopper Name:</span>
-              <span className="font-bold text-black">{submittedOrder.contactPerson}</span>
+              <span className="text-gray-500">Customer / Shopper Name:</span>
+              <span className="font-bold text-black">{getDisplayPurchaserName(submittedOrder)}</span>
             </div>
             <div className="flex justify-between border-b border-gray-200 pb-2">
               <span className="text-gray-500">Email:</span>
-              <span className="font-bold text-black">{submittedOrder.contactEmail}</span>
+              <span className="font-bold text-black">{submittedOrder.contactEmail || 'N/A'}</span>
             </div>
+            {submittedOrder.contactNumber && (
+              <div className="flex justify-between border-b border-gray-200 pb-2">
+                <span className="text-gray-500">Phone:</span>
+                <span className="font-bold text-black">{submittedOrder.contactNumber}</span>
+              </div>
+            )}
+            {submittedOrder.fbMessengerLink && (
+              <div className="flex justify-between border-b border-gray-200 pb-2 items-center">
+                <span className="text-gray-500">FB Messenger:</span>
+                <a
+                  href={submittedOrder.fbMessengerLink.startsWith('http') ? submittedOrder.fbMessengerLink : `https://${submittedOrder.fbMessengerLink}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 font-bold hover:underline inline-flex items-center gap-1"
+                >
+                  <span>💬 Profile Link</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            )}
             <div className="flex justify-between border-b border-gray-200 pb-2">
               <span className="text-gray-500">Address / Dept:</span>
-              <span className="font-bold text-black">{submittedOrder.deliveryAddress}</span>
+              <span className="font-bold text-black">{submittedOrder.deliveryAddress || 'No address specified'}</span>
             </div>
-            <div className="flex justify-between">
+            {submittedOrder.notes && (
+              <div className="border-b border-gray-200 pb-2">
+                <span className="text-gray-500 block mb-0.5">Notes / Special Instructions:</span>
+                <span className="font-sans italic text-gray-800 bg-white p-2 rounded border border-gray-200 block text-[11px]">
+                  "{submittedOrder.notes}"
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between pt-1">
               <span className="text-gray-500">Total Order Value:</span>
-              <span className="font-extrabold text-black">
+              <span className="font-extrabold text-black text-sm">
                 {systemSettings.currencySymbol || 'Php'} {submittedOrder.totalAmount.toFixed(2)}
               </span>
             </div>
@@ -858,7 +887,31 @@ export default function PublicOrderPortal({
         )}
       </main>
 
-    
+      {/* Floating Bottom Bar if cart has items */}
+      {cartItems.length > 0 && !isCheckoutOpen && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-xl w-[90%] bg-black text-white p-4 rounded-3xl shadow-2xl border border-neutral-800 flex items-center justify-between gap-4 animate-slide-up">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-white text-black flex items-center justify-center font-bold font-mono text-sm shrink-0">
+              {cartItems.reduce((sum, item) => sum + item.quantity, 0)}
+            </div>
+            <div>
+              <span className="text-xs font-mono text-gray-400 block">Total Order Subtotal</span>
+              <span className="text-base font-black font-mono text-white">
+                {systemSettings.currencySymbol || 'Php'} {cartSubtotal.toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setIsCheckoutOpen(true)}
+            className="bg-white text-black hover:bg-gray-100 font-extrabold text-xs uppercase tracking-wider py-3 px-6 rounded-2xl transition-all cursor-pointer flex items-center gap-2 shrink-0"
+            id="floating-checkout-btn"
+          >
+            <span>Complete Order</span>
+            <Send className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Order Checkout Modal */}
       {isCheckoutOpen && (

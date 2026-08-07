@@ -764,10 +764,21 @@ export default function App() {
             const mergedFetched = fetchedOrders.map(fo => {
               const local = localMap.get(fo.id);
               if (local) {
-                // If order was approved or updated locally, do not revert it to 'Pending Approval' if Google Sheets returns stale status
+                let status = fo.status;
                 if (local.status !== 'Pending Approval' && (fo.status === 'Pending Approval' || fo.status === 'Pending')) {
-                  return { ...fo, status: local.status };
+                  status = local.status;
                 }
+                return {
+                  ...fo,
+                  status,
+                  contactPerson: (fo.contactPerson && fo.contactPerson.trim() !== '') ? fo.contactPerson : (local.contactPerson || ''),
+                  contactNumber: (fo.contactNumber && fo.contactNumber.trim() !== '') ? fo.contactNumber : (local.contactNumber || ''),
+                  fbMessengerLink: (fo.fbMessengerLink && fo.fbMessengerLink.trim() !== '') ? fo.fbMessengerLink : (local.fbMessengerLink || ''),
+                  deliveryAddress: (fo.deliveryAddress && fo.deliveryAddress.trim() !== '') ? fo.deliveryAddress : (local.deliveryAddress || ''),
+                  poNumber: (fo.poNumber && fo.poNumber.trim() !== '') ? fo.poNumber : (local.poNumber || ''),
+                  notes: (fo.notes && fo.notes.trim() !== '') ? fo.notes : (local.notes || ''),
+                  contactEmail: (fo.contactEmail && fo.contactEmail.trim() !== '') ? fo.contactEmail : (local.contactEmail || '')
+                };
               }
               return fo;
             });
@@ -1402,6 +1413,8 @@ export default function App() {
     deliveryAddress: string;
     contactPerson: string;
     contactEmail: string;
+    contactNumber?: string;
+    fbMessengerLink?: string;
     shippingCost?: number;
   }, checkedItems?: CartItem[]) => {
     setIsSubmitting(true);
@@ -1437,6 +1450,8 @@ export default function App() {
       companyName: activeCompany.name,
       contactEmail: formData.contactEmail,
       contactPerson: formData.contactPerson,
+      contactNumber: formData.contactNumber,
+      fbMessengerLink: formData.fbMessengerLink,
       deliveryAddress: formData.deliveryAddress,
       poNumber: formData.poNumber || undefined,
       notes: formData.notes || undefined,

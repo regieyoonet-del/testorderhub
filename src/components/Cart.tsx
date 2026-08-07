@@ -16,7 +16,7 @@ interface CartProps {
   onUpdateQuantity: (id: string, qty: number) => void;
   onRemoveItem: (id: string) => void;
   activeCompany: CompanyProfile;
-  onSubmitOrder: (orderData: { poNumber: string; notes: string; deliveryAddress: string; contactPerson: string; contactEmail: string; shippingCost?: number }, checkedItems?: CartItem[]) => Promise<void>;
+  onSubmitOrder: (orderData: { poNumber: string; notes: string; deliveryAddress: string; contactPerson: string; contactEmail: string; contactNumber?: string; fbMessengerLink?: string; shippingCost?: number }, checkedItems?: CartItem[]) => Promise<void>;
   isSubmitting: boolean;
 }
 
@@ -35,6 +35,8 @@ export default function Cart({
   const [customAddress, setCustomAddress] = useState(activeCompany?.deliveryAddress || '');
   const [customContact, setCustomContact] = useState(activeCompany?.contactPerson || '');
   const [customEmail, setCustomEmail] = useState(activeCompany?.contactEmail || '');
+  const [customPhone, setCustomPhone] = useState(activeCompany?.contactPhone || '');
+  const [customMessenger, setCustomMessenger] = useState('');
   const [showConfirm, setShowConfirm] = useState(false);
   const [uncheckedItemIds, setUncheckedItemIds] = useState<string[]>([]);
   // Sync state if company changes
@@ -42,6 +44,8 @@ export default function Cart({
     setCustomAddress(activeCompany?.deliveryAddress || '');
     setCustomContact(activeCompany?.contactPerson || '');
     setCustomEmail(activeCompany?.contactEmail || '');
+    setCustomPhone(activeCompany?.contactPhone || '');
+    setCustomMessenger('');
     setPoNumber('');
     setNotes('');
     setUncheckedItemIds([]);
@@ -89,6 +93,8 @@ export default function Cart({
       deliveryAddress: customAddress.trim(),
       contactPerson: customContact.trim(),
       contactEmail: customEmail.trim(),
+      contactNumber: customPhone.trim(),
+      fbMessengerLink: customMessenger.trim(),
       shippingCost: shippingCost
     }, checkedItems);
     setShowConfirm(false);
@@ -343,6 +349,36 @@ export default function Cart({
                         onChange={(e) => setCustomEmail(e.target.value)}
                         className="w-full bg-white border border-black text-xs px-2.5 py-1.5 text-black focus:outline-none font-mono"
                         id="checkout-contact-email-input"
+                      />
+                    </div>
+
+                    {/* Contact Phone */}
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-black font-bold font-mono mb-1">
+                        Phone Number:
+                      </label>
+                      <input
+                        type="tel"
+                        value={customPhone}
+                        onChange={(e) => setCustomPhone(e.target.value)}
+                        placeholder="e.g. +63 917 123 4567"
+                        className="w-full bg-white border border-black text-xs px-2.5 py-1.5 text-black focus:outline-none font-mono"
+                        id="checkout-contact-phone-input"
+                      />
+                    </div>
+
+                    {/* Facebook Messenger Link */}
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-wider text-black font-bold font-mono mb-1">
+                        Facebook Messenger Link:
+                      </label>
+                      <input
+                        type="text"
+                        value={customMessenger}
+                        onChange={(e) => setCustomMessenger(e.target.value)}
+                        placeholder="e.g. https://m.me/username or fb.com/username"
+                        className="w-full bg-white border border-black text-xs px-2.5 py-1.5 text-black focus:outline-none font-mono"
+                        id="checkout-fb-messenger-input"
                       />
                     </div>
 

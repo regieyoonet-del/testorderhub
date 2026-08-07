@@ -241,6 +241,12 @@ export const INITIAL_ORDERS: Order[] = [
     orderNumber: 'RP-2026-1001',
     companyName: 'Acme Corporate Solutions',
     contactEmail: 'marcus.v@acme.corp',
+    contactPerson: 'Marcus Vance',
+    contactNumber: '+63 917 555 1001',
+    fbMessengerLink: 'm.me/marcusvance',
+    deliveryAddress: 'Suite 400, 100 Innovation Parkway, Tech District, CA 94016',
+    poNumber: 'PO-99182',
+    notes: 'Please ensure high-contrast embroidery thread on black polo shirts.',
     items: [
       {
         productId: 'prod-polo',
@@ -269,16 +275,18 @@ export const INITIAL_ORDERS: Order[] = [
     ],
     status: 'Completed',
     totalAmount: 657.50,
-    createdAt: '2026-06-15T10:30:00-07:00',
-    deliveryAddress: 'Suite 400, 100 Innovation Parkway, Tech District, CA 94016',
-    contactPerson: 'Marcus Vance',
-    poNumber: 'PO-99182'
+    createdAt: '2026-06-15T10:30:00-07:00'
   },
   {
     id: 'ord-1002',
     orderNumber: 'RP-2026-1002',
     companyName: 'GreenLife Wellness Labs',
     contactEmail: 's.chen@greenlife.io',
+    contactPerson: 'Sophia Chen',
+    contactNumber: '+63 918 876 5432',
+    fbMessengerLink: 'fb.com/sophiachen.greenlife',
+    deliveryAddress: 'Building B, 88 Organics Way, Seattle, WA 98101',
+    notes: 'Please leave packages with the receptionist at Floor 1.',
     items: [
       {
         productId: 'prod-bizcard',
@@ -304,15 +312,19 @@ export const INITIAL_ORDERS: Order[] = [
     ],
     status: 'In Production',
     totalAmount: 120.40,
-    createdAt: '2026-07-01T14:15:00-07:00',
-    deliveryAddress: 'Building B, 88 Organics Way, Seattle, WA 98101',
-    contactPerson: 'Sophia Chen'
+    createdAt: '2026-07-01T14:15:00-07:00'
   },
   {
     id: 'ord-1003',
     orderNumber: 'RP-2026-1003',
     companyName: 'Acme Corporate Solutions',
     contactEmail: 'marcus.v@acme.corp',
+    contactPerson: 'Marcus Vance',
+    contactNumber: '+63 917 555 1001',
+    fbMessengerLink: 'm.me/marcusvance',
+    deliveryAddress: 'Suite 400, 100 Innovation Parkway, Tech District, CA 94016',
+    poNumber: 'PO-99554',
+    notes: 'Laser engraving on pen clips must be centered.',
     items: [
       {
         productId: 'prod-pen',
@@ -328,10 +340,7 @@ export const INITIAL_ORDERS: Order[] = [
     ],
     status: 'Pending',
     totalAmount: 315.00,
-    createdAt: '2026-07-12T09:00:00-07:00',
-    deliveryAddress: 'Suite 400, 100 Innovation Parkway, Tech District, CA 94016',
-    contactPerson: 'Marcus Vance',
-    poNumber: 'PO-99554'
+    createdAt: '2026-07-12T09:00:00-07:00'
   }
 ];
 

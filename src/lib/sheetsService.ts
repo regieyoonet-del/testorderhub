@@ -134,43 +134,51 @@ function levenshteinDistance(a: string, b: string): number {
 function getProp(obj: any, key: string | string[]): any {
   if (!obj) return undefined;
   const keys = Array.isArray(key) ? key : [key];
-  const cleanKeys = keys.map(k => k.toLowerCase().replace(/[^a-z0-9]/g, ''));
+  const objKeys = Object.keys(obj);
 
-  // 1. First pass: exact match on normalized alphanumeric key
-  for (const k of Object.keys(obj)) {
-    const cleanK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (cleanKeys.includes(cleanK)) {
-      if (obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== '') {
-        return obj[k];
+  // 1. First pass: exact match on normalized alphanumeric key in candidate key priority order
+  for (const ck of keys) {
+    if (!ck) continue;
+    const cleanCk = ck.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!cleanCk) continue;
+
+    for (const k of objKeys) {
+      const cleanK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (cleanK === cleanCk) {
+        if (obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== '') {
+          return obj[k];
+        }
       }
     }
   }
 
-  // 2. Second pass: typo-tolerant fuzzy matching (e.g. "Decription", "Bae Price", "Contact Peron", "Delivery Addre", "Uername", "Pacode", "Statu")
+  // 2. Second pass: typo-tolerant fuzzy matching in candidate key priority order
   const SEMANTIC_KEYWORDS = ['email', 'person', 'number', 'phone', 'address', 'notes', 'price', 'name', 'status', 'portal', 'company', 'passcode', 'username', 'id'];
 
-  for (const k of Object.keys(obj)) {
-    const cleanK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (!cleanK) continue;
-    const cleanKNoS = cleanK.replace(/s/g, '');
+  for (const ck of keys) {
+    if (!ck) continue;
+    const cleanCk = ck.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!cleanCk) continue;
+    const cleanCkNoS = cleanCk.replace(/s/g, '');
 
-    for (const ck of cleanKeys) {
-      if (!ck) continue;
-      const ckNoS = ck.replace(/s/g, '');
+    for (const k of objKeys) {
+      const cleanK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!cleanK) continue;
+      const cleanKNoS = cleanK.replace(/s/g, '');
 
-      if (cleanKNoS === ckNoS) {
+      if (cleanKNoS === cleanCkNoS) {
         if (obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== '') {
           return obj[k];
         }
       }
 
-      // Semantic conflict check: Do not match if cleanK and ck contain different keywords from SEMANTIC_KEYWORDS
+      // Semantic conflict check: Do not match if cleanK and cleanCk contain different keywords from SEMANTIC_KEYWORDS
       const cleanKWords = SEMANTIC_KEYWORDS.filter(w => cleanK.includes(w));
-      const ckWords = SEMANTIC_KEYWORDS.filter(w => ck.includes(w));
+      const ckWords = SEMANTIC_KEYWORDS.filter(w => cleanCk.includes(w));
       const hasConflict = cleanKWords.some(w => !ckWords.includes(w)) || ckWords.some(w => !cleanKWords.includes(w));
       if (hasConflict) continue;
 
-      if (levenshteinDistance(cleanK, ck) <= 2) {
+      if (levenshteinDistance(cleanK, cleanCk) <= 2) {
         if (obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== '') {
           return obj[k];
         }
@@ -301,10 +309,10 @@ export const sheetsService = {
             orderNumber: String(getProp(item, ['OrderNumber', 'Order Number', 'orderNumber', 'Order #', 'OrderNo', 'Order No']) || ''),
             companyName: String(getProp(item, ['CompanyName', 'Company Name', 'companyName', 'Company', 'Client', 'Client Name', 'ClientName']) || ''),
             contactEmail: String(getProp(item, ['ContactEmail', 'Contact Email', 'contactEmail', 'Email', 'CustomerEmail', 'SubmitterEmail', 'BuyerEmail', 'CorporateEmail', 'Buyer Corporate Email', 'Customer Email', 'Purchaser Email']) || ''),
-            contactPerson: String(getProp(item, ['ContactPerson', 'Contact Person', 'contactPerson', 'ContactPeron', 'CustomerName', 'Customer Name', 'Purchaser', 'Purchaser Name', 'Purchaser / Submitter', 'SubmitterName', 'Submitter Name', 'Submitter', 'Name', 'ShopperName', 'Shopper Name', 'Shopper', 'BuyerName', 'Buyer Name', 'Buyer', 'Customer', 'Ordering Customer']) || ''),
+            contactPerson: String(getProp(item, ['ContactPerson', 'Contact Person', 'contactPerson', 'ContactPeron', 'CustomerName', 'Customer Name', "Customer's Name", 'Customers Name', 'Customer', 'Purchaser', 'Purchaser Name', 'Purchaser / Submitter', 'SubmitterName', 'Submitter Name', 'Submitter', 'Name', 'ShopperName', 'Shopper Name', 'Shopper', 'BuyerName', 'Buyer Name', 'Buyer', 'Ordering Customer', 'Ordering Person', 'Client Name', 'Client Contact']) || ''),
             contactNumber: String(getProp(item, ['ContactNumber', 'Contact Number', 'contactNumber', 'Phone', 'ContactPhone', 'CustomerPhone', 'Mobile', 'ShopperPhone', 'Shopper Phone', 'ContactNo', 'Contact No', 'Phone Number', 'Phone #', 'Mobile Number']) || ''),
-            fbMessengerLink: String(getProp(item, ['FBMessengerLink', 'FB Messenger Link', 'fbMessengerLink', 'FacebookMessengerLink', 'FBMessenger', 'Messenger', 'Facebook Messenger Link', 'FB Messenger', 'MessengerLink', 'Messenger Link', 'Facebook Link']) || ''),
-            deliveryAddress: String(getProp(item, ['DeliveryAddress', 'Delivery Address', 'deliveryAddress', 'DeliveryAddre', 'Address', 'DeliveryDept', 'Department / Address', 'Address / Dept', 'ShippingAddress', 'StandardAddress', 'Standard Address', 'Delivery Address / Dept', 'Shipping Address', 'Dept / Address', 'Location']) || ''),
+            fbMessengerLink: String(getProp(item, ['FBMessengerLink', 'FB Messenger Link', 'fbMessengerLink', 'FacebookMessengerLink', 'FBMessenger', 'Messenger', 'Facebook Messenger Link', 'FB Messenger', 'MessengerLink', 'Messenger Link', 'Facebook Link', 'FB Link', 'Facebook', 'Messenger Profile', 'FB Messenger Profile', 'Customer Messenger', 'Customer FB Messenger', 'Facebook/Messenger Link', 'Messenger URL', 'FB Messenger URL']) || ''),
+            deliveryAddress: String(getProp(item, ['DeliveryAddress', 'Delivery Address', 'deliveryAddress', 'DeliveryAddre', 'Customer Address', "Customer's Address", 'Customers Address', 'Address', 'Shipping Address', 'ShippingAddress', 'DeliveryDept', 'Department / Address', 'Address / Dept', 'StandardAddress', 'Standard Address', 'Delivery Address / Dept', 'Dept / Address', 'Location', 'Full Address', 'Destination Address']) || ''),
             poNumber: String(getProp(item, ['PONumber', 'PO Number', 'poNumber', 'PO / Cost Center', 'PO / Cost Center #', 'POCostCenter', 'PO', 'CostCenter', 'PO #', 'Cost Center']) || ''),
             totalAmount: Number(getProp(item, ['TotalAmount', 'Total Amount', 'totalAmount', 'Amount', 'Total']) || 0),
             status: status,
@@ -1133,28 +1141,34 @@ export const sheetsService = {
       let orders: Order[] | null = null;
       if (Array.isArray(raw.orders)) {
         orders = raw.orders.map((item: any) => {
+          const rawStatus = getProp(item, ['Status', 'status', 'Statu']);
+          const portalId = String(getProp(item, ['PortalID', 'Portal ID', 'portalId']) || '');
+          const portalName = String(getProp(item, ['PortalName', 'Portal Name', 'portalName']) || '');
           const orderId = String(getProp(item, ['OrderID', 'Order ID', 'id']) || `ord-${Date.now()}`);
-          const rawStatus = String(getProp(item, ['Status', 'status']) || 'Pending Approval');
-          let status: any = 'Pending Approval';
-          if (rawStatus.toLowerCase().includes('approve')) status = 'Approved';
-          else if (rawStatus.toLowerCase().includes('reject')) status = 'Rejected';
-          else if (rawStatus.toLowerCase().includes('production') || rawStatus.toLowerCase().includes('print')) status = 'In Production';
-          else if (rawStatus.toLowerCase().includes('dispatch') || rawStatus.toLowerCase().includes('shipped') || rawStatus.toLowerCase().includes('deliv')) status = 'Dispatched';
+          const isPortalOrder = orderId.startsWith('ord-portal-') || Boolean(portalId) || Boolean(portalName);
+
+          const rawStatusStr = String(rawStatus || '').trim();
+          let status: any = rawStatusStr;
+          if (!status) {
+            status = isPortalOrder ? 'Pending Approval' : 'Pending';
+          } else if (status === 'Pending Confirmation' || status === 'Pending Review') {
+            status = 'Pending Approval';
+          }
 
           return {
             id: orderId,
-            orderNumber: String(getProp(item, ['OrderNumber', 'Order Number', 'orderNumber', 'Order #', 'OrderNo']) || ''),
-            companyName: String(getProp(item, ['CompanyName', 'Company Name', 'companyName', 'Company', 'Client']) || ''),
-            contactEmail: String(getProp(item, ['ContactEmail', 'Contact Email', 'contactEmail', 'Email', 'CustomerEmail', 'SubmitterEmail']) || ''),
-            contactPerson: String(getProp(item, ['ContactPerson', 'Contact Person', 'contactPerson', 'CustomerName', 'Purchaser', 'SubmitterName', 'Name']) || ''),
-            contactNumber: String(getProp(item, ['ContactNumber', 'Contact Number', 'contactNumber', 'Phone', 'ContactPhone', 'Mobile']) || ''),
-            fbMessengerLink: String(getProp(item, ['FBMessengerLink', 'FB Messenger Link', 'fbMessengerLink', 'Messenger']) || ''),
-            deliveryAddress: String(getProp(item, ['DeliveryAddress', 'Delivery Address', 'deliveryAddress', 'Address']) || ''),
-            poNumber: String(getProp(item, ['PONumber', 'PO Number', 'poNumber', 'PO']) || ''),
-            totalAmount: Number(getProp(item, ['TotalAmount', 'Total Amount', 'totalAmount', 'Amount']) || 0),
+            orderNumber: String(getProp(item, ['OrderNumber', 'Order Number', 'orderNumber', 'Order #', 'OrderNo', 'Order No']) || ''),
+            companyName: String(getProp(item, ['CompanyName', 'Company Name', 'companyName', 'Company', 'Client', 'Client Name', 'ClientName']) || ''),
+            contactEmail: String(getProp(item, ['ContactEmail', 'Contact Email', 'contactEmail', 'Email', 'CustomerEmail', 'SubmitterEmail', 'BuyerEmail', 'CorporateEmail', 'Buyer Corporate Email', 'Customer Email', 'Purchaser Email']) || ''),
+            contactPerson: String(getProp(item, ['ContactPerson', 'Contact Person', 'contactPerson', 'ContactPeron', 'CustomerName', 'Customer Name', "Customer's Name", 'Customers Name', 'Customer', 'Purchaser', 'Purchaser Name', 'Purchaser / Submitter', 'SubmitterName', 'Submitter Name', 'Submitter', 'Name', 'ShopperName', 'Shopper Name', 'Shopper', 'BuyerName', 'Buyer Name', 'Buyer', 'Ordering Customer', 'Ordering Person', 'Client Name', 'Client Contact']) || ''),
+            contactNumber: String(getProp(item, ['ContactNumber', 'Contact Number', 'contactNumber', 'Phone', 'ContactPhone', 'CustomerPhone', 'Mobile', 'ShopperPhone', 'Shopper Phone', 'ContactNo', 'Contact No', 'Phone Number', 'Phone #', 'Mobile Number']) || ''),
+            fbMessengerLink: String(getProp(item, ['FBMessengerLink', 'FB Messenger Link', 'fbMessengerLink', 'FacebookMessengerLink', 'FBMessenger', 'Messenger', 'Facebook Messenger Link', 'FB Messenger', 'MessengerLink', 'Messenger Link', 'Facebook Link', 'FB Link', 'Facebook', 'Messenger Profile', 'FB Messenger Profile', 'Customer Messenger', 'Customer FB Messenger', 'Facebook/Messenger Link', 'Messenger URL', 'FB Messenger URL']) || ''),
+            deliveryAddress: String(getProp(item, ['DeliveryAddress', 'Delivery Address', 'deliveryAddress', 'DeliveryAddre', 'Customer Address', "Customer's Address", 'Customers Address', 'Address', 'Shipping Address', 'ShippingAddress', 'DeliveryDept', 'Department / Address', 'Address / Dept', 'StandardAddress', 'Standard Address', 'Delivery Address / Dept', 'Dept / Address', 'Location', 'Full Address', 'Destination Address']) || ''),
+            poNumber: String(getProp(item, ['PONumber', 'PO Number', 'poNumber', 'PO / Cost Center', 'PO / Cost Center #', 'POCostCenter', 'PO', 'CostCenter', 'PO #', 'Cost Center']) || ''),
+            totalAmount: Number(getProp(item, ['TotalAmount', 'Total Amount', 'totalAmount', 'Amount', 'Total']) || 0),
             status: status,
-            createdAt: String(getProp(item, ['CreatedAt', 'Created At', 'createdAt', 'Date']) || new Date().toISOString()),
-            notes: String(getProp(item, ['Notes', 'notes', 'SpecialNotes', 'Remarks']) || ''),
+            createdAt: String(getProp(item, ['CreatedAt', 'Created At', 'createdAt', 'Date', 'SubmittedAt']) || new Date().toISOString()),
+            notes: String(getProp(item, ['Notes', 'notes', 'SpecialNotes', 'OrderNotes', 'Special Notes', 'Purchaser Remarks & Notes', 'Remarks', 'Order Notes', 'Comments', 'Note', 'Order Remarks', 'Customer Notes', 'Purchaser Notes']) || ''),
             portalId: String(getProp(item, ['PortalID', 'Portal ID', 'portalId']) || ''),
             portalName: String(getProp(item, ['PortalName', 'Portal Name', 'portalName']) || ''),
             items: parseOrderItems(getProp(item, 'items') || getProp(item, 'Items') || getProp(item, 'OrderItems'))
