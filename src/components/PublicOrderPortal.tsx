@@ -1157,7 +1157,7 @@ export default function PublicOrderPortal({
                   ) : (
                     <>
                       <Send className="w-4 h-4" />
-                      <span>Submit Corporate Order</span>
+                      <span>Submit Order</span>
                     </>
                   )}
                 </button>
