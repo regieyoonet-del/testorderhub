@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { OrderPortal, Product, CompanyProfile, Order, OrderItem, SystemSettings, getDisplayPurchaserName } from '../types';
 import { getProductUnitPrice } from '../utils/pricing';
 import { getItemColorImage } from '../utils/colorUtils';
@@ -63,12 +63,33 @@ export default function PublicOrderPortal({
   onClosePublicView,
   isLoggedIn = false
 }: PublicOrderPortalProps) {
-  // Filter products included in this portal; fallback to all provided products if portal.productIds is empty or matches none
-  const portalProductIdsSet = new Set((portal.productIds || []).map(id => String(id).trim()));
-  const matchedPortalProducts = (portalProductIdsSet.size > 0)
-    ? products.filter(p => portalProductIdsSet.has(String(p.id).trim()))
-    : products;
-  const portalProducts = matchedPortalProducts.length > 0 ? matchedPortalProducts : products;
+  // Filter products strictly assigned to this portal / company profile
+  const portalProducts = useMemo(() => {
+    const pSet = new Set((portal.productIds || []).map(id => String(id).trim()));
+    const cSet = new Set((company?.enabledProductIds || []).map(id => String(id).trim()));
+    const customProducts = (company && Array.isArray(company.customProducts)) ? company.customProducts : [];
+
+    let matched: Product[] = [];
+
+    if (pSet.size > 0) {
+      matched = products.filter(p => pSet.has(String(p.id).trim()));
+    } else if (cSet.size > 0) {
+      matched = products.filter(p => cSet.has(String(p.id).trim()));
+    } else {
+      matched = products;
+    }
+
+    if (customProducts.length > 0) {
+      const existingIds = new Set(matched.map(m => m.id));
+      customProducts.forEach(cp => {
+        if (cp && cp.id && !existingIds.has(cp.id)) {
+          matched.push(cp);
+        }
+      });
+    }
+
+    return matched;
+  }, [portal.productIds, company?.enabledProductIds, company?.customProducts, products]);
 
   // Storefront Order Cart State
   const [cartItems, setCartItems] = useState<{

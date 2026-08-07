@@ -493,8 +493,14 @@ export default function App() {
         customVariantPrices: urlCustomVariantPrices || match.customVariantPrices
       };
       setActivePublicPortal(mergedMatch);
-      setIsResolvingPortal(false);
-      // If NOT connected to Sheets, we are done. If connected, we fetch live Sheets data in background silently without blocking the UI!
+      // Only unblock loading state immediately if offline or if we have an exact cached local portal
+      const isRealLocalPortal = orderPortals.some(p => p.id === match.id || (p.shareToken && p.shareToken.toLowerCase() === tokenClean.toLowerCase()));
+      if (!appsScriptConfig.isConnected || !appsScriptConfig.webAppUrl || isRealLocalPortal) {
+        setIsResolvingPortal(false);
+      } else {
+        setIsResolvingPortal(true);
+      }
+      // If NOT connected to Sheets, we are done.
       if (!appsScriptConfig.isConnected || !appsScriptConfig.webAppUrl) {
         return;
       }
@@ -762,21 +768,27 @@ export default function App() {
 
             const localMap = new Map<string, Order>(prevOrders.map(o => [o.id, o]));
             const mergedFetched = fetchedOrders.map(fo => {
-              const local = localMap.get(fo.id);
+              const local = localMap.get(fo.id) || prevOrders.find(o => o.orderNumber && fo.orderNumber && o.orderNumber.trim() === fo.orderNumber.trim());
               if (local) {
                 let status = fo.status;
                 if (local.status !== 'Pending Approval' && (fo.status === 'Pending Approval' || fo.status === 'Pending')) {
                   status = local.status;
                 }
+
+                const isGenericPerson = (p?: string) => !p || !p.trim() || p.trim().toLowerCase() === 'storefront customer' || p.trim().toLowerCase() === 'n/a';
+                const isGenericAddress = (a?: string) => !a || !a.trim() || a.trim().toLowerCase() === 'no address specified' || a.trim().toLowerCase() === 'n/a';
+                const isGenericNotes = (n?: string) => !n || !n.trim() || n.trim().toLowerCase() === 'none provided';
+                const isGenericMessenger = (m?: string) => !m || !m.trim() || m.trim().toLowerCase() === 'not provided' || m.trim().toLowerCase() === 'fb messenger: not provided';
+
                 return {
                   ...fo,
                   status,
-                  contactPerson: (fo.contactPerson && fo.contactPerson.trim() !== '') ? fo.contactPerson : (local.contactPerson || ''),
+                  contactPerson: !isGenericPerson(fo.contactPerson) ? fo.contactPerson : (local.contactPerson || fo.contactPerson || ''),
                   contactNumber: (fo.contactNumber && fo.contactNumber.trim() !== '') ? fo.contactNumber : (local.contactNumber || ''),
-                  fbMessengerLink: (fo.fbMessengerLink && fo.fbMessengerLink.trim() !== '') ? fo.fbMessengerLink : (local.fbMessengerLink || ''),
-                  deliveryAddress: (fo.deliveryAddress && fo.deliveryAddress.trim() !== '') ? fo.deliveryAddress : (local.deliveryAddress || ''),
+                  fbMessengerLink: !isGenericMessenger(fo.fbMessengerLink) ? fo.fbMessengerLink : (local.fbMessengerLink || fo.fbMessengerLink || ''),
+                  deliveryAddress: !isGenericAddress(fo.deliveryAddress) ? fo.deliveryAddress : (local.deliveryAddress || fo.deliveryAddress || ''),
                   poNumber: (fo.poNumber && fo.poNumber.trim() !== '') ? fo.poNumber : (local.poNumber || ''),
-                  notes: (fo.notes && fo.notes.trim() !== '') ? fo.notes : (local.notes || ''),
+                  notes: !isGenericNotes(fo.notes) ? fo.notes : (local.notes || fo.notes || ''),
                   contactEmail: (fo.contactEmail && fo.contactEmail.trim() !== '') ? fo.contactEmail : (local.contactEmail || '')
                 };
               }
