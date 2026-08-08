@@ -90,6 +90,11 @@ function parseOrderItems(val: any): OrderItem[] {
         unitPrice: unitPrice,
         selectedSize: getProp(it, ['SelectedSize', 'selectedSize', 'Size', 'size']) ? String(getProp(it, ['SelectedSize', 'selectedSize', 'Size', 'size'])) : undefined,
         selectedColor: getProp(it, ['SelectedColor', 'selectedColor', 'Color', 'color']) ? String(getProp(it, ['SelectedColor', 'selectedColor', 'Color', 'color'])) : undefined,
+        selectedAddOns: (() => {
+          const val = getProp(it, ['SelectedAddOns', 'selectedAddOns', 'Selected Add-Ons', 'AddOns', 'addOns']);
+          if (!val) return undefined;
+          try { return typeof val === 'object' ? val : JSON.parse(String(val)); } catch { return undefined; }
+        })(),
         submitterName: getProp(it, ['SubmitterName', 'submitterName', 'Name', 'CustomerName']) ? String(getProp(it, ['SubmitterName', 'submitterName', 'Name', 'CustomerName'])) : undefined,
         submitterEmail: getProp(it, ['SubmitterEmail', 'submitterEmail', 'Email', 'CustomerEmail']) ? String(getProp(it, ['SubmitterEmail', 'submitterEmail', 'Email', 'CustomerEmail'])) : undefined,
         submitterPhone: getProp(it, ['SubmitterPhone', 'submitterPhone', 'Phone']) ? String(getProp(it, ['SubmitterPhone', 'submitterPhone', 'Phone'])) : undefined
@@ -332,6 +337,11 @@ export const sheetsService = {
                 price: Number(getProp(it, ['Price', 'price']) || 0),
                 selectedSize: String(getProp(it, ['SelectedSize', 'Selected Size', 'selectedSize']) || ''),
                 selectedColor: String(getProp(it, ['SelectedColor', 'Selected Color', 'selectedColor']) || ''),
+                selectedAddOns: (() => {
+                  const val = getProp(it, ['SelectedAddOns', 'selectedAddOns', 'Selected Add-Ons', 'AddOns', 'addOns']);
+                  if (!val) return undefined;
+                  try { return typeof val === 'object' ? val : JSON.parse(String(val)); } catch { return undefined; }
+                })(),
                 customDetails: getProp(it, ['CustomDetails', 'Custom Details', 'customDetails'])
               }));
             }
@@ -522,6 +532,11 @@ export const sheetsService = {
           })(),
           colorImages: (() => {
             const val = getProp(item, 'ColorImages') || getProp(item, 'colorImages');
+            if (!val) return undefined;
+            try { return typeof val === 'object' ? val : JSON.parse(String(val)); } catch { return undefined; }
+          })(),
+          addOns: (() => {
+            const val = getProp(item, ['AddOns', 'addOns', 'ADDONS', 'add_ons', 'Add-Ons', 'Add-ons']);
             if (!val) return undefined;
             try { return typeof val === 'object' ? val : JSON.parse(String(val)); } catch { return undefined; }
           })()
@@ -991,6 +1006,33 @@ export const sheetsService = {
                   for (const [vKey, vVal] of Object.entries(vObj)) {
                     const num = Number(vVal);
                     if (!isNaN(num)) inner[vKey] = num;
+                  }
+                  if (Object.keys(inner).length > 0) res[pId] = inner;
+                }
+              }
+              return Object.keys(res).length > 0 ? res : undefined;
+            }
+            return undefined;
+          })(),
+          customAddOnPrices: (() => {
+            const val = getProp(item, ['CustomAddOnPrices', 'customAddOnPrices', 'Custom Add-On Prices', 'Add-On Pricing', 'AddOnPricing', 'Add-on Pricing']);
+            if (!val) return undefined;
+            let parsedObj: any = val;
+            if (typeof val === 'string') {
+              try {
+                parsedObj = JSON.parse(val);
+              } catch (e) {
+                return undefined;
+              }
+            }
+            if (parsedObj && typeof parsedObj === 'object' && !Array.isArray(parsedObj)) {
+              const res: Record<string, Record<string, number>> = {};
+              for (const [pId, aObj] of Object.entries(parsedObj)) {
+                if (aObj && typeof aObj === 'object') {
+                  const inner: Record<string, number> = {};
+                  for (const [aKey, aVal] of Object.entries(aObj)) {
+                    const num = Number(aVal);
+                    if (!isNaN(num)) inner[aKey] = num;
                   }
                   if (Object.keys(inner).length > 0) res[pId] = inner;
                 }

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Product, CartItem } from '../types';
+import { Product, CartItem, ProductAddOn } from '../types';
 import { getProductUnitPrice } from '../utils/pricing';
 import { Check, Plus, AlertCircle, Sparkles, SlidersHorizontal, Heart, Clock, Truck, Edit3, X, Save } from 'lucide-react';
 import ProductDetailsPage from './ProductDetailsPage';
@@ -84,6 +84,7 @@ export default function ProductCatalog({ products, onAddToCart, onUpdateProduct,
   const [sizes, setSizes] = useState<Record<string, string>>({});
   const [colors, setColors] = useState<Record<string, string>>({});
   const [customDetails, setCustomDetails] = useState<Record<string, Record<string, string>>>({});
+  const [selectedAddOnsMap, setSelectedAddOnsMap] = useState<Record<string, ProductAddOn[]>>({});
   const [addedNotification, setAddedNotification] = useState<string | null>(null);
 
   const categories = ['All', 'Uniforms', 'IDs & Accessories', 'Print Materials', 'Promo Items'];
@@ -136,15 +137,19 @@ export default function ProductCatalog({ products, onAddToCart, onUpdateProduct,
 
     const selectedSize = product.sizeOptions ? (sizes[product.id] || product.sizeOptions[0]) : undefined;
     const selectedColor = product.colorOptions ? (colors[product.id] || product.colorOptions[0]) : undefined;
-    const unitPrice = getProductUnitPrice(product, selectedSize, selectedColor);
+    const selectedAddOns = selectedAddOnsMap[product.id] || [];
+    const addOnsCost = selectedAddOns.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
+    const baseUnitPrice = getProductUnitPrice(product, selectedSize, selectedColor);
+    const finalUnitPrice = baseUnitPrice + addOnsCost;
 
     onAddToCart({
       product,
       quantity: qty,
       selectedSize,
       selectedColor,
+      selectedAddOns: selectedAddOns.length > 0 ? selectedAddOns : undefined,
       customDetails: customDetails[product.id] || {},
-      unitPrice
+      unitPrice: finalUnitPrice
     });
 
     // Reset configuring and show toast
@@ -268,21 +273,6 @@ export default function ProductCatalog({ products, onAddToCart, onUpdateProduct,
                       /{product.unit}
                     </span>
                   </div>
-                </div>
-
-                {/* Stock allocation limit progress bar matching reference image style */}
-                <div className="flex items-center justify-between gap-3 pt-3 border-t border-gray-100">
-                  <div className="flex-1 bg-gray-200 h-2.5 rounded-full overflow-hidden">
-                    <div
-                      className="bg-[#18181b] h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${((product.saleCount || 5) / (product.saleLimit || 10)) * 100}%`
-                      }}
-                    />
-                  </div>
-                  <span className="text-[10px] font-bold text-gray-500 font-mono whitespace-nowrap">
-                    {product.saleCount || 5}/{product.saleLimit || 10} Sale
-                  </span>
                 </div>
 
                 {/* Lead Time & Delivery Charge Banner with Quick Edit */}
@@ -464,6 +454,64 @@ export default function ProductCatalog({ products, onAddToCart, onUpdateProduct,
                           </button>
                         </div>
                       </div>
+
+                      {/* Optional Add-Ons checklist */}
+                      {product.addOns && product.addOns.length > 0 && (
+                        <div className="space-y-1.5 pt-1 border-t border-gray-100">
+                          <label className="block text-[9px] uppercase tracking-wider text-black font-bold font-mono">
+                            Optional Item Add-Ons:
+                          </label>
+                          <div className="space-y-1 bg-gray-50/80 p-2 rounded-lg border border-gray-200">
+                            {product.addOns.map((addOn) => {
+                              const currentSelected = selectedAddOnsMap[product.id] || [];
+                              const isChecked = currentSelected.some(a => a.id === addOn.id || a.name === addOn.name);
+                              return (
+                                <label
+                                  key={addOn.id || addOn.name}
+                                  className={`flex items-start gap-2 p-1.5 rounded-md cursor-pointer transition-colors ${
+                                    isChecked ? 'bg-emerald-50/90 border border-emerald-300' : 'hover:bg-white border border-transparent'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setSelectedAddOnsMap(prev => {
+                                        const list = prev[product.id] || [];
+                                        if (checked) {
+                                          return { ...prev, [product.id]: [...list, addOn] };
+                                        } else {
+                                          return { ...prev, [product.id]: list.filter(a => (a.id && a.id !== addOn.id) || a.name !== addOn.name) };
+                                        }
+                                      });
+                                    }}
+                                    className="mt-0.5 w-3.5 h-3.5 accent-black cursor-pointer shrink-0"
+                                  />
+                                  {addOn.imageUrl && (
+                                    <img
+                                      src={addOn.imageUrl}
+                                      alt={addOn.name}
+                                      className="w-7 h-7 rounded border border-gray-200 object-cover shrink-0 mt-0.5"
+                                    />
+                                  )}
+                                  <div className="flex-1 text-[10px] leading-tight">
+                                    <div className="flex justify-between items-center font-mono font-bold text-black">
+                                      <span>{addOn.name}</span>
+                                      <span className="text-emerald-700 bg-white px-1.5 py-0.5 rounded border border-gray-200 text-[9px]">
+                                        +Php {Number(addOn.price || 0).toFixed(2)}
+                                      </span>
+                                    </div>
+                                    {addOn.description && (
+                                      <p className="text-[9px] text-gray-500 font-mono mt-0.5">{addOn.description}</p>
+                                    )}
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex gap-2 pt-1">

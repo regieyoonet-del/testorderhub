@@ -75,6 +75,7 @@ export default function OrderPortals({
   const [productSearch, setProductSearch] = useState('');
   const [customPrices, setCustomPrices] = useState<Record<string, number>>({});
   const [customVariantPrices, setCustomVariantPrices] = useState<Record<string, Record<string, number>>>({});
+  const [customAddOnPrices, setCustomAddOnPrices] = useState<Record<string, Record<string, number>>>({});
 
   // Portal Orders Filter & Sorting State (used when viewing a portal detail page)
   const [orderSearch, setOrderSearch] = useState('');
@@ -99,6 +100,11 @@ export default function OrderPortals({
         url += `&cvp=${encodeURIComponent(JSON.stringify(portal.customVariantPrices))}`;
       } catch (e) {}
     }
+    if (portal.customAddOnPrices && Object.keys(portal.customAddOnPrices).length > 0) {
+      try {
+        url += `&caop=${encodeURIComponent(JSON.stringify(portal.customAddOnPrices))}`;
+      } catch (e) {}
+    }
     if (appsScriptUrl && appsScriptUrl.trim()) {
       url += `&script=${encodeURIComponent(appsScriptUrl.trim())}`;
     }
@@ -121,6 +127,7 @@ export default function OrderPortals({
     setSelectedProductIds(availableProducts.map(p => p.id));
     setCustomPrices({});
     setCustomVariantPrices({});
+    setCustomAddOnPrices({});
     setProductSearch('');
     setOrderSearch('');
     setOrderStatusFilter('all');
@@ -136,6 +143,7 @@ export default function OrderPortals({
     setSelectedProductIds([...portal.productIds]);
     setCustomPrices(portal.customPrices || {});
     setCustomVariantPrices(portal.customVariantPrices || {});
+    setCustomAddOnPrices(portal.customAddOnPrices || {});
     setProductSearch('');
     setOrderSearch('');
     setOrderStatusFilter('all');
@@ -179,6 +187,7 @@ export default function OrderPortals({
         productIds: selectedProductIds,
         customPrices,
         customVariantPrices,
+        customAddOnPrices,
         updatedAt: new Date().toISOString()
       };
       onUpdatePortal(updated);
@@ -193,7 +202,8 @@ export default function OrderPortals({
         status,
         productIds: selectedProductIds,
         customPrices,
-        customVariantPrices
+        customVariantPrices,
+        customAddOnPrices
       });
       setIsModalOpen(false);
     }
@@ -578,7 +588,7 @@ export default function OrderPortals({
                         </div>
 
                         {hasSizes && (
-                          <div className="mt-2 bg-white border border-gray-200 rounded-xl p-2.5 space-y-1.5">
+                          <div className="mt-2 bg-white border border-gray-200 rounded-xl p-2.5 space-y-1.5" onClick={(e) => e.stopPropagation()}>
                             <span className="text-[9px] font-mono font-bold text-gray-500 uppercase tracking-wider block">
                               Variant Size Pricing:
                             </span>
@@ -604,6 +614,59 @@ export default function OrderPortals({
                                       }}
                                       className="w-full text-[10px] font-mono text-black bg-transparent focus:outline-none font-bold"
                                     />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {prod.addOns && prod.addOns.length > 0 && (
+                          <div className="mt-2 bg-white border border-gray-200 rounded-xl p-2.5 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+                            <span className="text-[9px] font-mono font-bold text-gray-500 uppercase tracking-wider block">
+                              Add-On Pricing:
+                            </span>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {prod.addOns.map(addOn => {
+                                const addOnKey = addOn.id || addOn.name;
+                                const prodAddOnPrices = customAddOnPrices[prod.id] || {};
+                                const curPrice = prodAddOnPrices[addOnKey] !== undefined
+                                  ? prodAddOnPrices[addOnKey]
+                                  : Number(addOn.price || 0);
+
+                                return (
+                                  <div key={addOnKey} className="flex items-center justify-between gap-1.5 bg-gray-50 border border-gray-200 rounded-lg p-2">
+                                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                      {addOn.imageUrl && (
+                                        <img
+                                          src={addOn.imageUrl}
+                                          alt={addOn.name}
+                                          className="w-5 h-5 rounded object-cover border border-gray-200 shrink-0"
+                                        />
+                                      )}
+                                      <span className="text-[10px] font-mono font-bold text-black truncate" title={addOn.name}>
+                                        {addOn.name}:
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1 w-24 shrink-0 bg-white border border-gray-300 rounded px-1.5 py-0.5 focus-within:border-black">
+                                      <span className="text-[9px] font-mono text-gray-400">{systemSettings.currencySymbol || 'Php'}</span>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        value={curPrice}
+                                        onChange={(e) => {
+                                          const val = parseFloat(e.target.value) || 0;
+                                          setCustomAddOnPrices(prev => ({
+                                            ...prev,
+                                            [prod.id]: {
+                                              ...(prev[prod.id] || {}),
+                                              [addOnKey]: val
+                                            }
+                                          }));
+                                        }}
+                                        className="w-full text-[10px] font-mono text-black bg-transparent focus:outline-none font-bold"
+                                      />
+                                    </div>
                                   </div>
                                 );
                               })}

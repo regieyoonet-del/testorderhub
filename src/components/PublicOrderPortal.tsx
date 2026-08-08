@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { OrderPortal, Product, CompanyProfile, Order, OrderItem, SystemSettings, getDisplayPurchaserName } from '../types';
-import { getProductUnitPrice } from '../utils/pricing';
+import { OrderPortal, Product, CompanyProfile, Order, OrderItem, SystemSettings, ProductAddOn, getDisplayPurchaserName } from '../types';
+import { getProductUnitPrice, getAddOnUnitPrice } from '../utils/pricing';
 import { getItemColorImage } from '../utils/colorUtils';
 import ProductImageCarousel from './ProductImageCarousel';
 import {
@@ -112,7 +112,9 @@ export default function PublicOrderPortal({
     quantity: number;
     selectedSize?: string;
     selectedColor?: string;
+    selectedAddOns?: ProductAddOn[];
     customDetails: Record<string, string>;
+    unitPrice?: number;
   }[]>([]);
 
   // Option states per Product ID
@@ -120,6 +122,7 @@ export default function PublicOrderPortal({
   const [sizes, setSizes] = useState<Record<string, string>>({});
   const [colors, setColors] = useState<Record<string, string>>({});
   const [customs, setCustoms] = useState<Record<string, Record<string, string>>>({});
+  const [selectedAddOnsMap, setSelectedAddOnsMap] = useState<Record<string, ProductAddOn[]>>({});
   const [addedToast, setAddedToast] = useState<string | null>(null);
   const [selectedDetailProduct, setSelectedDetailProduct] = useState<Product | null>(null);
 
@@ -148,9 +151,15 @@ export default function PublicOrderPortal({
     const selectedSize = getSize(product);
     const selectedColor = getColor(product);
     const customDetails = getCustoms(product);
-    const unitPrice = getProductUnitPrice(product, selectedSize, selectedColor, portal);
+    const selectedAddOns = (selectedAddOnsMap[product.id] || []).map(a => ({
+      ...a,
+      price: getAddOnUnitPrice(product, a, portal)
+    }));
+    const addOnsCost = selectedAddOns.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
+    const baseUnitPrice = getProductUnitPrice(product, selectedSize, selectedColor, portal);
+    const unitPrice = baseUnitPrice + addOnsCost;
 
-    const compositeId = `${product.id}_${selectedSize || ''}_${selectedColor || ''}_${JSON.stringify(customDetails)}`;
+    const compositeId = `${product.id}_${selectedSize || ''}_${selectedColor || ''}_${JSON.stringify(customDetails)}_${JSON.stringify(selectedAddOns)}`;
 
     setCartItems(prev => {
       const existingIdx = prev.findIndex(item => item.id === compositeId);
@@ -168,6 +177,7 @@ export default function PublicOrderPortal({
           quantity: qty,
           selectedSize,
           selectedColor,
+          selectedAddOns: selectedAddOns.length > 0 ? selectedAddOns : undefined,
           customDetails,
           unitPrice
         }
@@ -225,6 +235,7 @@ export default function PublicOrderPortal({
           quantity: item.quantity,
           selectedSize: item.selectedSize,
           selectedColor: item.selectedColor,
+          selectedAddOns: item.selectedAddOns,
           customDetails: item.customDetails,
           unitPrice: item.unitPrice ?? getProductUnitPrice(item.product, item.selectedSize, item.selectedColor, portal)
         })) as any
@@ -558,6 +569,66 @@ export default function PublicOrderPortal({
                   </div>
                 ))}
 
+                {/* Add-Ons Options */}
+                {product.addOns && product.addOns.length > 0 && (
+                  <div className="space-y-2 pt-1 border-t border-gray-100">
+                    <label className="block text-xs uppercase font-mono font-bold text-gray-500">
+                      Optional Add-Ons
+                    </label>
+                    <div className="space-y-1.5 bg-gray-50 p-3 rounded-2xl border border-gray-200">
+                      {product.addOns.map(addOn => {
+                        const currentAddOns = selectedAddOnsMap[product.id] || [];
+                        const isChecked = currentAddOns.some(a => a.id === addOn.id || a.name === addOn.name);
+                        const effectivePrice = getAddOnUnitPrice(product, addOn, portal);
+                        const addOnObj = { ...addOn, price: effectivePrice };
+                        return (
+                          <label
+                            key={addOn.id || addOn.name}
+                            className={`flex items-start gap-2.5 p-2 rounded-xl cursor-pointer transition-all ${
+                              isChecked ? 'bg-emerald-50 border border-emerald-300 shadow-2xs' : 'bg-white border border-gray-200 hover:border-gray-300'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setSelectedAddOnsMap(prev => {
+                                  const list = prev[product.id] || [];
+                                  if (checked) {
+                                    return { ...prev, [product.id]: [...list, addOnObj] };
+                                  } else {
+                                    return { ...prev, [product.id]: list.filter(a => (a.id && a.id !== addOn.id) || a.name !== addOn.name) };
+                                  }
+                                });
+                              }}
+                              className="mt-0.5 w-4 h-4 accent-black cursor-pointer shrink-0"
+                            />
+                            {addOn.imageUrl && (
+                              <img
+                                src={addOn.imageUrl}
+                                alt={addOn.name}
+                                className="w-8 h-8 rounded-lg border border-gray-200 object-cover shrink-0 mt-0.5"
+                              />
+                            )}
+                            <div className="flex-1 text-xs">
+                              <div className="flex justify-between items-center font-bold text-black">
+                                <span>{addOn.name}</span>
+                                <span className="font-mono text-emerald-700 bg-white px-2 py-0.5 rounded-md border border-gray-200 text-[11px]">
+                                  +{(systemSettings.currencySymbol || 'Php')} {effectivePrice.toFixed(2)}
+                                </span>
+                              </div>
+                              {addOn.description && (
+                                <p className="text-[11px] text-gray-500 font-sans mt-0.5">{addOn.description}</p>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* Quantity & Subtotal */}
                 <div className="space-y-2 pt-2">
                   <label className="block text-xs uppercase font-mono font-bold text-gray-500">
@@ -868,6 +939,66 @@ export default function PublicOrderPortal({
                         </div>
                       ))}
 
+                      {/* Add-Ons Options */}
+                      {product.addOns && product.addOns.length > 0 && (
+                        <div className="space-y-1 pt-1 border-t border-gray-100">
+                          <label className="block text-[9px] uppercase font-mono font-bold text-gray-400">
+                            Optional Add-Ons
+                          </label>
+                          <div className="space-y-1 bg-gray-50 p-2 rounded-xl border border-gray-200">
+                            {product.addOns.map(addOn => {
+                              const currentAddOns = selectedAddOnsMap[product.id] || [];
+                              const isChecked = currentAddOns.some(a => a.id === addOn.id || a.name === addOn.name);
+                              const effectivePrice = getAddOnUnitPrice(product, addOn, portal);
+                              const addOnObj = { ...addOn, price: effectivePrice };
+                              return (
+                                <label
+                                  key={addOn.id || addOn.name}
+                                  className={`flex items-start gap-2 p-1.5 rounded-lg cursor-pointer transition-all ${
+                                    isChecked ? 'bg-emerald-50 border border-emerald-300' : 'bg-white border border-gray-200 hover:border-gray-300'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setSelectedAddOnsMap(prev => {
+                                        const list = prev[product.id] || [];
+                                        if (checked) {
+                                          return { ...prev, [product.id]: [...list, addOnObj] };
+                                        } else {
+                                          return { ...prev, [product.id]: list.filter(a => (a.id && a.id !== addOn.id) || a.name !== addOn.name) };
+                                        }
+                                      });
+                                    }}
+                                    className="mt-0.5 w-3.5 h-3.5 accent-black cursor-pointer shrink-0"
+                                  />
+                                  {addOn.imageUrl && (
+                                    <img
+                                      src={addOn.imageUrl}
+                                      alt={addOn.name}
+                                      className="w-7 h-7 rounded border border-gray-200 object-cover shrink-0 mt-0.5"
+                                    />
+                                  )}
+                                  <div className="flex-1 text-[10px] leading-snug">
+                                    <div className="flex justify-between items-center font-bold text-black font-mono">
+                                      <span>{addOn.name}</span>
+                                      <span className="text-emerald-700 bg-white px-1 py-0.2 rounded border border-gray-200 text-[9px]">
+                                        +{(systemSettings.currencySymbol || 'Php')} {effectivePrice.toFixed(2)}
+                                      </span>
+                                    </div>
+                                    {addOn.description && (
+                                      <p className="text-[9px] text-gray-500 font-sans mt-0.5">{addOn.description}</p>
+                                    )}
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Quantity Input */}
                       <div className="space-y-1">
                         <label className="block text-[9px] uppercase font-mono font-bold text-gray-400">
@@ -1003,6 +1134,15 @@ export default function PublicOrderPortal({
                               item.selectedColor && `Color: ${item.selectedColor}`
                             ].filter(Boolean).join(' · ')}
                           </span>
+                          {item.selectedAddOns && item.selectedAddOns.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1 font-mono text-[10px]">
+                              {item.selectedAddOns.map((addOn, idx) => (
+                                <span key={idx} className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-1.5 py-0.2 rounded font-bold">
+                                  +{addOn.name} (+{(systemSettings.currencySymbol || 'Php')} {Number(addOn.price || 0).toFixed(2)})
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         {/* Mobile remove button (top right) */}

@@ -12,6 +12,14 @@ export interface CustomField {
   required?: boolean;
 }
 
+export interface ProductAddOn {
+  id: string;
+  name: string;
+  price: number;
+  description?: string;
+  imageUrl?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -27,6 +35,7 @@ export interface Product {
   sizeOptions?: string[];
   colorOptions?: string[];
   customFields?: CustomField[];
+  addOns?: ProductAddOn[];
   frequentlyOrdered?: boolean;
   shippingFee?: number;
   leadTime?: string;
@@ -43,6 +52,7 @@ export interface OrderItem {
   price: number;
   selectedSize?: string;
   selectedColor?: string;
+  selectedAddOns?: ProductAddOn[];
   customDetails?: Record<string, string>;
   unitPrice?: number;
   submitterName?: string;
@@ -105,6 +115,7 @@ export interface CartItem {
   quantity: number;
   selectedSize?: string;
   selectedColor?: string;
+  selectedAddOns?: ProductAddOn[];
   customDetails: Record<string, string>;
   unitPrice?: number; // Price calculated from variant or portal custom pricing
 }
@@ -135,6 +146,7 @@ export interface CatalogProduct {
   colors: ColorOption[];
   sizes?: string[];
   sizeOptions?: string[];
+  addOns?: ProductAddOn[];
   status: 'Active' | 'Hidden';
   createdAt?: string;
   variantPrices?: Record<string, number>;
@@ -207,6 +219,7 @@ export interface OrderPortal {
   shareToken: string;
   customPrices?: Record<string, number>; // Map of productId -> custom portal base price set by Company Admin
   customVariantPrices?: Record<string, Record<string, number>>; // Map of productId -> (variantKey -> custom price)
+  customAddOnPrices?: Record<string, Record<string, number>>; // Map of productId -> (addOnKey -> custom price)
 }
 
 export interface AppNotification {

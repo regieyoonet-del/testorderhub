@@ -255,8 +255,8 @@ function initSheets(ss) {
   // Headers definitions
   var headers = {
     "Orders": ["Order ID", "Order Number", "Company Name", "Contact Email", "Contact Person", "Contact Number", "FB Messenger Link", "Delivery Address", "PO Number", "Total Amount", "Status", "Created At", "Notes", "Portal ID", "Portal Name"],
-    "OrderItems": ["Order ID", "Product ID", "Product Name", "Image URL", "Quantity", "Price", "Selected Size", "Selected Color", "Custom Details"],
-    "Products": ["Product ID", "Name", "Category", "Description", "Image URL", "Base Price", "Original Price", "Min Quantity", "Unit", "Size Options", "Color Options", "Frequently Ordered", "Shipping Fee", "Image URLs", "Custom Fields"],
+    "OrderItems": ["Order ID", "Product ID", "Product Name", "Image URL", "Quantity", "Price", "Selected Size", "Selected Color", "Custom Details", "Selected Add-Ons"],
+    "Products": ["Product ID", "Name", "Category", "Description", "Image URL", "Base Price", "Original Price", "Min Quantity", "Unit", "Size Options", "Color Options", "Frequently Ordered", "Shipping Fee", "Image URLs", "Custom Fields", "Add-Ons"],
     "CatalogProducts": ["Product ID", "SKU", "Name", "Category", "Description", "Image URL", "Image URLs", "MOQ", "Lead Time", "Branding Methods", "Colors", "Sizes", "Status"],
     "Companies": ["Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Delivery Address", "Username", "Passcode", "PO Required", "Logo URL", "Approved Products", "Custom Products"],
     "Portals": ["Portal ID", "Company ID", "Company Name", "Portal Name", "Description", "Status", "Product IDs", "Portal Pricing", "Variant Pricing", "Created At", "Updated At", "Share Token"],
@@ -393,7 +393,7 @@ function saveNewOrder(ss, order) {
   }
   ordersSheet.appendRow(orderRow);
   
-  var expectedItemsHeaders = ["Order ID", "Product ID", "Product Name", "Image URL", "Quantity", "Price", "Selected Size", "Selected Color", "Custom Details"];
+  var expectedItemsHeaders = ["Order ID", "Product ID", "Product Name", "Image URL", "Quantity", "Price", "Selected Size", "Selected Color", "Custom Details", "Selected Add-Ons"];
   var itemsData = ensureHeaders(itemsSheet, expectedItemsHeaders);
   var itemsHeaders = itemsData[0];
   
@@ -401,6 +401,15 @@ function saveNewOrder(ss, order) {
     var detailsStr = "";
     if (item.customDetails) {
       detailsStr = JSON.stringify(item.customDetails);
+    }
+
+    var selectedAddOnsStr = "";
+    if (item.selectedAddOns) {
+      if (typeof item.selectedAddOns === 'string') {
+        selectedAddOnsStr = item.selectedAddOns;
+      } else {
+        try { selectedAddOnsStr = JSON.stringify(item.selectedAddOns); } catch(e) {}
+      }
     }
     
     var itemMap = {
@@ -412,7 +421,8 @@ function saveNewOrder(ss, order) {
       "Price": item.price,
       "Selected Size": item.selectedSize || "",
       "Selected Color": item.selectedColor || "",
-      "Custom Details": detailsStr
+      "Custom Details": detailsStr,
+      "Selected Add-Ons": selectedAddOnsStr
     };
     
     var itemRow = [];
@@ -427,7 +437,7 @@ function saveNewOrder(ss, order) {
 
 function saveProduct(ss, product) {
   var sheet = ss.getSheetByName("Products");
-  var expectedHeaders = ["Product ID", "Name", "Category", "Description", "Image URL", "Base Price", "Original Price", "Min Quantity", "Unit", "Size Options", "Color Options", "Frequently Ordered", "Shipping Fee", "Lead Time", "Image URLs", "Custom Fields"];
+  var expectedHeaders = ["Product ID", "Name", "Category", "Description", "Image URL", "Base Price", "Original Price", "Min Quantity", "Unit", "Size Options", "Color Options", "Frequently Ordered", "Shipping Fee", "Lead Time", "Image URLs", "Custom Fields", "Add-Ons"];
   var data = ensureHeaders(sheet, expectedHeaders);
   var headers = data[0];
   
@@ -491,6 +501,15 @@ function saveProduct(ss, product) {
       try { customFieldsStr = JSON.stringify(product.customFields); } catch(e) {}
     }
   }
+
+  var addOnsStr = "";
+  if (product.addOns) {
+    if (typeof product.addOns === 'string') {
+      addOnsStr = product.addOns;
+    } else {
+      try { addOnsStr = JSON.stringify(product.addOns); } catch(e) {}
+    }
+  }
   
   var productMap = {
     "Product ID": targetId,
@@ -508,7 +527,8 @@ function saveProduct(ss, product) {
     "Shipping Fee": product.shippingFee !== undefined ? product.shippingFee : 0,
     "Lead Time": product.leadTime || "5-7 Business Days",
     "Image URLs": imageUrlsStr,
-    "Custom Fields": customFieldsStr
+    "Custom Fields": customFieldsStr,
+    "Add-Ons": addOnsStr
   };
   
   var rowData = [];
@@ -585,7 +605,7 @@ function saveCompany(ss, company) {
 
 function savePortal(ss, portal) {
   var sheet = ss.getSheetByName("Portals");
-  var expectedHeaders = ["Portal ID", "Company ID", "Company Name", "Portal Name", "Description", "Status", "Product IDs", "Portal Pricing", "Variant Pricing", "Created At", "Updated At", "Share Token"];
+  var expectedHeaders = ["Portal ID", "Company ID", "Company Name", "Portal Name", "Description", "Status", "Product IDs", "Portal Pricing", "Variant Pricing", "Add-On Pricing", "Created At", "Updated At", "Share Token"];
   var data = ensureHeaders(sheet, expectedHeaders);
   var headers = data[0];
   
@@ -609,6 +629,7 @@ function savePortal(ss, portal) {
   var productIdsStr = portal.productIds ? portal.productIds.join(", ") : "";
   var portalPricingStr = portal.customPrices ? JSON.stringify(portal.customPrices) : "";
   var variantPricingStr = portal.customVariantPrices ? JSON.stringify(portal.customVariantPrices) : "";
+  var addOnPricingStr = portal.customAddOnPrices ? JSON.stringify(portal.customAddOnPrices) : "";
   
   var portalMap = {
     "Portal ID": portal.id,
@@ -620,6 +641,7 @@ function savePortal(ss, portal) {
     "Product IDs": productIdsStr,
     "Portal Pricing": portalPricingStr,
     "Variant Pricing": variantPricingStr,
+    "Add-On Pricing": addOnPricingStr,
     "Created At": portal.createdAt || new Date().toISOString(),
     "Updated At": portal.updatedAt || new Date().toISOString(),
     "Share Token": portal.shareToken || ""

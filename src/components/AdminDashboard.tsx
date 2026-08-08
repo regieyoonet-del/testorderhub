@@ -91,6 +91,8 @@ interface AdminDashboardProps {
   initialTab?: 'clients' | 'catalog' | 'orders' | 'analytics' | 'settings' | 'sync';
   initialCatalogSection?: 'catalog' | 'enquiries';
   highlightEnquiryNumber?: string;
+  highlightOrderNumber?: string;
+  highlightOrderId?: string;
 }
 
 export default function AdminDashboard({
@@ -121,7 +123,9 @@ export default function AdminDashboard({
   isSyncingSheets,
   initialTab,
   initialCatalogSection,
-  highlightEnquiryNumber
+  highlightEnquiryNumber,
+  highlightOrderNumber,
+  highlightOrderId
 }: AdminDashboardProps) {
   const [adminTab, setAdminTab] = useState<'clients' | 'catalog' | 'orders' | 'analytics' | 'settings' | 'sync'>(initialTab || 'clients');
 
@@ -130,6 +134,28 @@ export default function AdminDashboard({
       setAdminTab(initialTab);
     }
   }, [initialTab]);
+
+  React.useEffect(() => {
+    if (highlightOrderNumber || highlightOrderId) {
+      setAdminTab('orders');
+      const searchVal = highlightOrderNumber || highlightOrderId || '';
+      setOrderSearch(searchVal);
+      setFilterStatus('all');
+      setFilterCompany('all');
+      setFilterCategory('all');
+      setFilterDate('all');
+      setFilterSpecificDate('');
+
+      const matchingOrder = orders.find(
+        o =>
+          (highlightOrderNumber && o.orderNumber && o.orderNumber.toLowerCase() === highlightOrderNumber.toLowerCase()) ||
+          (highlightOrderId && o.id === highlightOrderId)
+      );
+      if (matchingOrder) {
+        setSelectedOrder(matchingOrder);
+      }
+    }
+  }, [highlightOrderNumber, highlightOrderId, orders]);
 
   // Admin Settings Tab state
   const [adminUser, setAdminUser] = useState(() => systemSettings.adminUsername || 'admin');
@@ -483,12 +509,15 @@ export default function AdminDashboard({
     onUpdateOrders(updated);
   };
 
-  // Exclude custom company storefront portal orders from ARH Admin order views & analytics
+  // Exclude custom company storefront portal orders from ARH Admin default order views & analytics, unless searching
   const directCompanyOrders = React.useMemo(() => {
+    if (orderSearch.trim()) {
+      return orders;
+    }
     return orders.filter(
       o => !(o.id.startsWith('ord-portal-') || Boolean(o.portalId) || Boolean(o.portalName) || o.status === 'Pending Approval')
     );
-  }, [orders]);
+  }, [orders, orderSearch]);
 
   const filteredOrders = React.useMemo(() => {
     const list = directCompanyOrders.filter((ord) => {

@@ -6,7 +6,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { X, Check, ArrowLeft, ShieldCheck, HelpCircle, Layers, Tag, Award, Edit, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
+import { X, Check, Plus, ArrowLeft, ShieldCheck, HelpCircle, Layers, Tag, Award, Edit, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
 import { Product } from '../types';
 
 interface ProductDetailsPageProps {
@@ -258,19 +258,6 @@ export default function ProductDetailsPage({ product, onClose, onEdit, editLabel
                 <span className="text-sm font-bold text-gray-400 line-through block mt-1">Php {retailPrice.toFixed(2)}</span>
                 <span className="text-[9px] text-red-500 font-bold block">Save {savingsPercent}%</span>
               </div>
-              <div className="border-l border-gray-200 pl-4">
-                <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold">Allocated Limit</span>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <div className="w-12 bg-gray-200 h-2 rounded-full overflow-hidden">
-                    <div
-                      className="bg-black h-full rounded-full"
-                      style={{ width: `${((product.saleCount || 5) / (product.saleLimit || 10)) * 100}%` }}
-                    />
-                  </div>
-                  <span className="text-[10px] font-bold text-black">{product.saleCount || 5}/{product.saleLimit || 10}</span>
-                </div>
-                <span className="text-[9px] text-gray-400 block">Order stream count</span>
-              </div>
             </div>
 
             {/* Shipping Logistics Fee Display */}
@@ -366,6 +353,47 @@ export default function ProductDetailsPage({ product, onClose, onEdit, editLabel
                       </button>
                     );
                   })}
+                </div>
+              </div>
+            )}
+
+            {/* Product Add-Ons Section */}
+            {product.addOns && product.addOns.length > 0 && (
+              <div className="space-y-3.5 pt-4 border-t border-gray-100">
+                <h3 className="text-[10px] uppercase font-mono tracking-widest text-black font-extrabold flex items-center gap-1.5">
+                  <Plus className="w-4 h-4 text-emerald-600" />
+                  Available Item Add-Ons & Accessories
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {product.addOns.map((a, idx) => (
+                    <div
+                      key={a.id || idx}
+                      className="p-3 bg-emerald-50/50 border border-emerald-200/80 rounded-2xl flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        {a.imageUrl && (
+                          <img
+                            src={a.imageUrl}
+                            alt={a.name}
+                            className="w-9 h-9 rounded-xl border border-emerald-200/80 object-cover shrink-0"
+                          />
+                        )}
+                        <div>
+                          <span className="font-extrabold text-black uppercase tracking-tight block">
+                            {a.name}
+                          </span>
+                          {a.description && (
+                            <span className="text-[10px] text-gray-500 font-mono block mt-0.5">
+                              {a.description}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="font-mono font-bold text-emerald-800 bg-white border border-emerald-200 px-2.5 py-1 rounded-lg shrink-0 text-xs shadow-2xs">
+                        +Php {Number(a.price || 0).toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

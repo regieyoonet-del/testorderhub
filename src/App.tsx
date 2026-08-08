@@ -212,7 +212,11 @@ export const sanitizeMasterProducts = (prods: Product[], comps: CompanyProfile[]
   const map = new Map<string, Product>();
   prods.forEach(p => {
     if (p && p.id && !customProductIds.has(p.id)) {
-      map.set(p.id, p);
+      const initMatch = INITIAL_PRODUCTS.find(ip => ip.id === p.id);
+      map.set(p.id, {
+        ...p,
+        addOns: (p.addOns && p.addOns.length > 0) ? p.addOns : initMatch?.addOns
+      });
     }
   });
   return Array.from(map.values());
@@ -222,7 +226,11 @@ export const sanitizeProducts = (prods: Product[]): Product[] => {
   const map = new Map<string, Product>();
   prods.forEach(p => {
     if (p && p.id) {
-      map.set(p.id, p);
+      const initMatch = INITIAL_PRODUCTS.find(ip => ip.id === p.id);
+      map.set(p.id, {
+        ...p,
+        addOns: (p.addOns && p.addOns.length > 0) ? p.addOns : initMatch?.addOns
+      });
     }
   });
   return Array.from(map.values());
@@ -236,13 +244,34 @@ export default function App() {
   const [companies, setCompanies] = useState<CompanyProfile[]>(() => {
     const cached = localStorage.getItem('rp_companies');
     const loaded: CompanyProfile[] = cached ? JSON.parse(cached) : INITIAL_COMPANIES;
-    return loaded.map(sanitizeCompany);
+    return loaded.map(c => {
+      const sanitized = sanitizeCompany(c);
+      const initComp = INITIAL_COMPANIES.find(ic => ic.id === c.id);
+      return {
+        ...sanitized,
+        customProducts: (sanitized.customProducts || []).map(cp => {
+          const initCp = initComp?.customProducts?.find(p => p.id === cp.id);
+          const initMaster = INITIAL_PRODUCTS.find(p => p.id === cp.id);
+          return {
+            ...cp,
+            addOns: (cp.addOns && cp.addOns.length > 0) ? cp.addOns : (initCp?.addOns || initMaster?.addOns)
+          };
+        })
+      };
+    });
   });
 
   const [products, setProducts] = useState<Product[]>(() => {
     const cached = localStorage.getItem('rp_master_products');
     const loaded: Product[] = cached ? JSON.parse(cached) : INITIAL_PRODUCTS;
-    return sanitizeMasterProducts(loaded, companies);
+    const mergedLoaded = loaded.map(p => {
+      const initMatch = INITIAL_PRODUCTS.find(ip => ip.id === p.id);
+      return {
+        ...p,
+        addOns: (p.addOns && p.addOns.length > 0) ? p.addOns : initMatch?.addOns
+      };
+    });
+    return sanitizeMasterProducts(mergedLoaded, companies);
   });
 
   const [orders, setOrders] = useState<Order[]>(() => {
@@ -275,29 +304,7 @@ export default function App() {
         return [];
       }
     }
-    return [
-      {
-        id: 'notif-init-1',
-        recipientType: 'company',
-        companyName: 'Print Room',
-        title: 'New Storefront Order',
-        message: 'New storefront order ARH-2026-1023 placed via AS Colour Products Portal.',
-        timestamp: new Date().toISOString(),
-        read: false,
-        orderNumber: 'ARH-2026-1023',
-        type: 'new_storefront_order'
-      },
-      {
-        id: 'notif-init-2',
-        recipientType: 'admin',
-        title: 'New Company Order',
-        message: 'New order ARH-2026-1010-BATCH placed by Print Room.',
-        timestamp: new Date(Date.now() - 3600000).toISOString(),
-        read: false,
-        orderNumber: 'ARH-2026-1010-BATCH',
-        type: 'new_company_order'
-      }
-    ];
+    return [];
   });
 
   useEffect(() => {
@@ -546,9 +553,11 @@ export default function App() {
     const searchParams = new URLSearchParams(window.location.search);
     const urlCp = searchParams.get('cp');
     const urlCvp = searchParams.get('cvp');
+    const urlCaop = searchParams.get('caop');
 
     let urlCustomPrices: Record<string, number> | undefined;
     let urlCustomVariantPrices: Record<string, Record<string, number>> | undefined;
+    let urlCustomAddOnPrices: Record<string, Record<string, number>> | undefined;
 
     if (urlCp) {
       try {
@@ -558,6 +567,11 @@ export default function App() {
     if (urlCvp) {
       try {
         urlCustomVariantPrices = JSON.parse(decodeURIComponent(urlCvp));
+      } catch (e) {}
+    }
+    if (urlCaop) {
+      try {
+        urlCustomAddOnPrices = JSON.parse(decodeURIComponent(urlCaop));
       } catch (e) {}
     }
 
@@ -608,7 +622,8 @@ export default function App() {
       const mergedMatch: OrderPortal = {
         ...match,
         customPrices: urlCustomPrices || match.customPrices,
-        customVariantPrices: urlCustomVariantPrices || match.customVariantPrices
+        customVariantPrices: urlCustomVariantPrices || match.customVariantPrices,
+        customAddOnPrices: urlCustomAddOnPrices || match.customAddOnPrices
       };
       setActivePublicPortal(mergedMatch);
       // Only unblock loading state immediately if offline or if we have an exact cached local portal
@@ -639,7 +654,18 @@ export default function App() {
           setProducts(prev => {
             const map = new Map<string, Product>();
             prev.forEach(p => map.set(p.id, p));
-            fetchedProducts.forEach(p => map.set(p.id, p));
+            fetchedProducts.forEach(p => {
+              const existing = map.get(p.id);
+              const initMatch = INITIAL_PRODUCTS.find(ip => ip.id === p.id);
+              const effectiveAddOns = (p.addOns && p.addOns.length > 0)
+                ? p.addOns
+                : ((existing?.addOns && existing.addOns.length > 0) ? existing.addOns : initMatch?.addOns);
+              map.set(p.id, {
+                ...existing,
+                ...p,
+                addOns: effectiveAddOns
+              });
+            });
             return Array.from(map.values());
           });
         }
@@ -657,7 +683,26 @@ export default function App() {
         if (fetchedCompanies && fetchedCompanies.length > 0) {
           const coMap = new Map<string, CompanyProfile>();
           companies.forEach(c => coMap.set(c.id, c));
-          fetchedCompanies.forEach(c => coMap.set(c.id, sanitizeCompany(c)));
+          fetchedCompanies.forEach(c => {
+            const existing = coMap.get(c.id);
+            const mergedCustoms = (c.customProducts && c.customProducts.length > 0) ? c.customProducts : (existing?.customProducts || []);
+            coMap.set(c.id, sanitizeCompany({
+              ...existing,
+              ...c,
+              customProducts: mergedCustoms.map(cp => {
+                const existingCp = existing?.customProducts?.find(ep => ep.id === cp.id);
+                const initCp = INITIAL_COMPANIES.find(ic => ic.id === c.id)?.customProducts?.find(p => p.id === cp.id);
+                const initMaster = INITIAL_PRODUCTS.find(p => p.id === cp.id);
+                const effectiveAddOns = (cp.addOns && cp.addOns.length > 0)
+                  ? cp.addOns
+                  : ((existingCp?.addOns && existingCp.addOns.length > 0) ? existingCp.addOns : (initCp?.addOns || initMaster?.addOns));
+                return {
+                  ...cp,
+                  addOns: effectiveAddOns
+                };
+              })
+            }));
+          });
           updatedCompaniesList = Array.from(coMap.values());
           setCompanies(updatedCompaniesList);
         }
@@ -671,7 +716,8 @@ export default function App() {
             poMap.set(fp.id, {
               ...fp,
               customPrices: (fp.customPrices && Object.keys(fp.customPrices).length > 0) ? fp.customPrices : (existing?.customPrices || urlCustomPrices),
-              customVariantPrices: (fp.customVariantPrices && Object.keys(fp.customVariantPrices).length > 0) ? fp.customVariantPrices : (existing?.customVariantPrices || urlCustomVariantPrices)
+              customVariantPrices: (fp.customVariantPrices && Object.keys(fp.customVariantPrices).length > 0) ? fp.customVariantPrices : (existing?.customVariantPrices || urlCustomVariantPrices),
+              customAddOnPrices: (fp.customAddOnPrices && Object.keys(fp.customAddOnPrices).length > 0) ? fp.customAddOnPrices : (existing?.customAddOnPrices || urlCustomAddOnPrices)
             });
           });
           updatedPortalsList = Array.from(poMap.values());
@@ -722,7 +768,8 @@ export default function App() {
           setActivePublicPortal({
             ...fetchedMatch,
             customPrices: (fetchedMatch.customPrices && Object.keys(fetchedMatch.customPrices).length > 0) ? fetchedMatch.customPrices : urlCustomPrices,
-            customVariantPrices: (fetchedMatch.customVariantPrices && Object.keys(fetchedMatch.customVariantPrices).length > 0) ? fetchedMatch.customVariantPrices : urlCustomVariantPrices
+            customVariantPrices: (fetchedMatch.customVariantPrices && Object.keys(fetchedMatch.customVariantPrices).length > 0) ? fetchedMatch.customVariantPrices : urlCustomVariantPrices,
+            customAddOnPrices: (fetchedMatch.customAddOnPrices && Object.keys(fetchedMatch.customAddOnPrices).length > 0) ? fetchedMatch.customAddOnPrices : urlCustomAddOnPrices
           });
         }
         setIsResolvingPortal(false);
@@ -742,13 +789,15 @@ export default function App() {
         if (
           JSON.stringify(updated.customPrices) !== JSON.stringify(activePublicPortal.customPrices) ||
           JSON.stringify(updated.customVariantPrices) !== JSON.stringify(activePublicPortal.customVariantPrices) ||
+          JSON.stringify(updated.customAddOnPrices) !== JSON.stringify(activePublicPortal.customAddOnPrices) ||
           updated.name !== activePublicPortal.name ||
           updated.status !== activePublicPortal.status
         ) {
           setActivePublicPortal(prev => prev ? ({
             ...updated,
             customPrices: (updated.customPrices && Object.keys(updated.customPrices).length > 0) ? updated.customPrices : prev.customPrices,
-            customVariantPrices: (updated.customVariantPrices && Object.keys(updated.customVariantPrices).length > 0) ? updated.customVariantPrices : prev.customVariantPrices
+            customVariantPrices: (updated.customVariantPrices && Object.keys(updated.customVariantPrices).length > 0) ? updated.customVariantPrices : prev.customVariantPrices,
+            customAddOnPrices: (updated.customAddOnPrices && Object.keys(updated.customAddOnPrices).length > 0) ? updated.customAddOnPrices : prev.customAddOnPrices
           }) : null);
         }
       }
@@ -1717,6 +1766,7 @@ export default function App() {
         price: uPrice,
         selectedSize: item.selectedSize,
         selectedColor: item.selectedColor,
+        selectedAddOns: item.selectedAddOns,
         customDetails: item.customDetails
       };
     });
@@ -1745,7 +1795,7 @@ export default function App() {
       await sheetsService.saveOrder(appsScriptConfig.webAppUrl, newOrder);
     }
 
-    // Generate Admin Notification for new company order
+    // Generate Admin & Company Notifications for new company order
     const adminNotif: AppNotification = {
       id: `notif-${Date.now()}-admin`,
       recipientType: 'admin',
@@ -1757,9 +1807,23 @@ export default function App() {
       orderNumber: orderNo,
       type: 'new_company_order'
     };
-    setNotifications(prev => [adminNotif, ...prev]);
+
+    const companyNotif: AppNotification = {
+      id: `notif-${Date.now()}-comp`,
+      recipientType: 'company',
+      companyName: activeCompany.name,
+      title: 'Order Placed Successfully',
+      message: `Your order ${orderNo} has been placed successfully (${systemSettings.currencySymbol || 'Php'} ${finalAmount.toFixed(2)}).`,
+      timestamp: new Date().toISOString(),
+      read: false,
+      orderId: newOrder.id,
+      orderNumber: orderNo,
+      type: 'new_company_order'
+    };
+
+    setNotifications(prev => [companyNotif, adminNotif, ...prev]);
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
-      sheetsService.saveNotification(appsScriptConfig.webAppUrl, adminNotif).catch(err => console.warn('Save admin notification notice:', err));
+      sheetsService.saveNotifications(appsScriptConfig.webAppUrl, [companyNotif, adminNotif]).catch(err => console.warn('Save order notifications notice:', err));
     }
 
     setOrders(prev => [newOrder, ...prev]);
@@ -1845,6 +1909,7 @@ export default function App() {
         price: uPrice,
         selectedSize: it.selectedSize,
         selectedColor: it.selectedColor,
+        selectedAddOns: (it as any).selectedAddOns,
         customDetails: it.customDetails
       };
     });
@@ -1934,7 +1999,11 @@ export default function App() {
     masterList.forEach(p => {
       if (otherCompanyCustomIds.has(p.id)) return;
       if (!hasExplicitEnabledList || enabledIds!.includes(p.id)) {
-        productMap.set(p.id, p);
+        const initMatch = INITIAL_PRODUCTS.find(ip => ip.id === p.id);
+        productMap.set(p.id, {
+          ...p,
+          addOns: (p.addOns && p.addOns.length > 0) ? p.addOns : initMatch?.addOns
+        });
       }
     });
 
@@ -1942,7 +2011,12 @@ export default function App() {
     if (Array.isArray(company.customProducts) && company.customProducts.length > 0) {
       company.customProducts.forEach(cp => {
         if (cp && cp.id) {
-          productMap.set(cp.id, cp);
+          const initCp = INITIAL_COMPANIES.find(ic => ic.id === company.id)?.customProducts?.find(p => p.id === cp.id);
+          const initMaster = INITIAL_PRODUCTS.find(p => p.id === cp.id);
+          productMap.set(cp.id, {
+            ...cp,
+            addOns: (cp.addOns && cp.addOns.length > 0) ? cp.addOns : (initCp?.addOns || initMaster?.addOns)
+          });
         }
       });
     }
@@ -2271,9 +2345,11 @@ export default function App() {
                 onForceSyncAll={handleForceSyncAll}
                 onPullFromSheets={syncWithSheets}
                 isSyncingSheets={isSyncingSheets}
-                initialTab={activeTab === 'sync' ? 'sync' : (adminCatalogSection ? 'catalog' : undefined)}
+                initialTab={activeTab === 'sync' ? 'sync' : (adminCatalogSection ? 'catalog' : ((highlightOrderNumber || highlightOrderId) ? 'orders' : undefined))}
                 initialCatalogSection={adminCatalogSection}
                 highlightEnquiryNumber={highlightEnquiryNumber}
+                highlightOrderNumber={highlightOrderNumber}
+                highlightOrderId={highlightOrderId}
               />
             )}
 

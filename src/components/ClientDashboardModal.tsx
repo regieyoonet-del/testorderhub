@@ -6,7 +6,8 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { CompanyProfile, Order, Product, getDisplayPurchaserName } from '../types';
+import { CompanyProfile, Order, Product, ProductAddOn, getDisplayPurchaserName } from '../types';
+import { INITIAL_PRODUCTS } from '../data/mockData';
 import ProductDetailsPage from './ProductDetailsPage';
 import ProductImageCarousel from './ProductImageCarousel';
 import {
@@ -36,7 +37,8 @@ import {
   Check,
   Edit2,
   Trash2,
-  Paperclip
+  Paperclip,
+  Image as ImageIcon
 } from 'lucide-react';
 
 interface ClientDashboardModalProps {
@@ -117,6 +119,11 @@ export default function ClientDashboardModal({
   const [newColorInput, setNewColorInput] = useState('');
   const [newImgUrlInput, setNewImgUrlInput] = useState('');
 
+  const [newAddOnName, setNewAddOnName] = useState('');
+  const [newAddOnPrice, setNewAddOnPrice] = useState<number | string>(15.00);
+  const [newAddOnDesc, setNewAddOnDesc] = useState('');
+  const [newAddOnImageUrl, setNewAddOnImageUrl] = useState('');
+
   const [productForm, setProductForm] = useState<Omit<Product, 'id'>>({
     name: '',
     category: 'Uniforms',
@@ -161,11 +168,17 @@ export default function ClientDashboardModal({
       customFields: [
         { name: 'logo_position', type: 'select', label: 'Logo Position', options: ['Left Chest', 'Right Chest', 'Sleeve', 'Back Collar'], required: true },
         { name: 'personalization', type: 'textarea', label: 'Sizes & Name Personalization (Optional)', placeholder: 'e.g. John - L - Logo only', required: false }
+      ],
+      addOns: [
+        { id: 'addon-default-1', name: 'Individual Packaging', price: 10.00, description: 'Individual polybag per item' }
       ]
     });
     setNewSizeInput('');
     setNewColorInput('');
     setNewImgUrlInput('');
+    setNewAddOnName('');
+    setNewAddOnPrice(15.00);
+    setNewAddOnDesc('');
     setShowProductForm(true);
   };
 
@@ -194,11 +207,15 @@ export default function ClientDashboardModal({
       colorOptions: prod.colorOptions || [],
       colorImages: prod.colorImages || {},
       variantPrices: prod.variantPrices || {},
-      customFields: prod.customFields || []
+      customFields: prod.customFields || [],
+      addOns: prod.addOns || []
     });
     setNewSizeInput('');
     setNewColorInput('');
     setNewImgUrlInput('');
+    setNewAddOnName('');
+    setNewAddOnPrice(15.00);
+    setNewAddOnDesc('');
     setShowProductForm(true);
   };
 
@@ -282,6 +299,53 @@ export default function ClientDashboardModal({
     setProductForm(prev => ({
       ...prev,
       customFields: currentFields.filter((_, idx) => idx !== index)
+    }));
+  };
+
+  const handleAddAddOn = (name?: string, price?: number, desc?: string, imgUrl?: string) => {
+    const finalName = name || newAddOnName.trim();
+    const finalPrice = typeof price === 'number' ? price : (parseFloat(String(newAddOnPrice)) || 0);
+    const finalDesc = desc !== undefined ? desc : newAddOnDesc.trim();
+    const finalImgUrl = imgUrl !== undefined ? imgUrl : newAddOnImageUrl.trim();
+
+    if (!finalName) return;
+
+    const currentAddOns = productForm.addOns || [];
+    const newAddOn: ProductAddOn = {
+      id: `addon-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      name: finalName,
+      price: finalPrice,
+      description: finalDesc,
+      imageUrl: finalImgUrl
+    };
+
+    setProductForm(prev => ({
+      ...prev,
+      addOns: [...currentAddOns, newAddOn]
+    }));
+
+    if (!name) {
+      setNewAddOnName('');
+      setNewAddOnPrice(15.00);
+      setNewAddOnDesc('');
+      setNewAddOnImageUrl('');
+    }
+  };
+
+  const handleUpdateAddOn = (index: number, updatedAddOn: ProductAddOn) => {
+    const currentAddOns = [...(productForm.addOns || [])];
+    currentAddOns[index] = updatedAddOn;
+    setProductForm(prev => ({
+      ...prev,
+      addOns: currentAddOns
+    }));
+  };
+
+  const handleRemoveAddOn = (index: number) => {
+    const currentAddOns = productForm.addOns || [];
+    setProductForm(prev => ({
+      ...prev,
+      addOns: currentAddOns.filter((_, idx) => idx !== index)
     }));
   };
 
@@ -416,7 +480,11 @@ export default function ClientDashboardModal({
     // First pass: master products enabled for this company
     masterProducts.forEach(p => {
       if (!hasExplicitEnabledList || enabledIds.includes(p.id)) {
-        productMap.set(p.id, p);
+        const initMatch = INITIAL_PRODUCTS.find(ip => ip.id === p.id);
+        productMap.set(p.id, {
+          ...p,
+          addOns: (p.addOns && p.addOns.length > 0) ? p.addOns : initMatch?.addOns
+        });
       }
     });
 
@@ -424,7 +492,11 @@ export default function ClientDashboardModal({
     if (company.customProducts && company.customProducts.length > 0) {
       company.customProducts.forEach(cp => {
         if (cp && cp.id) {
-          productMap.set(cp.id, cp);
+          const initMaster = INITIAL_PRODUCTS.find(ip => ip.id === cp.id);
+          productMap.set(cp.id, {
+            ...cp,
+            addOns: (cp.addOns && cp.addOns.length > 0) ? cp.addOns : initMaster?.addOns
+          });
         }
       });
     }
@@ -854,28 +926,6 @@ export default function ClientDashboardModal({
                         value={productForm.unit}
                         onChange={(e) => setProductForm({ ...productForm, unit: e.target.value })}
                         placeholder="e.g. pcs or box"
-                        className="w-full bg-gray-50 border border-gray-200 focus:bg-white focus:border-black rounded-xl p-3 text-xs focus:outline-none font-bold text-black font-mono"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-[10px] uppercase font-mono tracking-wider font-bold text-gray-700">Stock/Sales Count *</label>
-                      <input
-                        type="number"
-                        required
-                        value={productForm.saleCount}
-                        onChange={(e) => setProductForm({ ...productForm, saleCount: parseInt(e.target.value) || 1 })}
-                        className="w-full bg-gray-50 border border-gray-200 focus:bg-white focus:border-black rounded-xl p-3 text-xs focus:outline-none font-bold text-black font-mono"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-[10px] uppercase font-mono tracking-wider font-bold text-gray-700">Stock/Sales Limit *</label>
-                      <input
-                        type="number"
-                        required
-                        value={productForm.saleLimit}
-                        onChange={(e) => setProductForm({ ...productForm, saleLimit: parseInt(e.target.value) || 1 })}
                         className="w-full bg-gray-50 border border-gray-200 focus:bg-white focus:border-black rounded-xl p-3 text-xs focus:outline-none font-bold text-black font-mono"
                       />
                     </div>
@@ -1376,6 +1426,213 @@ export default function ClientDashboardModal({
                         )}
                       </div>
                     </div>
+
+                    {/* OPTIONAL ITEM ADD-ONS */}
+                    <div className="space-y-4 bg-neutral-50/50 p-4 rounded-2xl border border-gray-200/60">
+                      <div className="flex justify-between items-center border-b border-gray-200/60 pb-2">
+                        <div>
+                          <span className="block text-[10px] uppercase font-mono tracking-wider font-extrabold text-black">
+                            Optional Product Add-Ons & Pricing
+                          </span>
+                          <span className="block text-[9px] text-gray-400 font-mono">
+                            Add customizable add-ons available for buyers (e.g. ID card holder case, individual shirt packaging, neck label print)
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* New Add-On Input Row */}
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-white border border-gray-200 rounded-xl p-3 shadow-2xs">
+                        <div className="sm:col-span-5 space-y-1">
+                          <label className="block text-[9px] uppercase font-mono font-bold text-gray-400">Add-On Name *</label>
+                          <input
+                            type="text"
+                            value={newAddOnName}
+                            onChange={(e) => setNewAddOnName(e.target.value)}
+                            placeholder="e.g. ID Card Case / Neck Print"
+                            className="w-full bg-gray-50 border border-gray-200 focus:bg-white focus:border-black rounded-lg p-2 text-xs focus:outline-none font-bold text-black"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-3 space-y-1">
+                          <label className="block text-[9px] uppercase font-mono font-bold text-gray-400">Price (Php) *</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={newAddOnPrice}
+                            onChange={(e) => setNewAddOnPrice(e.target.value)}
+                            className="w-full bg-gray-50 border border-gray-200 focus:bg-white focus:border-black rounded-lg p-2 text-xs focus:outline-none font-bold text-black font-mono"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-4 space-y-1 flex flex-col justify-end">
+                          <button
+                            type="button"
+                            onClick={() => handleAddAddOn()}
+                            className="w-full bg-black text-white px-3 py-2 rounded-lg text-xs font-mono uppercase font-bold hover:bg-neutral-800 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            Add Custom Add-On
+                          </button>
+                        </div>
+
+                        <div className="sm:col-span-12 space-y-1 pt-1">
+                          <label className="block text-[9px] uppercase font-mono font-bold text-gray-400">Optional Description / Instructions</label>
+                          <input
+                            type="text"
+                            value={newAddOnDesc}
+                            onChange={(e) => setNewAddOnDesc(e.target.value)}
+                            placeholder="e.g. Transparent vinyl sleeve or special collar print"
+                            className="w-full bg-gray-50 border border-gray-200 focus:bg-white focus:border-black rounded-lg p-1.5 text-xs focus:outline-none font-mono text-gray-700"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-12 space-y-1 pt-1 border-t border-gray-100">
+                          <label className="block text-[9px] uppercase font-mono font-bold text-gray-400 flex items-center gap-1">
+                            <ImageIcon className="w-3 h-3 text-gray-500" />
+                            Linked Image (Select from product images or paste URL)
+                          </label>
+                          <div className="flex flex-col sm:flex-row gap-2 items-center">
+                            <select
+                              value={[productForm.imageUrl, ...(productForm.imageUrls || [])].filter(Boolean).includes(newAddOnImageUrl) ? newAddOnImageUrl : (newAddOnImageUrl ? '__custom__' : '')}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val !== '__custom__') {
+                                  setNewAddOnImageUrl(val);
+                                }
+                              }}
+                              className="w-full sm:w-1/2 bg-gray-50 border border-gray-200 focus:bg-white focus:border-black rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-black"
+                            >
+                              <option value="">-- No Linked Image --</option>
+                              {productForm.imageUrl && (
+                                <option value={productForm.imageUrl}>-- Main Cover Image --</option>
+                              )}
+                              {(productForm.imageUrls || []).map((img, idx) => (
+                                <option key={idx} value={img}>
+                                  Gallery Image {idx + 1}
+                                </option>
+                              ))}
+                              <option value="__custom__">-- Custom Image URL --</option>
+                            </select>
+                            <input
+                              type="text"
+                              value={newAddOnImageUrl}
+                              onChange={(e) => setNewAddOnImageUrl(e.target.value)}
+                              placeholder="Direct image URL (https://...)"
+                              className="w-full sm:w-1/2 bg-gray-50 border border-gray-200 focus:bg-white focus:border-black rounded-lg px-2.5 py-1.5 text-xs font-mono text-gray-700"
+                            />
+                            {newAddOnImageUrl && (
+                              <div className="shrink-0 w-7 h-7 rounded-md border border-gray-200 overflow-hidden bg-gray-50">
+                                <img src={newAddOnImageUrl} alt="Addon Preview" className="w-full h-full object-cover" />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Active Add-Ons List */}
+                      <div className="space-y-2 pt-1">
+                        {(!productForm.addOns || productForm.addOns.length === 0) ? (
+                          <div className="text-center py-3 bg-white/60 rounded-xl border border-dashed border-gray-200">
+                            <p className="text-[10px] text-gray-400 font-mono">No add-ons added yet. Create custom add-ons above.</p>
+                          </div>
+                        ) : (
+                          productForm.addOns.map((addOn, index) => (
+                            <div key={addOn.id || index} className="bg-white border border-gray-200 rounded-xl p-3 space-y-2 shadow-2xs relative group/addon">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex-1 grid grid-cols-1 sm:grid-cols-12 gap-2">
+                                  <div className="sm:col-span-6">
+                                    <span className="block text-[8px] uppercase font-mono font-bold text-gray-400">Add-On Title</span>
+                                    <input
+                                      type="text"
+                                      value={addOn.name}
+                                      onChange={(e) => handleUpdateAddOn(index, { ...addOn, name: e.target.value })}
+                                      className="w-full bg-gray-50 border border-gray-200 focus:bg-white focus:border-black rounded-lg p-1.5 text-xs font-bold text-black"
+                                    />
+                                  </div>
+
+                                  <div className="sm:col-span-3">
+                                    <span className="block text-[8px] uppercase font-mono font-bold text-gray-400">Price (Php)</span>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      value={addOn.price}
+                                      onChange={(e) => handleUpdateAddOn(index, { ...addOn, price: parseFloat(e.target.value) || 0 })}
+                                      className="w-full bg-gray-50 border border-gray-200 focus:bg-white focus:border-black rounded-lg p-1.5 text-xs font-bold font-mono text-black"
+                                    />
+                                  </div>
+
+                                  <div className="sm:col-span-3 flex items-center justify-end">
+                                    <span className="text-[11px] font-mono font-extrabold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200">
+                                      +Php {Number(addOn.price || 0).toFixed(2)}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveAddOn(index)}
+                                  className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                                  title="Remove Add-On"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+
+                              <div>
+                                <input
+                                  type="text"
+                                  value={addOn.description || ''}
+                                  onChange={(e) => handleUpdateAddOn(index, { ...addOn, description: e.target.value })}
+                                  placeholder="Short description or instructions for buyers..."
+                                  className="w-full bg-gray-50/70 border border-gray-200 focus:bg-white focus:border-black rounded-lg p-1 text-[11px] font-mono text-gray-600"
+                                />
+                              </div>
+
+                              {/* Linked Image Row */}
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2 border-t border-gray-100">
+                                <span className="text-[9px] text-gray-400 font-bold uppercase font-mono shrink-0 flex items-center gap-1">
+                                  <ImageIcon className="w-3 h-3 text-gray-400" />
+                                  Linked Image:
+                                </span>
+                                <select
+                                  value={[productForm.imageUrl, ...(productForm.imageUrls || [])].filter(Boolean).includes(addOn.imageUrl || '') ? (addOn.imageUrl || '') : (addOn.imageUrl ? '__custom__' : '')}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val !== '__custom__') {
+                                      handleUpdateAddOn(index, { ...addOn, imageUrl: val });
+                                    }
+                                  }}
+                                  className="bg-gray-50 border border-gray-200 focus:bg-white focus:border-black rounded-lg px-2 py-1 text-[11px] font-mono font-bold text-black shrink-0"
+                                >
+                                  <option value="">-- No Linked Image --</option>
+                                  {productForm.imageUrl && (
+                                    <option value={productForm.imageUrl}>-- Main Cover Image --</option>
+                                  )}
+                                  {(productForm.imageUrls || []).map((img, idx) => (
+                                    <option key={idx} value={img}>
+                                      Gallery Image {idx + 1}
+                                    </option>
+                                  ))}
+                                  <option value="__custom__">-- Custom Image URL --</option>
+                                </select>
+                                <input
+                                  type="text"
+                                  value={addOn.imageUrl || ''}
+                                  onChange={(e) => handleUpdateAddOn(index, { ...addOn, imageUrl: e.target.value })}
+                                  placeholder="Image URL..."
+                                  className="flex-1 bg-gray-50/70 border border-gray-200 focus:bg-white focus:border-black rounded-lg px-2 py-1 text-[11px] font-mono text-gray-600"
+                                />
+                                {addOn.imageUrl && (
+                                  <div className="shrink-0 w-7 h-7 rounded-md border border-gray-200 overflow-hidden bg-gray-50">
+                                    <img src={addOn.imageUrl} alt={addOn.name} className="w-full h-full object-cover" />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   <div className="flex gap-3 justify-end pt-3">
@@ -1503,21 +1760,24 @@ export default function ClientDashboardModal({
                                 </span>
                               </div>
 
-                              {/* Sale Progress Bar */}
-                              <div className="space-y-1 pt-0.5">
-                                <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                                  <div
-                                    className="bg-black h-full rounded-full transition-all"
-                                    style={{ width: `${Math.min(100, ((p.saleCount || 5) / 10) * 100)}%` }}
-                                  />
-                                </div>
-                                <div className="flex justify-between text-[9px] font-mono text-gray-400 font-bold">
-                                  <span>{p.saleCount || 5}/10 Sale</span>
-                                  <span className={p.isEnabled ? 'text-emerald-600' : 'text-gray-400'}>
-                                    {p.isEnabled ? '● Active Allocation' : '○ Excluded'}
-                                  </span>
-                                </div>
+                              {/* Status Badge */}
+                              <div className="flex justify-end text-[9px] font-mono font-bold pt-0.5">
+                                <span className={p.isEnabled ? 'text-emerald-600' : 'text-gray-400'}>
+                                  {p.isEnabled ? '● Active Allocation' : '○ Excluded'}
+                                </span>
                               </div>
+
+                              {/* Available Add-Ons Badge */}
+                              {p.addOns && p.addOns.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-1 text-[9px] font-mono pt-0.5">
+                                  <span className="text-gray-400 font-bold uppercase mr-0.5">Add-Ons:</span>
+                                  {p.addOns.map((a, idx) => (
+                                    <span key={idx} className="px-1.5 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200/80 rounded-md font-bold">
+                                      {a.name} (+Php {Number(a.price || 0).toFixed(2)})
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
 
                               {/* Lead Time & Delivery Info Box */}
                               <div className="bg-neutral-50 border border-gray-200/90 rounded-2xl p-2.5 space-y-1.5 text-[10px] font-mono">

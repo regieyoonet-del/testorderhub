@@ -50,3 +50,30 @@ export function getProductUnitPrice(
   // 3. Fallback to product base price
   return Number(product.basePrice) || 0;
 }
+
+/**
+ * Gets the price for a product add-on, respecting custom portal add-on pricing if set.
+ */
+export function getAddOnUnitPrice(
+  product: Product,
+  addOn: { id?: string; name: string; price: number },
+  portal?: OrderPortal | null
+): number {
+  if (!product || !addOn) return 0;
+  const addOnKey = addOn.id || addOn.name;
+
+  if (portal && portal.customAddOnPrices?.[product.id]) {
+    const pAddOnPrices = portal.customAddOnPrices[product.id];
+    if (addOnKey && pAddOnPrices[addOnKey] !== undefined && pAddOnPrices[addOnKey] !== null && (pAddOnPrices[addOnKey] as any) !== '') {
+      const num = Number(pAddOnPrices[addOnKey]);
+      if (!isNaN(num)) return num;
+    }
+    if (addOn.name && pAddOnPrices[addOn.name] !== undefined && pAddOnPrices[addOn.name] !== null && (pAddOnPrices[addOn.name] as any) !== '') {
+      const num = Number(pAddOnPrices[addOn.name]);
+      if (!isNaN(num)) return num;
+    }
+  }
+
+  return Number(addOn.price) || 0;
+}
+

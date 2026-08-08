@@ -38,7 +38,11 @@ export const INITIAL_PRODUCTS: Product[] = [
     ],
     frequentlyOrdered: true,
     shippingFee: 15.00,
-    leadTime: '5-7 Business Days'
+    leadTime: '5-7 Business Days',
+    addOns: [
+      { id: 'ao-polo-1', name: 'Individual Polybag Packaging', price: 10.00, description: 'Each shirt individually folded and heat-sealed in polybag.' },
+      { id: 'ao-polo-2', name: 'Sleeve Logo Embroidery', price: 25.00, description: 'Additional 2-inch logo stitched on left or right sleeve.' }
+    ]
   },
   {
     id: 'prod-id',
@@ -69,7 +73,11 @@ export const INITIAL_PRODUCTS: Product[] = [
       }
     ],
     frequentlyOrdered: true,
-    shippingFee: 5.00
+    shippingFee: 5.00,
+    addOns: [
+      { id: 'ao-id-1', name: 'Magnetic Badge Backing', price: 15.00, description: 'Heavy-duty dual magnet attachment replacing standard clip.' },
+      { id: 'ao-id-2', name: 'Polycarbonate Rigid Protector Case', price: 12.00, description: 'Clear protective hard case.' }
+    ]
   },
   {
     id: 'prod-lanyard',
@@ -78,12 +86,18 @@ export const INITIAL_PRODUCTS: Product[] = [
     description: 'Smooth polyester lanyard with full-color heat-transfer corporate branding. Includes premium oval hook and safety breakaway clasp.',
     imageUrl: 'https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?w=400&h=400&fit=crop&q=80',
     basePrice: 1.95,
-    originalPrice: 4.00,
+    originalPrice: 3.50,
     saleCount: 8,
     saleLimit: 10,
-    minQuantity: 50,
+    minQuantity: 20,
     unit: 'pcs',
+    frequentlyOrdered: true,
+    shippingFee: 5.00,
     colorOptions: ['Core Black', 'Graphite Grey', 'Branding Accent White'],
+    addOns: [
+      { id: 'ao-lan-1', name: 'Safety Breakaway Neck Clasp', price: 5.00, description: 'Quick-release safety plastic buckle.' },
+      { id: 'ao-lan-2', name: 'Retractable Carabiner Reel', price: 20.00, description: 'Heavy-duty retractable badge reel with 30-inch cord.' }
+    ],
     customFields: [
       {
         name: 'AttachmentType',
@@ -92,9 +106,7 @@ export const INITIAL_PRODUCTS: Product[] = [
         options: ['Premium Swivel Trigger Clip', 'Standard Lobster Claw', 'Bull Dog Clip'],
         required: true
       }
-    ],
-    frequentlyOrdered: true,
-    shippingFee: 10.00
+    ]
   },
   {
     id: 'prod-bizcard',
@@ -118,7 +130,11 @@ export const INITIAL_PRODUCTS: Product[] = [
       }
     ],
     frequentlyOrdered: true,
-    shippingFee: 8.00
+    shippingFee: 8.00,
+    addOns: [
+      { id: 'ao-biz-1', name: 'Rounded Corner Finishing', price: 8.00, description: 'Die-cut 1/4" radius rounded corners.' },
+      { id: 'ao-biz-2', name: 'Spot UV Varnish Accent', price: 20.00, description: 'Glossy raised UV coating over corporate logo.' }
+    ]
   },
   {
     id: 'prod-tote',
@@ -142,7 +158,11 @@ export const INITIAL_PRODUCTS: Product[] = [
         required: true
       }
     ],
-    shippingFee: 12.00
+    shippingFee: 12.00,
+    addOns: [
+      { id: 'ao-tote-1', name: 'Bottom Gusset Reinforcement', price: 12.00, description: 'Expanded bottom base panel for heavy items.' },
+      { id: 'ao-tote-2', name: 'Inner Zipper Pocket', price: 18.00, description: 'Internal small pocket with zipper closure.' }
+    ]
   },
   {
     id: 'prod-pen',
@@ -166,7 +186,11 @@ export const INITIAL_PRODUCTS: Product[] = [
         required: true
       }
     ],
-    shippingFee: 3.50
+    shippingFee: 3.50,
+    addOns: [
+      { id: 'ao-pen-1', name: 'Velvet Gift Pouch', price: 5.00, description: 'Individual black velvet drawstring pouch.' },
+      { id: 'ao-pen-2', name: 'Black Gel Ink Refill Pack', price: 10.00, description: 'Extra high-capacity gel refill cartridge.' }
+    ]
   },
   {
     id: 'prod-mug',
@@ -189,7 +213,11 @@ export const INITIAL_PRODUCTS: Product[] = [
         required: true
       }
     ],
-    shippingFee: 15.00
+    shippingFee: 15.00,
+    addOns: [
+      { id: 'ao-mug-1', name: 'Individual Kraft Gift Box', price: 8.00, description: 'Custom fit corrugated kraft presentation box.' },
+      { id: 'ao-mug-2', name: 'Metallic Foil Print Accent', price: 15.00, description: 'Gold or silver metallic foil emblem.' }
+    ]
   }
 ];
 
