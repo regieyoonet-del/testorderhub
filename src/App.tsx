@@ -668,6 +668,7 @@ export default function App() {
   }, [appsScriptConfig]);
 
   const [isSyncingSheets, setIsSyncingSheets] = useState(false);
+  const [hasInitialSynced, setHasInitialSynced] = useState(false);
   const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
   const isSyncingRef = React.useRef(false);
 
@@ -864,7 +865,10 @@ export default function App() {
       } finally {
         setIsSyncingSheets(false);
         isSyncingRef.current = false;
+        setHasInitialSynced(true);
       }
+    } else {
+      setHasInitialSynced(true);
     }
   };
 
@@ -1717,21 +1721,15 @@ export default function App() {
     const allProductsArray = Array.from(productMap.values());
 
     let companyAvailableProducts: Product[] = [];
+    const companyProducts = getCompanyProducts(portalCompany, allProductsArray);
 
     if (activePublicPortal.productIds && activePublicPortal.productIds.length > 0) {
       const portalSet = new Set(activePublicPortal.productIds.map(id => String(id).trim()));
-      companyAvailableProducts = allProductsArray.filter(p => portalSet.has(String(p.id).trim()));
-
-      if (companyAvailableProducts.length === 0) {
-        companyAvailableProducts = getCompanyProducts(portalCompany, allProductsArray);
-      }
+      const filtered = companyProducts.filter(p => portalSet.has(String(p.id).trim()));
+      // Use filtered if it matched any products, otherwise use companyProducts
+      companyAvailableProducts = filtered.length > 0 ? filtered : companyProducts;
     } else {
-      companyAvailableProducts = getCompanyProducts(portalCompany, allProductsArray);
-    }
-
-    // Safety fallback: If still 0 products, show all available products
-    if (companyAvailableProducts.length === 0 && allProductsArray.length > 0) {
-      companyAvailableProducts = allProductsArray;
+      companyAvailableProducts = companyProducts;
     }
 
     return (
@@ -1873,6 +1871,14 @@ export default function App() {
 
   // If no user is authenticated, serve the portal gate screen
   if (!loggedInUser) {
+    if (!hasInitialSynced && isSyncingSheets) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+          <div className="w-10 h-10 border-4 border-gray-200 border-t-black rounded-full animate-spin" />
+        </div>
+      );
+    }
+
     return (
       <>
         <style dangerouslySetInnerHTML={{ __html: getThemeStyles(systemSettings.colorTheme || 'classic_noir') }} />

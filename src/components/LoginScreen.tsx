@@ -134,7 +134,7 @@ export default function LoginScreen({
 
             <div className="space-y-1">
               <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-mono font-bold">
-                B2B Username
+                Username
               </label>
               <div className="relative flex items-center">
                 <User className="absolute left-3.5 w-4 h-4 text-gray-400" />
@@ -152,7 +152,7 @@ export default function LoginScreen({
 
             <div className="space-y-1">
               <label className="block text-[10px] uppercase tracking-wider text-gray-400 font-mono font-bold">
-                Portal Passcode
+                Passcode
               </label>
               <div className="relative flex items-center">
                 <KeyRound className="absolute left-3.5 w-4 h-4 text-gray-400" />
@@ -182,7 +182,7 @@ export default function LoginScreen({
               id="login-submit-btn"
             >
               {isVerifying && <RefreshCw className="w-4 h-4 animate-spin" />}
-              <span>{isVerifying ? 'Verifying with Cloud...' : 'Sign In to Catalog'}</span>
+              <span>{isVerifying ? 'Verifying with Cloud...' : 'Sign In'}</span>
             </button>
           </form>
         </div>

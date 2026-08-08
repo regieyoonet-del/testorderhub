@@ -502,17 +502,30 @@ export default function ClientDashboardModal({
           className="bg-white w-full h-full flex flex-col overflow-hidden"
         >
         {/* Header Block */}
-        <div className="p-6 md:p-8 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0 bg-[#fafafa]">
+        <div className="p-4 sm:p-6 md:p-8 border-b border-gray-100 flex flex-col shrink-0 bg-[#fafafa]">
+          {/* Subtle 'X' Close Button above company logo */}
+          <div className="mb-2">
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-black hover:bg-gray-200/80 transition-colors cursor-pointer -ml-1.5 -mt-1"
+              aria-label="Back to Clients"
+              title="Back to Clients"
+              id="close-client-dashboard-btn"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
           <div className="flex items-center space-x-4">
             {company.logoUrl ? (
               <img
                 src={company.logoUrl}
                 alt={company.name}
-                className="w-16 h-16 object-contain shrink-0"
+                className="w-14 h-14 md:w-16 md:h-16 object-contain shrink-0"
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <div className="w-16 h-16 rounded-[1.25rem] bg-black text-white flex items-center justify-center font-bold font-mono text-xl shrink-0">
+              <div className="w-14 h-14 md:w-16 md:h-16 rounded-[1.25rem] bg-black text-white flex items-center justify-center font-bold font-mono text-xl shrink-0">
                 {company.name.substring(0, 2).toUpperCase()}
               </div>
             )}
@@ -520,7 +533,7 @@ export default function ClientDashboardModal({
               <h3 className="text-xl md:text-2xl font-black uppercase text-black tracking-tight leading-none">
                 {company.name}
               </h3>
-              <div className="flex items-center gap-1.5 mt-1.5 text-xs text-gray-500 font-mono">
+              <div className="flex flex-wrap items-center gap-1.5 mt-1.5 text-xs text-gray-500 font-mono">
                 <span className="bg-gray-200 text-gray-700 px-2 py-0.5 rounded-md font-bold flex items-center gap-1 border border-gray-300">
                   <Key className="w-3 h-3 text-gray-400" />
                   {company.username}
@@ -529,19 +542,6 @@ export default function ClientDashboardModal({
                 <span className="font-semibold text-gray-600">Contact: {company.contactPerson}</span>
               </div>
             </div>
-          </div>
-
-          <div className="flex items-center gap-3 self-end md:self-center">
-            {/* Close Button */}
-            <button
-              onClick={onClose}
-              className="px-4 py-2 bg-black border border-black text-white hover:bg-neutral-900 rounded-xl text-xs uppercase font-extrabold tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-sm"
-              aria-label="Close Dashboard & Return"
-              id="close-client-dashboard-btn"
-            >
-              <X className="w-4 h-4" />
-              <span>Back to Clients</span>
-            </button>
           </div>
         </div>
 

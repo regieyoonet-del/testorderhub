@@ -5,7 +5,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Order, CartItem, getDisplayPurchaserName } from '../types';
-import { Calendar, RefreshCw, ChevronDown, ChevronUp, Clock, Package, CheckCircle2, Truck, ArrowRight, Store, Layers, ExternalLink, User, MapPin, MessageCircle } from 'lucide-react';
+import { Calendar, RefreshCw, ChevronDown, ChevronUp, Clock, Package, CheckCircle2, Truck, ArrowRight, Store, Layers, ExternalLink, User, MapPin, MessageCircle, ArrowUpDown } from 'lucide-react';
 
 interface OrderHistoryProps {
   orders: Order[];
@@ -25,6 +25,7 @@ export default function OrderHistory({
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [reorderedId, setReorderedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'portal' | 'direct'>('all');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
 
   // Filter orders to only show the ones matching the selected active company
   const companyOrders = useMemo(() => {
@@ -46,10 +47,18 @@ export default function OrderHistory({
   }, [companyOrders]);
 
   const displayedOrders = useMemo(() => {
-    if (activeTab === 'portal') return portalOrders;
-    if (activeTab === 'direct') return directOrders;
-    return companyOrders;
-  }, [activeTab, companyOrders, portalOrders, directOrders]);
+    let list = companyOrders;
+    if (activeTab === 'portal') list = portalOrders;
+    if (activeTab === 'direct') list = directOrders;
+
+    return [...list].sort((a, b) => {
+      const timeA = new Date(a.createdAt).getTime();
+      const timeB = new Date(b.createdAt).getTime();
+      const validA = isNaN(timeA) ? 0 : timeA;
+      const validB = isNaN(timeB) ? 0 : timeB;
+      return sortOrder === 'newest' ? validB - validA : validA - validB;
+    });
+  }, [activeTab, companyOrders, portalOrders, directOrders, sortOrder]);
 
   const toggleExpand = (id: string) => {
     setExpandedOrderId(prev => (prev === id ? null : id));
@@ -157,49 +166,68 @@ export default function OrderHistory({
           <p className="text-xs text-gray-500 font-mono mt-0.5">{selectedCompanyName} Records</p>
         </div>
 
-        {/* Source Filter Tabs Switcher */}
-        <div className="flex flex-wrap items-center gap-1.5 bg-gray-100 p-1 border border-gray-200 rounded-xl shrink-0">
-          <button
-            type="button"
-            onClick={() => setActiveTab('all')}
-            className={`px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeTab === 'all'
-                ? 'bg-black text-white shadow-xs'
-                : 'text-gray-600 hover:text-black'
-            }`}
-            id="history-tab-all"
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>All ({companyOrders.length})</span>
-          </button>
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          {/* Sort Selector */}
+          <div className="flex items-center gap-1.5 bg-gray-100 p-1 border border-gray-200 rounded-xl">
+            <span className="text-[10px] font-mono font-bold uppercase text-gray-500 pl-2 flex items-center gap-1">
+              <ArrowUpDown className="w-3 h-3 text-gray-500" />
+              <span>Sort:</span>
+            </span>
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as 'newest' | 'oldest')}
+              className="bg-white border border-gray-200 rounded-lg px-2.5 py-1 text-[11px] font-mono font-bold uppercase text-black focus:outline-none focus:border-black cursor-pointer shadow-2xs"
+              id="order-history-sort-select"
+            >
+              <option value="newest">Newest to Oldest</option>
+              <option value="oldest">Oldest to Newest</option>
+            </select>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('portal')}
-            className={`px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeTab === 'portal'
-                ? 'bg-black text-white shadow-xs'
-                : 'text-gray-600 hover:text-black'
-            }`}
-            id="history-tab-portal"
-          >
-            <Store className="w-3.5 h-3.5" />
-            <span>Order Portals ({portalOrders.length})</span>
-          </button>
+          {/* Source Filter Tabs Switcher */}
+          <div className="flex flex-wrap items-center gap-1.5 bg-gray-100 p-1 border border-gray-200 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setActiveTab('all')}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'all'
+                  ? 'bg-black text-white shadow-xs'
+                  : 'text-gray-600 hover:text-black'
+              }`}
+              id="history-tab-all"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>All ({companyOrders.length})</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('direct')}
-            className={`px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeTab === 'direct'
-                ? 'bg-black text-white shadow-xs'
-                : 'text-gray-600 hover:text-black'
-            }`}
-            id="history-tab-direct"
-          >
-            <Package className="w-3.5 h-3.5" />
-            <span>Direct Catalog ({directOrders.length})</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('portal')}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'portal'
+                  ? 'bg-black text-white shadow-xs'
+                  : 'text-gray-600 hover:text-black'
+              }`}
+              id="history-tab-portal"
+            >
+              <Store className="w-3.5 h-3.5" />
+              <span>Order Portals ({portalOrders.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('direct')}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-mono uppercase font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'direct'
+                  ? 'bg-black text-white shadow-xs'
+                  : 'text-gray-600 hover:text-black'
+              }`}
+              id="history-tab-direct"
+            >
+              <Package className="w-3.5 h-3.5" />
+              <span>Direct Catalog ({directOrders.length})</span>
+            </button>
+          </div>
         </div>
       </div>
 
