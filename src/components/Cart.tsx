@@ -49,7 +49,7 @@ export default function Cart({
     setPoNumber('');
     setNotes('');
     setUncheckedItemIds([]);
-  }, [activeCompany]);
+  }, [activeCompany?.id]);
 
   if (!isOpen) return null;
 

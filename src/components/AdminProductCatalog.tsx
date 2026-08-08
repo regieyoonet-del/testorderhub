@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { CatalogProduct, ColorOption, QuoteEnquiry, Product } from '../types';
 import { sanitizeCatalogProduct } from '../data/initialCatalog';
 import {
@@ -47,6 +47,8 @@ interface AdminProductCatalogProps {
   onSaveQuoteEnquiry?: (updatedEnquiry: QuoteEnquiry) => void;
   onAddProductToCompanyCatalog?: (product: Product, companyIdentifier: string) => void;
   currencySymbol?: string;
+  initialSection?: 'catalog' | 'enquiries';
+  highlightEnquiryNumber?: string;
 }
 
 const DEFAULT_CATEGORIES = [
@@ -98,9 +100,24 @@ export default function AdminProductCatalog({
   onDeleteQuoteEnquiry,
   onSaveQuoteEnquiry,
   onAddProductToCompanyCatalog,
-  currencySymbol = 'Php'
+  currencySymbol = 'Php',
+  initialSection,
+  highlightEnquiryNumber
 }: AdminProductCatalogProps) {
-  const [activeSection, setActiveSection] = useState<'catalog' | 'enquiries'>('catalog');
+  const [activeSection, setActiveSection] = useState<'catalog' | 'enquiries'>(initialSection || 'catalog');
+
+  useEffect(() => {
+    if (initialSection) {
+      setActiveSection(initialSection);
+    }
+  }, [initialSection]);
+
+  useEffect(() => {
+    if (highlightEnquiryNumber) {
+      setSearchQuery(highlightEnquiryNumber);
+      setActiveSection('enquiries');
+    }
+  }, [highlightEnquiryNumber]);
 
   // Quote Builder Modal State
   const [selectedQuoteForBuilder, setSelectedQuoteForBuilder] = useState<QuoteEnquiry | null>(null);

@@ -131,7 +131,7 @@ export default function QuoteBuilderModal({
       setQuoteNotes((enquiry.quoteNotes && enquiry.quoteNotes.trim() !== '') ? enquiry.quoteNotes : DEFAULT_QUOTE_NOTES);
       setQuoteStatus(enquiry.status === 'New' ? 'Quoted' : enquiry.status);
     }
-  }, [enquiry]);
+  }, [enquiry?.id]);
 
   // Calculations
   const subtotal = useMemo(() => {

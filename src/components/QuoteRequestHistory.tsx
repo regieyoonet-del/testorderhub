@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { QuoteEnquiry, CompanyProfile } from '../types';
 import { DEFAULT_QUOTE_NOTES } from '../constants/quoteDefaults';
 import { printElement } from '../utils/printUtils';
@@ -33,12 +33,16 @@ interface QuoteRequestHistoryProps {
   quoteEnquiries: QuoteEnquiry[];
   activeCompany: CompanyProfile;
   onSaveQuoteEnquiry?: (updatedEnquiry: QuoteEnquiry) => void;
+  highlightQuoteId?: string;
+  highlightEnquiryNumber?: string;
 }
 
 export default function QuoteRequestHistory({
   quoteEnquiries,
   activeCompany,
-  onSaveQuoteEnquiry
+  onSaveQuoteEnquiry,
+  highlightQuoteId,
+  highlightEnquiryNumber
 }: QuoteRequestHistoryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -46,6 +50,14 @@ export default function QuoteRequestHistory({
   const [selectedQuoteForAddition, setSelectedQuoteForAddition] = useState<QuoteEnquiry | null>(null);
   const [additionNotes, setAdditionNotes] = useState('');
   const clientSheetRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (highlightEnquiryNumber || highlightQuoteId) {
+      if (highlightEnquiryNumber) {
+        setSearchQuery(highlightEnquiryNumber);
+      }
+    }
+  }, [highlightEnquiryNumber, highlightQuoteId]);
 
   // Filter quote enquiries to only those belonging to the active customer company
   const companyEnquiries = quoteEnquiries.filter(q => {

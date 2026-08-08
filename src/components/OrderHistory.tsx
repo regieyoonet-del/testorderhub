@@ -13,6 +13,8 @@ interface OrderHistoryProps {
   onReorderPastOrder: (order: Order) => void;
   onUpdateOrderStatus?: (orderId: string, status: Order['status']) => void;
   appsScriptUrl?: string;
+  highlightOrderId?: string;
+  highlightOrderNumber?: string;
 }
 
 export default function OrderHistory({
@@ -20,12 +22,33 @@ export default function OrderHistory({
   selectedCompanyName,
   onReorderPastOrder,
   onUpdateOrderStatus,
-  appsScriptUrl
+  appsScriptUrl,
+  highlightOrderId,
+  highlightOrderNumber
 }: OrderHistoryProps) {
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [reorderedId, setReorderedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'portal' | 'direct'>('all');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+
+  // Auto expand and scroll to highlighted order if requested
+  React.useEffect(() => {
+    if (highlightOrderId || highlightOrderNumber) {
+      const match = orders.find(o =>
+        (highlightOrderId && o.id === highlightOrderId) ||
+        (highlightOrderNumber && o.orderNumber && o.orderNumber.toLowerCase() === highlightOrderNumber.toLowerCase())
+      );
+      if (match) {
+        setExpandedOrderId(match.id);
+        setTimeout(() => {
+          const el = document.getElementById(`order-record-${match.id}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 150);
+      }
+    }
+  }, [highlightOrderId, highlightOrderNumber, orders]);
 
   // Filter orders to only show the ones matching the selected active company
   const companyOrders = useMemo(() => {

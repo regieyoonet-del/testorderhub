@@ -57,7 +57,7 @@ export default function CustomerSettings({
     setContactPhone(activeCompany.contactPhone || '');
     setDeliveryAddress(activeCompany.deliveryAddress || '');
     setLogoUrl(activeCompany.logoUrl || '');
-  }, [activeCompany]);
+  }, [activeCompany?.id]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

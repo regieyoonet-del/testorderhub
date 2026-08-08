@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Order, Product, CompanyProfile, CatalogProduct, QuoteEnquiry, ColorOption, OrderPortal, OrderItem } from '../types';
+import { Order, Product, CompanyProfile, CatalogProduct, QuoteEnquiry, ColorOption, OrderPortal, OrderItem, AppNotification } from '../types';
 import { INITIAL_CATALOG_PRODUCTS } from '../data/initialCatalog';
 import { parseColorList, resolveColorHex } from '../utils/colorUtils';
 import { DEFAULT_QUOTE_NOTES } from '../constants/quoteDefaults';
@@ -19,6 +19,7 @@ export interface AllSheetsData {
   quoteEnquiries: QuoteEnquiry[] | null;
   catalogProducts: CatalogProduct[] | null;
   portals: OrderPortal[] | null;
+  notifications: AppNotification[] | null;
 }
 
 function parseArrayProp(val: any): string[] | undefined {
@@ -1051,6 +1052,120 @@ export const sheetsService = {
   },
 
   /**
+   * Fetch all notifications from Google Sheets.
+   */
+  async fetchNotifications(url: string): Promise<AppNotification[] | null> {
+    if (!url) return null;
+    const cleanedUrl = url.trim();
+    try {
+      const response = await fetch(`${cleanedUrl}?action=getNotifications`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) return null;
+      const rawData = await response.json();
+      if (Array.isArray(rawData)) {
+        return rawData.map(item => ({
+          id: String(getProp(item, ['NotificationID', 'id', 'Notification ID', 'NotificationId']) || `notif-${Date.now()}`),
+          recipientType: (getProp(item, ['RecipientType', 'recipientType', 'Recipient Type']) || 'admin') as any,
+          companyName: getProp(item, ['CompanyName', 'companyName', 'Company Name']) ? String(getProp(item, ['CompanyName', 'companyName', 'Company Name'])) : undefined,
+          title: String(getProp(item, ['Title', 'title']) || 'Notification'),
+          message: String(getProp(item, ['Message', 'message']) || ''),
+          timestamp: String(getProp(item, ['Timestamp', 'timestamp']) || new Date().toISOString()),
+          read: String(getProp(item, ['Read', 'read'])).toLowerCase() === 'true' || getProp(item, ['Read', 'read']) === true,
+          orderId: getProp(item, ['OrderID', 'orderId', 'Order ID']) ? String(getProp(item, ['OrderID', 'orderId', 'Order ID'])) : undefined,
+          orderNumber: getProp(item, ['OrderNumber', 'orderNumber', 'Order Number']) ? String(getProp(item, ['OrderNumber', 'orderNumber', 'Order Number'])) : undefined,
+          type: (getProp(item, ['Type', 'type']) || 'new_storefront_order') as any,
+        }));
+      }
+      return null;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (fetchNotifications):', error);
+      return null;
+    }
+  },
+
+  /**
+   * Save a single notification to Google Sheets.
+   */
+  async saveNotification(url: string, notification: AppNotification): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = url.trim();
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveNotification', notification })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveNotification):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Save multiple notifications to Google Sheets.
+   */
+  async saveNotifications(url: string, notifications: AppNotification[]): Promise<boolean> {
+    if (!url || !notifications || notifications.length === 0) return false;
+    const cleanedUrl = url.trim();
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveNotifications', notifications })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveNotifications):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Mark a notification as read in Google Sheets.
+   */
+  async markNotificationRead(url: string, notifId: string): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = url.trim();
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'markNotificationRead', notifId })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (markNotificationRead):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Clear all notifications in Google Sheets.
+   */
+  async clearNotifications(url: string): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = url.trim();
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'clearNotifications' })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (clearNotifications):', error);
+      return false;
+    }
+  },
+
+  /**
    * Single-roundtrip bulk fetch of all database tables from Apps Script for fast sign-in & initial load sync.
    */
   async fetchAllData(url: string): Promise<AllSheetsData | null> {
@@ -1259,6 +1374,23 @@ export const sheetsService = {
         }));
       }
 
+      // Extract notifications
+      let notifications: AppNotification[] | null = null;
+      if (Array.isArray(raw.notifications)) {
+        notifications = raw.notifications.map((item: any) => ({
+          id: String(getProp(item, ['NotificationID', 'id', 'Notification ID', 'NotificationId']) || `notif-${Date.now()}`),
+          recipientType: (getProp(item, ['RecipientType', 'recipientType', 'Recipient Type']) || 'admin') as any,
+          companyName: getProp(item, ['CompanyName', 'companyName', 'Company Name']) ? String(getProp(item, ['CompanyName', 'companyName', 'Company Name'])) : undefined,
+          title: String(getProp(item, ['Title', 'title']) || 'Notification'),
+          message: String(getProp(item, ['Message', 'message']) || ''),
+          timestamp: String(getProp(item, ['Timestamp', 'timestamp']) || new Date().toISOString()),
+          read: String(getProp(item, ['Read', 'read'])).toLowerCase() === 'true' || getProp(item, ['Read', 'read']) === true,
+          orderId: getProp(item, ['OrderID', 'orderId', 'Order ID']) ? String(getProp(item, ['OrderID', 'orderId', 'Order ID'])) : undefined,
+          orderNumber: getProp(item, ['OrderNumber', 'orderNumber', 'Order Number']) ? String(getProp(item, ['OrderNumber', 'orderNumber', 'Order Number'])) : undefined,
+          type: (getProp(item, ['Type', 'type']) || 'new_storefront_order') as any
+        }));
+      }
+
       return {
         products,
         companies,
@@ -1266,7 +1398,8 @@ export const sheetsService = {
         adminSettings,
         quoteEnquiries,
         catalogProducts,
-        portals
+        portals,
+        notifications
       };
     } catch (err) {
       console.warn('Google Sheets fetchAllData notice:', err);

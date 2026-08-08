@@ -89,6 +89,8 @@ interface AdminDashboardProps {
   onPullFromSheets?: () => Promise<void>;
   isSyncingSheets?: boolean;
   initialTab?: 'clients' | 'catalog' | 'orders' | 'analytics' | 'settings' | 'sync';
+  initialCatalogSection?: 'catalog' | 'enquiries';
+  highlightEnquiryNumber?: string;
 }
 
 export default function AdminDashboard({
@@ -117,7 +119,9 @@ export default function AdminDashboard({
   onForceSyncAll,
   onPullFromSheets,
   isSyncingSheets,
-  initialTab
+  initialTab,
+  initialCatalogSection,
+  highlightEnquiryNumber
 }: AdminDashboardProps) {
   const [adminTab, setAdminTab] = useState<'clients' | 'catalog' | 'orders' | 'analytics' | 'settings' | 'sync'>(initialTab || 'clients');
 
@@ -628,6 +632,8 @@ export default function AdminDashboard({
           onSaveQuoteEnquiry={onSaveQuoteEnquiry}
           onAddProductToCompanyCatalog={onAddProductToCompanyCatalog}
           currencySymbol={currencySymbol}
+          initialSection={initialCatalogSection}
+          highlightEnquiryNumber={highlightEnquiryNumber}
         />
       )}
 

@@ -43,7 +43,8 @@ function doGet(e) {
       companies: getTableData(sheet, "Companies"),
       portals: getTableData(sheet, "Portals"),
       orders: getOrdersWithItems(sheet),
-      adminSettings: adminData.length > 0 ? adminData[0] : {}
+      adminSettings: adminData.length > 0 ? adminData[0] : {},
+      notifications: getTableData(sheet, "Notifications")
     });
   }
 
@@ -74,6 +75,10 @@ function doGet(e) {
   if (action === "getAdminSettings") {
     var adminData = getTableData(sheet, "Admin");
     return getJsonOutput(adminData.length > 0 ? adminData[0] : {});
+  }
+
+  if (action === "getNotifications") {
+    return getJsonOutput(getTableData(sheet, "Notifications"));
   }
   
   return getJsonOutput({ status: "success", message: "ARH Print Apps Script is active" });
@@ -148,6 +153,22 @@ function doPost(e) {
 
   if (payload.action === "saveAdminSettings") {
     return getJsonOutput(saveAdminSettings(sheet, payload.settings, payload.adminUsername, payload.adminPasscode));
+  }
+
+  if (payload.action === "saveNotification") {
+    return getJsonOutput(saveNotification(sheet, payload.notification));
+  }
+
+  if (payload.action === "saveNotifications") {
+    return getJsonOutput(saveNotifications(sheet, payload.notifications));
+  }
+
+  if (payload.action === "markNotificationRead") {
+    return getJsonOutput(markNotificationRead(sheet, payload.notifId));
+  }
+
+  if (payload.action === "clearNotifications") {
+    return getJsonOutput(clearNotifications(sheet));
   }
   
   return getJsonOutput({ status: "error", message: "Unknown action" });
@@ -229,7 +250,7 @@ function getMapValueByHeader(map, header) {
 }
 
 function initSheets(ss) {
-  var sheets = ["Orders", "OrderItems", "Products", "CatalogProducts", "Companies", "Portals", "Admin", "Quotes"];
+  var sheets = ["Orders", "OrderItems", "Products", "CatalogProducts", "Companies", "Portals", "Admin", "Quotes", "Notifications"];
   
   // Headers definitions
   var headers = {
@@ -240,7 +261,8 @@ function initSheets(ss) {
     "Companies": ["Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Delivery Address", "Username", "Passcode", "PO Required", "Logo URL", "Approved Products", "Custom Products"],
     "Portals": ["Portal ID", "Company ID", "Company Name", "Portal Name", "Description", "Status", "Product IDs", "Portal Pricing", "Variant Pricing", "Created At", "Updated At", "Share Token"],
     "Admin": ["Hub Name", "Short Hub Name", "Order Prefix", "Currency Symbol", "Admin Username", "Admin Passcode", "Color Theme", "Admin Email", "App Logo URL"],
-    "Quotes": ["Enquiry ID", "Enquiry Number", "Product ID", "Product Name", "Product Category", "Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Quantity", "Preferred Branding Method", "Preferred Color", "Preferred Size", "Notes", "Status", "Created At", "Quoted Unit Price", "Quoted Total Price", "Quoted Tax", "Quoted Shipping", "Quote Notes", "Quoted Valid Until", "Quoted At", "Quoted Line Items", "Requested Product Addition", "Requested Product Addition At", "Requested Product Notes"]
+    "Quotes": ["Enquiry ID", "Enquiry Number", "Product ID", "Product Name", "Product Category", "Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Quantity", "Preferred Branding Method", "Preferred Color", "Preferred Size", "Notes", "Status", "Created At", "Quoted Unit Price", "Quoted Total Price", "Quoted Tax", "Quoted Shipping", "Quote Notes", "Quoted Valid Until", "Quoted At", "Quoted Line Items", "Requested Product Addition", "Requested Product Addition At", "Requested Product Notes"],
+    "Notifications": ["Notification ID", "Recipient Type", "Company Name", "Title", "Message", "Timestamp", "Read", "Order ID", "Order Number", "Type"]
   };
   
   for (var i = 0; i < sheets.length; i++) {
@@ -919,6 +941,103 @@ function saveAdminSettings(ss, settings, adminUser, adminPass) {
   }
   
   sheet.appendRow(rowData);
+  return { status: "success" };
+}
+
+function saveNotification(ss, notif) {
+  var sheet = ss.getSheetByName("Notifications");
+  var expectedHeaders = ["Notification ID", "Recipient Type", "Company Name", "Title", "Message", "Timestamp", "Read", "Order ID", "Order Number", "Type"];
+  var data = ensureHeaders(sheet, expectedHeaders);
+  var headers = data[0];
+
+  if (!notif) return { status: "error", message: "Missing notification" };
+  var targetId = String(notif.id || "").trim();
+  if (!targetId) return { status: "error", message: "Missing notification ID" };
+
+  var notifIdIndex = -1;
+  for (var c = 0; c < headers.length; c++) {
+    var normH = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (normH === "notificationid" || normH === "id") {
+      notifIdIndex = c;
+      break;
+    }
+  }
+  if (notifIdIndex === -1) notifIdIndex = 0;
+
+  var rowIndex = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][notifIdIndex]).trim() === targetId) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+
+  var notifMap = {
+    "Notification ID": notif.id,
+    "Recipient Type": notif.recipientType || "admin",
+    "Company Name": notif.companyName || "",
+    "Title": notif.title || "",
+    "Message": notif.message || "",
+    "Timestamp": notif.timestamp || new Date().toISOString(),
+    "Read": notif.read ? "TRUE" : "FALSE",
+    "Order ID": notif.orderId || "",
+    "Order Number": notif.orderNumber || "",
+    "Type": notif.type || "new_storefront_order"
+  };
+
+  var row = [];
+  for (var c = 0; c < headers.length; c++) {
+    row.push(getMapValueByHeader(notifMap, headers[c]));
+  }
+
+  if (rowIndex > 0) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  } else {
+    sheet.appendRow(row);
+  }
+
+  return { status: "success", notificationId: notif.id };
+}
+
+function saveNotifications(ss, notifications) {
+  if (!Array.isArray(notifications)) return { status: "error", message: "Invalid array" };
+  notifications.forEach(function(n) {
+    saveNotification(ss, n);
+  });
+  return { status: "success", count: notifications.length };
+}
+
+function markNotificationRead(ss, notifId) {
+  var sheet = ss.getSheetByName("Notifications");
+  var expectedHeaders = ["Notification ID", "Recipient Type", "Company Name", "Title", "Message", "Timestamp", "Read", "Order ID", "Order Number", "Type"];
+  var data = ensureHeaders(sheet, expectedHeaders);
+  var headers = data[0];
+
+  var notifIdIndex = -1, readIndex = -1;
+  for (var c = 0; c < headers.length; c++) {
+    var normH = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (normH === "notificationid" || normH === "id") notifIdIndex = c;
+    if (normH === "read") readIndex = c;
+  }
+  if (notifIdIndex === -1) notifIdIndex = 0;
+  if (readIndex === -1) readIndex = 6;
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][notifIdIndex]).trim() === String(notifId).trim()) {
+      sheet.getRange(i + 1, readIndex + 1).setValue("TRUE");
+      break;
+    }
+  }
+  return { status: "success" };
+}
+
+function clearNotifications(ss) {
+  var sheet = ss.getSheetByName("Notifications");
+  if (sheet && sheet.getMaxRows() > 1) {
+    try {
+      sheet.deleteRows(2, sheet.getMaxRows() - 1);
+    } catch (e) {}
+  }
   return { status: "success" };
 }
 

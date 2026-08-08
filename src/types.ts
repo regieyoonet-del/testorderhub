@@ -209,6 +209,19 @@ export interface OrderPortal {
   customVariantPrices?: Record<string, Record<string, number>>; // Map of productId -> (variantKey -> custom price)
 }
 
+export interface AppNotification {
+  id: string;
+  recipientType: 'admin' | 'company';
+  companyName?: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  orderId?: string;
+  orderNumber?: string;
+  type: 'new_storefront_order' | 'order_status_change' | 'new_company_order' | 'quote_request' | 'quote_status_change';
+}
+
 export function getDisplayPurchaserName(
   order: {
     contactPerson?: string;

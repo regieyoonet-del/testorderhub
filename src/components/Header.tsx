@@ -4,7 +4,8 @@
  */
 
 import React from 'react';
-import { CompanyProfile, SystemSettings } from '../types';
+import { CompanyProfile, SystemSettings, AppNotification } from '../types';
+import NotificationBell from './NotificationBell';
 import {
   Printer,
   ShoppingCart,
@@ -35,6 +36,11 @@ interface HeaderProps {
   isSheetsConnected?: boolean;
   isSyncingSheets?: boolean;
   onSyncSheets?: () => void;
+  notifications?: AppNotification[];
+  onMarkNotificationAsRead?: (id: string) => void;
+  onMarkAllNotificationsAsRead?: () => void;
+  onClearNotifications?: () => void;
+  onSelectNotification?: (notif: AppNotification) => void;
 }
 
 export default function Header({
@@ -50,7 +56,12 @@ export default function Header({
   systemSettings,
   isSheetsConnected,
   isSyncingSheets,
-  onSyncSheets
+  onSyncSheets,
+  notifications = [],
+  onMarkNotificationAsRead,
+  onMarkAllNotificationsAsRead,
+  onClearNotifications,
+  onSelectNotification
 }: HeaderProps) {
   return (
     <header className="bg-white border-b-2 border-black sticky top-0 z-40">
@@ -115,6 +126,18 @@ export default function Header({
               <span className="hidden sm:inline">{isSyncingSheets ? 'Syncing...' : 'Sync Sheets'}</span>
             </button>
           )}
+
+          {/* Persistent Notification Bell */}
+          <NotificationBell
+            userRole={userRole}
+            companyName={selectedCompany?.name}
+            notifications={notifications}
+            onMarkAsRead={onMarkNotificationAsRead || (() => {})}
+            onMarkAllAsRead={onMarkAllNotificationsAsRead || (() => {})}
+            onClearAll={onClearNotifications || (() => {})}
+            onSelectNotification={onSelectNotification}
+          />
+
           {userRole === 'admin' ? null : (
             <button
               onClick={onCartToggle}
