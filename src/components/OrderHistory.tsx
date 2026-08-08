@@ -398,26 +398,6 @@ export default function OrderHistory({
                       </div>
                     </div>
 
-                    {order.status === 'Pending Approval' && onUpdateOrderStatus && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 font-sans">
-                        <div className="space-y-0.5">
-                          <span className="font-extrabold text-xs text-amber-900 uppercase block">
-                            ⏳ Portal Request Pending Company Review
-                          </span>
-                          <p className="text-xs text-amber-800">
-                            This order was submitted via portal link. Review items and submit to admin for official ordering.
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => onUpdateOrderStatus(order.id, 'Pending')}
-                          className="bg-black text-white hover:bg-neutral-800 font-extrabold text-xs uppercase px-4 py-2.5 rounded-lg border border-black shadow-xs flex items-center gap-2 cursor-pointer shrink-0"
-                          id={`history-submit-admin-${order.id}`}
-                        >
-                          <span>Submit Order to Admin</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 text-xs text-gray-600">
                       <div>
