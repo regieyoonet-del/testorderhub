@@ -264,10 +264,10 @@ export default function ProductCatalog({ products, onAddToCart, onUpdateProduct,
                   {/* B2B Negotiated Price vs Original Retail Price */}
                   <div className="flex items-baseline gap-2">
                     <span className="text-lg font-extrabold text-black tracking-tight">
-                      Php {product.basePrice.toFixed(2)}
+                      Php {(Number(product.basePrice) || 0).toFixed(2)}
                     </span>
                     <span className="text-xs text-red-500/80 line-through font-mono font-bold">
-                      Php {(product.originalPrice || product.basePrice * 1.8).toFixed(2)}
+                      Php {(Number(product.originalPrice || (product.basePrice || 0) * 1.8) || 0).toFixed(2)}
                     </span>
                     <span className="text-[10px] text-gray-400 font-mono ml-auto">
                       /{product.unit}
@@ -305,7 +305,7 @@ export default function ProductCatalog({ products, onAddToCart, onUpdateProduct,
                       <Truck className="w-3.5 h-3.5 text-neutral-800 shrink-0" />
                       <span>Delivery: <strong className="text-black">
                         {product.shippingFee !== undefined && product.shippingFee > 0
-                          ? `Php ${product.shippingFee.toFixed(2)}`
+                          ? `Php ${(Number(product.shippingFee) || 0).toFixed(2)}`
                           : 'Free Delivery'}
                       </strong></span>
                     </div>

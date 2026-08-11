@@ -348,7 +348,7 @@ export default function PublicOrderPortal({
             <div className="flex justify-between pt-1">
               <span className="text-gray-500">Total Order Value:</span>
               <span className="font-extrabold text-black text-sm">
-                {systemSettings.currencySymbol || 'Php'} {submittedOrder.totalAmount.toFixed(2)}
+                {systemSettings.currencySymbol || 'Php'} {(Number(submittedOrder.totalAmount) || 0).toFixed(2)}
               </span>
             </div>
           </div>
@@ -368,7 +368,7 @@ export default function PublicOrderPortal({
                     </span>
                   </div>
                   <span className="font-mono font-bold text-black">
-                    {systemSettings.currencySymbol || 'Php'} {(it.price * it.quantity).toFixed(2)}
+                    {systemSettings.currencySymbol || 'Php'} {((Number(it.price ?? it.unitPrice) || 0) * (Number(it.quantity) || 0)).toFixed(2)}
                   </span>
                 </div>
               ))}
@@ -1068,7 +1068,7 @@ export default function PublicOrderPortal({
             <div>
               <span className="text-xs font-mono text-gray-400 block">Total Order Subtotal</span>
               <span className="text-base font-black font-mono text-white">
-                {systemSettings.currencySymbol || 'Php'} {cartSubtotal.toFixed(2)}
+                {systemSettings.currencySymbol || 'Php'} {(Number(cartSubtotal) || 0).toFixed(2)}
               </span>
             </div>
           </div>
@@ -1177,7 +1177,7 @@ export default function PublicOrderPortal({
                         </div>
 
                         <span className="font-mono font-bold text-black text-xs min-w-[70px] text-right">
-                          {systemSettings.currencySymbol || 'Php'} {((item.unitPrice ?? getProductUnitPrice(item.product, item.selectedSize, item.selectedColor, portal)) * item.quantity).toFixed(2)}
+                          {systemSettings.currencySymbol || 'Php'} {((Number(item.unitPrice ?? getProductUnitPrice(item.product, item.selectedSize, item.selectedColor, portal)) || 0) * (Number(item.quantity) || 0)).toFixed(2)}
                         </span>
 
                         {/* Desktop remove button */}
@@ -1200,7 +1200,7 @@ export default function PublicOrderPortal({
 
                 <div className="flex justify-between items-center bg-black text-white p-3 rounded-xl font-mono text-xs font-bold">
                   <span>Subtotal Value:</span>
-                  <span>{systemSettings.currencySymbol || 'Php'} {cartSubtotal.toFixed(2)}</span>
+                  <span>{systemSettings.currencySymbol || 'Php'} {(Number(cartSubtotal) || 0).toFixed(2)}</span>
                 </div>
               </div>
 

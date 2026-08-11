@@ -666,7 +666,7 @@ export default function ClientDashboardModal({
                     <DollarSign className="w-4 h-4 text-gray-400" />
                   </div>
                   <div>
-                    <span className="block text-xl font-black font-mono text-black">Php {stats.totalSpend.toFixed(2)}</span>
+                    <span className="block text-xl font-black font-mono text-black">Php {(Number(stats.totalSpend) || 0).toFixed(2)}</span>
                     <span className="text-[9px] text-gray-400 block font-mono mt-0.5">Aggregated B2B billing invoices</span>
                   </div>
                 </div>
@@ -699,7 +699,7 @@ export default function ClientDashboardModal({
                     <Tag className="w-4 h-4 text-gray-400" />
                   </div>
                   <div>
-                    <span className="block text-xl font-black font-mono text-black">Php {stats.avgOrderValue.toFixed(2)}</span>
+                    <span className="block text-xl font-black font-mono text-black">Php {(Number(stats.avgOrderValue) || 0).toFixed(2)}</span>
                     <span className="text-[9px] text-gray-400 block font-mono mt-0.5">Average checkout invoice metric</span>
                   </div>
                 </div>
@@ -792,7 +792,7 @@ export default function ClientDashboardModal({
                             </span>
                           </div>
                           <div className="text-right shrink-0">
-                            <span className="block font-black text-black font-mono text-xs">Php {ord.totalAmount.toFixed(2)}</span>
+                            <span className="block font-black text-black font-mono text-xs">Php {(Number(ord.totalAmount) || 0).toFixed(2)}</span>
                             {ord.poNumber && (
                               <span className="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-mono font-bold mt-0.5 inline-block">
                                 PO: {ord.poNumber}
@@ -1750,10 +1750,10 @@ export default function ClientDashboardModal({
                               {/* Price */}
                               <div className="flex items-baseline gap-2">
                                 <span className="text-lg font-extrabold text-black tracking-tight">
-                                  Php {p.basePrice.toFixed(2)}
+                                  Php {(Number(p.basePrice) || 0).toFixed(2)}
                                 </span>
                                 <span className="text-xs text-red-500/80 line-through font-mono font-bold">
-                                  Php {(p.originalPrice || p.basePrice * 1.8).toFixed(2)}
+                                  Php {(Number(p.originalPrice || (p.basePrice || 0) * 1.8) || 0).toFixed(2)}
                                 </span>
                                 <span className="text-[10px] text-gray-400 font-mono ml-auto">
                                   /{p.unit}
@@ -1787,7 +1787,7 @@ export default function ClientDashboardModal({
                                 </div>
                                 <div className="flex items-center gap-1.5 text-gray-800 font-bold border-t border-gray-200/60 pt-1.5">
                                   <Truck className="w-3.5 h-3.5 text-neutral-800 shrink-0" />
-                                  <span>Delivery: <strong className="text-black">{p.shippingFee && p.shippingFee > 0 ? `Php ${p.shippingFee.toFixed(2)}` : 'Free Delivery'}</strong></span>
+                                  <span>Delivery: <strong className="text-black">{p.shippingFee && p.shippingFee > 0 ? `Php ${(Number(p.shippingFee) || 0).toFixed(2)}` : 'Free Delivery'}</strong></span>
                                 </div>
                               </div>
 
@@ -1883,7 +1883,7 @@ export default function ClientDashboardModal({
                                 {p.name}
                               </h5>
                               <p className="text-[10px] text-gray-500 font-mono mt-0.5">
-                                Price: <span className="font-bold text-black">Php {p.basePrice.toFixed(2)}</span> / MOQ: {p.minQuantity} {p.unit}
+                                Price: <span className="font-bold text-black">Php {(Number(p.basePrice) || 0).toFixed(2)}</span> / MOQ: {p.minQuantity} {p.unit}
                               </p>
 
                               {/* Size Variants in Compact View */}
@@ -2079,7 +2079,7 @@ export default function ClientDashboardModal({
 
                           <div className="flex items-center gap-6 justify-between md:justify-end shrink-0">
                             <div className="text-left md:text-right font-mono">
-                              <span className="block font-black text-black text-xs md:text-sm">Php {ord.totalAmount.toFixed(2)}</span>
+                              <span className="block font-black text-black text-xs md:text-sm">Php {(Number(ord.totalAmount) || 0).toFixed(2)}</span>
                               {ord.poNumber && (
                                 <span className="text-[9px] bg-black text-white px-1.5 py-0.5 rounded font-bold uppercase tracking-wider block mt-0.5">
                                   PO: {ord.poNumber}
@@ -2169,8 +2169,8 @@ export default function ClientDashboardModal({
                                           </div>
                                         </div>
                                         <div className="text-right shrink-0">
-                                          <span className="font-bold text-black block">{it.quantity} @ Php {it.price.toFixed(2)}</span>
-                                          <span className="font-black text-black block text-xs mt-0.5">Php {(it.quantity * it.price).toFixed(2)}</span>
+                                          <span className="font-bold text-black block">{it.quantity} @ Php {(Number(it.price ?? it.unitPrice) || 0).toFixed(2)}</span>
+                                          <span className="font-black text-black block text-xs mt-0.5">Php {((Number(it.quantity) || 0) * (Number(it.price ?? it.unitPrice) || 0)).toFixed(2)}</span>
                                         </div>
                                       </div>
                                     ));
@@ -2220,7 +2220,7 @@ export default function ClientDashboardModal({
                                               </div>
                                             </div>
                                             <div className="text-right shrink-0">
-                                              <span className="font-bold text-black block text-xs">{it.quantity}x @ Php {it.price.toFixed(2)}</span>
+                                              <span className="font-bold text-black block text-xs">{it.quantity}x @ Php {(Number(it.price ?? it.unitPrice) || 0).toFixed(2)}</span>
                                             </div>
                                           </div>
                                         ))}

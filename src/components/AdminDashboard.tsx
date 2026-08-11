@@ -57,10 +57,13 @@ import {
   Inbox,
   FileSpreadsheet,
   ExternalLink,
-  MapPin
+  MapPin,
+  Receipt,
+  Printer
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ClientDashboardModal from './ClientDashboardModal';
+import ReceiptGenerator from './ReceiptGenerator';
 
 interface AdminDashboardProps {
   products: Product[];
@@ -88,7 +91,7 @@ interface AdminDashboardProps {
   onForceSyncAll: () => Promise<boolean>;
   onPullFromSheets?: () => Promise<void>;
   isSyncingSheets?: boolean;
-  initialTab?: 'clients' | 'catalog' | 'orders' | 'analytics' | 'settings' | 'sync';
+  initialTab?: 'clients' | 'catalog' | 'orders' | 'analytics' | 'receipt' | 'settings' | 'sync';
   initialCatalogSection?: 'catalog' | 'enquiries';
   highlightEnquiryNumber?: string;
   highlightOrderNumber?: string;
@@ -127,7 +130,7 @@ export default function AdminDashboard({
   highlightOrderNumber,
   highlightOrderId
 }: AdminDashboardProps) {
-  const [adminTab, setAdminTab] = useState<'clients' | 'catalog' | 'orders' | 'analytics' | 'settings' | 'sync'>(initialTab || 'clients');
+  const [adminTab, setAdminTab] = useState<'clients' | 'catalog' | 'orders' | 'analytics' | 'receipt' | 'settings' | 'sync'>(initialTab || 'clients');
 
   React.useEffect(() => {
     if (initialTab) {
@@ -614,6 +617,7 @@ export default function AdminDashboard({
           { id: 'catalog', label: 'ARH Products', icon: Layers, count: catalogProducts.length },
           { id: 'orders', label: 'Orders', icon: ClipboardList, count: directCompanyOrders.length },
           { id: 'analytics', label: 'Analytics', icon: BarChart3, count: null },
+          { id: 'receipt', label: 'Receipt Generator', icon: Receipt, count: null },
           { id: 'settings', label: 'Admin Settings', icon: Settings, count: null },
           { id: 'sync', label: 'Google Sheet Sync', icon: FileSpreadsheet, count: null }
         ].map((subtab) => {
@@ -1203,7 +1207,23 @@ export default function AdminDashboard({
                           {/* Card Header: Order Number and Date */}
                           <div className="flex items-center justify-between font-mono text-[9px] text-gray-400">
                             <span className="font-extrabold text-black">{ord.orderNumber}</span>
-                            <span>{new Date(ord.createdAt).toLocaleDateString()}</span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedOrder(ord);
+                                  setTimeout(() => window.print(), 100);
+                                }}
+                                className="no-print inline-flex items-center gap-1 bg-gray-100 hover:bg-black hover:text-white text-gray-700 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold transition-all cursor-pointer"
+                                title="Print or save PDF of this order"
+                                id={`btn-print-order-card-${ord.id}`}
+                              >
+                                <Printer className="w-2.5 h-2.5" />
+                                <span>Print</span>
+                              </button>
+                              <span>{new Date(ord.createdAt).toLocaleDateString()}</span>
+                            </div>
                           </div>
 
                           {/* Client Information */}
@@ -1267,7 +1287,7 @@ export default function AdminDashboard({
                           {/* Order items count & Billing total */}
                           <div className="flex justify-between items-center border-t border-dashed border-gray-100 pt-2 text-xs font-mono">
                             <span className="text-[9px] text-gray-400 font-bold">{ord.items.length} line-item(s)</span>
-                            <span className="font-extrabold text-black">Php {ord.totalAmount.toFixed(2)}</span>
+                            <span className="font-extrabold text-black">Php {(Number(ord.totalAmount) || 0).toFixed(2)}</span>
                           </div>
 
                           {/* Pipeline status trigger controls */}
@@ -1869,6 +1889,18 @@ export default function AdminDashboard({
         </div>
       )}
 
+      {/* Receipt Generator Tab */}
+      {adminTab === 'receipt' && (
+        <ReceiptGenerator
+          orders={orders}
+          companies={companies}
+          hubName={hubName}
+          currencySymbol={currencySymbol}
+          appLogoUrl={appLogoUrl}
+          adminEmail={adminEmail}
+        />
+      )}
+
       {/* Google Sheet Sync Tab */}
       {adminTab === 'sync' && (
         <div className="animate-fade-in" id="admin-sync-tab">
@@ -1906,17 +1938,30 @@ export default function AdminDashboard({
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 10 }}
               transition={{ duration: 0.2 }}
-              className="bg-white border-2 border-black max-w-2xl w-full p-6 md:p-8 pb-10 md:pb-12 rounded-3xl relative z-10 space-y-6 shadow-2xl my-8 sm:my-12 font-sans text-left"
+              className="printable-area bg-white border-2 border-black max-w-2xl w-full p-6 md:p-8 pb-10 md:pb-12 rounded-3xl relative z-10 space-y-6 shadow-2xl my-8 sm:my-12 font-sans text-left"
               id="order-details-modal"
             >
-              {/* Close Button */}
-              <button
-                onClick={() => setSelectedOrder(null)}
-                className="absolute top-4 right-4 p-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-full transition-all cursor-pointer"
-                id="close-order-details-modal"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              {/* Header Action Controls */}
+              <div className="absolute top-4 right-4 flex items-center gap-2 no-print">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="flex items-center space-x-1.5 bg-black hover:bg-neutral-800 text-white font-mono text-xs font-bold uppercase px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-xs"
+                  id="btn-print-order-modal"
+                  title="Print or Save PDF"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print Order</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrder(null)}
+                  className="p-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-full transition-all cursor-pointer"
+                  id="close-order-details-modal"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
               {/* Modal Header */}
               <div className="border-b border-gray-100 pb-4 space-y-2">
@@ -2067,8 +2112,8 @@ export default function AdminDashboard({
                           </div>
 
                           <div className="text-left sm:text-right text-xs font-mono shrink-0">
-                            <span className="text-gray-500">{it.quantity} x Php {it.price.toFixed(2)} = </span>
-                            <span className="font-bold text-black block sm:inline-block sm:ml-1">Php {(it.quantity * it.price).toFixed(2)}</span>
+                            <span className="text-gray-500">{it.quantity} x Php {(Number(it.price ?? it.unitPrice) || 0).toFixed(2)} = </span>
+                            <span className="font-bold text-black block sm:inline-block sm:ml-1">Php {(Number(it.quantity || 0) * (Number(it.price ?? it.unitPrice) || 0)).toFixed(2)}</span>
                           </div>
                         </div>
                       ));
@@ -2161,8 +2206,8 @@ export default function AdminDashboard({
                               </div>
 
                               <div className="text-left sm:text-right text-xs font-mono shrink-0">
-                                <span className="text-gray-500">{it.quantity} x Php {it.price.toFixed(2)} = </span>
-                                <span className="font-bold text-black block sm:inline-block sm:ml-1">Php {(it.quantity * it.price).toFixed(2)}</span>
+                                <span className="text-gray-500">{it.quantity} x Php {(Number(it.price ?? it.unitPrice) || 0).toFixed(2)} = </span>
+                                <span className="font-bold text-black block sm:inline-block sm:ml-1">Php {(Number(it.quantity || 0) * (Number(it.price ?? it.unitPrice) || 0)).toFixed(2)}</span>
                               </div>
                             </div>
                           ))}
@@ -2179,11 +2224,11 @@ export default function AdminDashboard({
                   <span className="text-[9px] uppercase tracking-wider text-gray-400 font-bold block">Aggregated Total Amount</span>
                   <span className="text-xs text-gray-300">Including shipping where applicable</span>
                 </div>
-                <span className="text-xl font-black shrink-0">Php {selectedOrder.totalAmount.toFixed(2)}</span>
+                <span className="text-xl font-black shrink-0">Php {(Number(selectedOrder.totalAmount) || 0).toFixed(2)}</span>
               </div>
 
               {/* Change status inside Details view too */}
-              <div className="border-t border-gray-100 pt-5 space-y-2 text-center">
+              <div className="border-t border-gray-100 pt-5 space-y-2 text-center no-print">
                 <span className="text-[9px] uppercase tracking-wider text-gray-400 font-bold block font-mono">Update Dispatch Pipeline Status</span>
                 <div className="flex flex-wrap justify-center gap-2">
                   {[

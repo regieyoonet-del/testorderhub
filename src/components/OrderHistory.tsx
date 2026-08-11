@@ -364,7 +364,7 @@ export default function OrderHistory({
                   <div className="flex items-center justify-between md:justify-end gap-4 border-t border-gray-100 pt-3 md:border-none md:pt-0 shrink-0">
                     <div className="text-left md:text-right">
                       <span className="text-[9px] uppercase tracking-wider text-gray-400 font-mono block">Order Total</span>
-                      <span className="text-base font-extrabold text-black font-mono">Php {order.totalAmount.toFixed(2)}</span>
+                      <span className="text-base font-extrabold text-black font-mono">Php {(Number(order.totalAmount) || 0).toFixed(2)}</span>
                     </div>
 
                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
@@ -413,8 +413,8 @@ export default function OrderHistory({
                               </div>
                             </div>
                             <div className="text-right text-xs font-mono">
-                              <span className="text-gray-500">{item.quantity} units × Php {item.price.toFixed(2)} = </span>
-                              <span className="font-bold text-black">Php {(item.quantity * item.price).toFixed(2)}</span>
+                              <span className="text-gray-500">{item.quantity} units × Php {(Number(item.price ?? item.unitPrice) || 0).toFixed(2)} = </span>
+                              <span className="font-bold text-black">Php {((Number(item.quantity) || 0) * (Number(item.price ?? item.unitPrice) || 0)).toFixed(2)}</span>
                             </div>
                           </div>
                         ))}

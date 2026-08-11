@@ -250,12 +250,12 @@ export default function ProductDetailsPage({ product, onClose, onEdit, editLabel
             <div className="p-5 bg-[#fafafa] border border-gray-200 rounded-2xl grid grid-cols-3 gap-4 font-mono items-center">
               <div>
                 <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold">B2B Deal Price</span>
-                <span className="text-xl font-black text-black block mt-0.5">Php {product.basePrice.toFixed(2)}</span>
+                <span className="text-xl font-black text-black block mt-0.5">Php {(Number(product.basePrice) || 0).toFixed(2)}</span>
                 <span className="text-[9px] text-gray-400 block">per {product.unit}</span>
               </div>
               <div className="border-l border-gray-200 pl-4">
                 <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold">MSRP Retail</span>
-                <span className="text-sm font-bold text-gray-400 line-through block mt-1">Php {retailPrice.toFixed(2)}</span>
+                <span className="text-sm font-bold text-gray-400 line-through block mt-1">Php {(Number(retailPrice) || 0).toFixed(2)}</span>
                 <span className="text-[9px] text-red-500 font-bold block">Save {savingsPercent}%</span>
               </div>
             </div>
@@ -263,7 +263,7 @@ export default function ProductDetailsPage({ product, onClose, onEdit, editLabel
             {/* Shipping Logistics Fee Display */}
             <div className="flex items-center gap-2 p-3.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-mono text-black">
               <span className="font-bold uppercase tracking-wider text-[9px] text-gray-400">Shipping Logistics Fee:</span>
-              <span className="font-bold text-black">Php {product.shippingFee !== undefined ? product.shippingFee.toFixed(2) : '15.00'}</span>
+              <span className="font-bold text-black">Php {product.shippingFee !== undefined ? (Number(product.shippingFee) || 0).toFixed(2) : '15.00'}</span>
               <span className="text-[10px] text-gray-500">(flat-rate logistics fee for this product line)</span>
             </div>
 
@@ -293,7 +293,7 @@ export default function ProductDetailsPage({ product, onClose, onEdit, editLabel
                           <span>{sz}</span>
                           {vPrice !== undefined && (
                             <span className="text-[10px] bg-black text-white px-1.5 py-0.5 rounded font-bold">
-                              Php {vPrice.toFixed(2)}
+                              Php {(Number(vPrice) || 0).toFixed(2)}
                             </span>
                           )}
                         </div>

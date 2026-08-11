@@ -1185,7 +1185,7 @@ function getJsonOutput(obj) {
               <div className="space-y-1">
                 <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
                 <div className="flex flex-wrap gap-1">
-                  {["Order ID", "Product ID", "Product Name", "Image URL", "Quantity", "Price", "Selected Size", "Selected Color", "Custom Details"].map(col => (
+                  {["Order ID", "Product ID", "Product Name", "Image URL", "Quantity", "Price", "Selected Size", "Selected Color", "Custom Details", "Selected Add-Ons"].map(col => (
                     <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
                       {col}
                     </span>
@@ -1205,7 +1205,7 @@ function getJsonOutput(obj) {
               <div className="space-y-1">
                 <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
                 <div className="flex flex-wrap gap-1">
-                  {["Product ID", "Name", "Category", "Description", "Image URL", "Base Price", "Original Price", "Min Quantity", "Unit", "Size Options", "Color Options", "Frequently Ordered"].map(col => (
+                  {["Product ID", "Name", "Category", "Description", "Image URL", "Base Price", "Original Price", "Min Quantity", "Unit", "Size Options", "Color Options", "Frequently Ordered", "Shipping Fee", "Lead Time", "Image URLs", "Custom Fields", "Add-Ons"].map(col => (
                     <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
                       {col}
                     </span>
@@ -1225,7 +1225,7 @@ function getJsonOutput(obj) {
               <div className="space-y-1">
                 <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
                 <div className="flex flex-wrap gap-1">
-                  {["Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Delivery Address", "Passcode", "PO Required", "Logo URL", "Approved Products"].map(col => (
+                  {["Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Delivery Address", "Passcode", "PO Required", "Logo URL", "Approved Products", "Custom Products"].map(col => (
                     <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
                       {col}
                     </span>

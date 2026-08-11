@@ -1256,7 +1256,12 @@ export const sheetsService = {
           leadTime: String(getProp(item, ['LeadTime', 'Lead Time', 'leadTime']) || '5-7 Days'),
           sizeOptions: parseArrayProp(getProp(item, ['Sizes', 'sizeOptions', 'SizeOptions'])),
           colorOptions: parseArrayProp(getProp(item, ['Colors', 'colorOptions', 'ColorOptions'])),
-          frequentlyOrdered: true
+          frequentlyOrdered: true,
+          addOns: (() => {
+            const val = getProp(item, ['AddOns', 'addOns', 'ADDONS', 'add_ons', 'Add-Ons', 'Add-ons']);
+            if (!val) return undefined;
+            try { return typeof val === 'object' ? val : JSON.parse(String(val)); } catch { return undefined; }
+          })()
         }));
       }
 

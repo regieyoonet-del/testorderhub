@@ -220,7 +220,7 @@ export default function Cart({
                                   {item.product.name}
                                 </h5>
                                 <span className="text-[10px] font-mono text-gray-500 block mt-0.5">
-                                  Php {(item.unitPrice ?? getProductUnitPrice(item.product, item.selectedSize, item.selectedColor)).toFixed(2)} per {item.product.unit}
+                                  Php {(Number(item.unitPrice ?? getProductUnitPrice(item.product, item.selectedSize, item.selectedColor)) || 0).toFixed(2)} per {item.product.unit}
                                 </span>
                               </div>
                             </div>
@@ -281,7 +281,7 @@ export default function Cart({
                             
                             <div className="font-mono text-xs text-right">
                               <span className="text-gray-400">Total: </span>
-                              <span className="font-bold text-black">Php {(Number(item.product.basePrice) * Number(item.quantity)).toFixed(2)}</span>
+                              <span className="font-bold text-black">Php {((Number(item.product.basePrice) || 0) * (Number(item.quantity) || 0)).toFixed(2)}</span>
                             </div>
                           </div>
                         </div>
@@ -422,15 +422,15 @@ export default function Cart({
               <div className="space-y-1.5 font-mono text-xs">
                 <div className="flex justify-between text-gray-500">
                   <span>Cart Subtotal</span>
-                  <span>Php {subtotal.toFixed(2)}</span>
+                  <span>Php {(Number(subtotal) || 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center text-gray-500 py-1">
                   <span>Shipping &amp; Logistics</span>
-                  <span className="font-bold text-black">Php {shippingCost.toFixed(2)}</span>
+                  <span className="font-bold text-black">Php {(Number(shippingCost) || 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-black text-sm font-extrabold border-t border-gray-200 pt-2">
                   <span>ESTIMATED BILLING</span>
-                  <span>Php {total.toFixed(2)}</span>
+                  <span>Php {(Number(total) || 0).toFixed(2)}</span>
                 </div>
               </div>
 
