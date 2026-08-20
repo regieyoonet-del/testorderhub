@@ -339,38 +339,12 @@ export default function App() {
     if (cached) {
       try {
         const parsed: Job[] = JSON.parse(cached);
-        // Filter out legacy default mock jobs
-        const filtered = parsed.filter(j => !['JOB-10452', 'JOB-10453', 'JOB-10454', 'JOB-10455', 'JOB-10456'].includes(j.id));
-        // Deduplicate any identical Job IDs so each job row has a unique identifier
-        const seenIds = new Set<string>();
-        let maxNum = 10450;
-        filtered.forEach(j => {
-          const match = (j.id || '').match(/JOB-(\d+)/i);
-          if (match && match[1]) {
-            const num = parseInt(match[1], 10);
-            if (!isNaN(num) && num > maxNum) maxNum = num;
-          }
-        });
-        const sanitized = filtered.map(j => {
-          if (!j.id || seenIds.has(j.id)) {
-            maxNum += 1;
-            const newId = `JOB-${maxNum}`;
-            seenIds.add(newId);
-            return {
-              ...j,
-              id: newId,
-              items: (j.items || []).map(it => ({ ...it, jobId: newId }))
-            };
-          }
-          seenIds.add(j.id);
-          return j;
-        });
-        return sanitized;
+        return Array.isArray(parsed) ? parsed : [];
       } catch {
         return [];
       }
     }
-    return INITIAL_JOBS;
+    return [];
   });
 
   const [jobColumns, setJobColumns] = useState<JobColumn[]>(() => {
@@ -974,6 +948,8 @@ export default function App() {
         let fetchedPortals = allData?.portals ?? null;
         let fetchedNotifications = allData?.notifications ?? null;
         let fetchedJobs = allData?.jobs ?? null;
+        let fetchedJobColumns = allData?.jobColumns ?? null;
+        let fetchedJobItemColumns = allData?.jobItemColumns ?? null;
 
         // Fallback to parallel fetches if bulk endpoint was not available or empty
         if (!allData) {
@@ -986,7 +962,9 @@ export default function App() {
             fetchedCatalogProducts,
             fetchedPortals,
             fetchedNotifications,
-            fetchedJobs
+            fetchedJobs,
+            fetchedJobColumns,
+            fetchedJobItemColumns
           ] = await Promise.all([
             sheetsService.fetchProducts(url).catch(() => null),
             sheetsService.fetchCompanies(url).catch(() => null),
@@ -996,7 +974,9 @@ export default function App() {
             sheetsService.fetchCatalogProducts(url).catch(() => null),
             sheetsService.fetchPortals(url).catch(() => null),
             sheetsService.fetchNotifications(url).catch(() => null),
-            sheetsService.fetchJobs(url).catch(() => null)
+            sheetsService.fetchJobs(url).catch(() => null),
+            sheetsService.fetchJobColumns(url).catch(() => null),
+            sheetsService.fetchJobItemColumns(url).catch(() => null)
           ]);
         }
 
@@ -1209,13 +1189,21 @@ export default function App() {
           });
         }
 
-        // 9. Process jobs
-        if (fetchedJobs !== null) {
+        // 9. Process jobs & columns
+        if (fetchedJobs !== null && Array.isArray(fetchedJobs)) {
           setJobs(prevJobs => {
             const fetchedIds = new Set(fetchedJobs.map(j => j.id));
             const unsyncedLocal = prevJobs.filter(j => !fetchedIds.has(j.id));
             return [...unsyncedLocal, ...fetchedJobs];
           });
+        }
+
+        if (fetchedJobColumns !== null && Array.isArray(fetchedJobColumns) && fetchedJobColumns.length > 0) {
+          setJobColumns(fetchedJobColumns);
+        }
+
+        if (fetchedJobItemColumns !== null && Array.isArray(fetchedJobItemColumns) && fetchedJobItemColumns.length > 0) {
+          setJobItemColumns(fetchedJobItemColumns);
         }
 
         setLastSyncedTime(new Date().toLocaleTimeString());
@@ -1527,10 +1515,16 @@ export default function App() {
 
   const handleSaveJobColumns = (columns: JobColumn[]) => {
     setJobColumns(columns);
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.saveJobColumns(appsScriptConfig.webAppUrl, columns);
+    }
   };
 
   const handleSaveJobItemColumns = (columns: JobItemColumn[]) => {
     setJobItemColumns(columns);
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.saveJobItemColumns(appsScriptConfig.webAppUrl, columns);
+    }
   };
 
   const handleCreateJobFromOrder = (order: Order) => {
@@ -1630,9 +1624,15 @@ export default function App() {
       for (const portal of orderPortals) {
         await sheetsService.savePortal(url, portal);
       }
-      // 8. Sync jobs
+      // 8. Sync jobs & custom job columns
       for (const job of jobs) {
         await sheetsService.saveJob(url, job);
+      }
+      if (jobColumns && jobColumns.length > 0) {
+        await sheetsService.saveJobColumns(url, jobColumns);
+      }
+      if (jobItemColumns && jobItemColumns.length > 0) {
+        await sheetsService.saveJobItemColumns(url, jobItemColumns);
       }
       return true;
     } catch (e) {

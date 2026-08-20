@@ -44,7 +44,10 @@ function doGet(e) {
       portals: getTableData(sheet, "Portals"),
       orders: getOrdersWithItems(sheet),
       adminSettings: adminData.length > 0 ? adminData[0] : {},
-      notifications: getTableData(sheet, "Notifications")
+      notifications: getTableData(sheet, "Notifications"),
+      jobs: getTableData(sheet, "Jobs"),
+      jobColumns: getTableData(sheet, "JobColumns"),
+      jobItemColumns: getTableData(sheet, "JobItemColumns")
     });
   }
 
@@ -79,6 +82,18 @@ function doGet(e) {
 
   if (action === "getNotifications") {
     return getJsonOutput(getTableData(sheet, "Notifications"));
+  }
+
+  if (action === "getJobs") {
+    return getJsonOutput(getTableData(sheet, "Jobs"));
+  }
+
+  if (action === "getJobColumns") {
+    return getJsonOutput(getTableData(sheet, "JobColumns"));
+  }
+
+  if (action === "getJobItemColumns") {
+    return getJsonOutput(getTableData(sheet, "JobItemColumns"));
   }
   
   return getJsonOutput({ status: "success", message: "ARH Print Apps Script is active" });
@@ -170,6 +185,30 @@ function doPost(e) {
   if (payload.action === "clearNotifications") {
     return getJsonOutput(clearNotifications(sheet));
   }
+
+  if (payload.action === "saveJob") {
+    return getJsonOutput(saveJob(sheet, payload.job));
+  }
+
+  if (payload.action === "saveJobsBatch") {
+    return getJsonOutput(saveJobsBatch(sheet, payload.jobs));
+  }
+
+  if (payload.action === "deleteJob") {
+    return getJsonOutput(deleteRowById(sheet, "Jobs", "Job ID", payload.jobId));
+  }
+
+  if (payload.action === "updateJobStatus") {
+    return getJsonOutput(updateJobStatus(sheet, payload.jobId, payload.status));
+  }
+
+  if (payload.action === "saveJobColumns") {
+    return getJsonOutput(saveJobColumns(sheet, payload.columns));
+  }
+
+  if (payload.action === "saveJobItemColumns") {
+    return getJsonOutput(saveJobItemColumns(sheet, payload.columns));
+  }
   
   return getJsonOutput({ status: "error", message: "Unknown action" });
 }
@@ -256,7 +295,7 @@ function getMapValueByHeader(map, header) {
 }
 
 function initSheets(ss) {
-  var sheets = ["Orders", "OrderItems", "Products", "CatalogProducts", "Companies", "Portals", "Admin", "Quotes", "Notifications"];
+  var sheets = ["Orders", "OrderItems", "Products", "CatalogProducts", "Companies", "Portals", "Admin", "Quotes", "Notifications", "Jobs", "JobColumns", "JobItemColumns"];
   
   // Headers definitions
   var headers = {
@@ -268,7 +307,10 @@ function initSheets(ss) {
     "Portals": ["Portal ID", "Company ID", "Company Name", "Portal Name", "Description", "Status", "Product IDs", "Portal Pricing", "Variant Pricing", "Created At", "Updated At", "Share Token"],
     "Admin": ["Hub Name", "Short Hub Name", "Company Tagline", "Company Address", "Tax TIN ID", "Order Prefix", "Currency Symbol", "Admin Username", "Admin Passcode", "Color Theme", "Admin Email", "App Logo URL", "App Favicon URL"],
     "Quotes": ["Enquiry ID", "Enquiry Number", "Product ID", "Product Name", "Product Category", "Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Quantity", "Preferred Branding Method", "Preferred Color", "Preferred Size", "Notes", "Status", "Created At", "Quoted Unit Price", "Quoted Total Price", "Quoted Tax", "Quoted Shipping", "Quote Notes", "Quoted Valid Until", "Quoted At", "Quoted Line Items", "Requested Product Addition", "Requested Product Addition At", "Requested Product Notes"],
-    "Notifications": ["Notification ID", "Recipient Type", "Company Name", "Title", "Message", "Timestamp", "Read", "Order ID", "Order Number", "Type"]
+    "Notifications": ["Notification ID", "Recipient Type", "Company Name", "Title", "Message", "Timestamp", "Read", "Order ID", "Order Number", "Type"],
+    "Jobs": ["Job ID", "Company ID", "Company Name", "Order ID", "Order Number", "Source", "Status", "Position", "Values JSON", "Items JSON", "Activities JSON", "Created At", "Updated At", "Created By"],
+    "JobColumns": ["Column ID", "Name", "Type", "Position", "Required", "Is System Field", "Is Hidden", "Options", "Created Date"],
+    "JobItemColumns": ["Column ID", "Name", "Type", "Position", "Required", "Is System Field", "Is Hidden", "Calculation", "Options"]
   };
   
   for (var i = 0; i < sheets.length; i++) {
@@ -1073,6 +1115,213 @@ function clearNotifications(ss) {
   return { status: "success" };
 }
 
+function saveJob(ss, job) {
+  var sheet = ss.getSheetByName("Jobs");
+  var expectedHeaders = ["Job ID", "Company ID", "Company Name", "Order ID", "Order Number", "Source", "Status", "Position", "Values JSON", "Items JSON", "Activities JSON", "Created At", "Updated At", "Created By"];
+  var data = ensureHeaders(sheet, expectedHeaders);
+  var headers = data[0];
+  
+  if (!job) return { status: "error", message: "Missing job" };
+  var targetId = String(job.id || "").trim();
+  if (!targetId) return { status: "error", message: "Missing job ID" };
+
+  var jobIdIndex = -1;
+  for (var c = 0; c < headers.length; c++) {
+    var normH = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (normH === "jobid" || normH === "id") {
+      jobIdIndex = c;
+      break;
+    }
+  }
+  if (jobIdIndex === -1) jobIdIndex = 0;
+  
+  var rowIndex = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][jobIdIndex]).trim() === targetId) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+  
+  var valuesJsonStr = "";
+  if (job.values) {
+    valuesJsonStr = typeof job.values === 'string' ? job.values : JSON.stringify(job.values);
+  }
+  
+  var itemsJsonStr = "";
+  if (job.items) {
+    itemsJsonStr = typeof job.items === 'string' ? job.items : JSON.stringify(job.items);
+  }
+  
+  var activitiesJsonStr = "";
+  if (job.activities) {
+    activitiesJsonStr = typeof job.activities === 'string' ? job.activities : JSON.stringify(job.activities);
+  }
+
+  var jobMap = {
+    "Job ID": targetId,
+    "Company ID": job.companyId || "",
+    "Company Name": job.companyName || "",
+    "Order ID": job.orderId || "",
+    "Order Number": job.orderNumber || "",
+    "Source": job.source || "Manual",
+    "Status": job.status || "Pending",
+    "Position": job.position !== undefined ? job.position : 0,
+    "Values JSON": valuesJsonStr,
+    "Items JSON": itemsJsonStr,
+    "Activities JSON": activitiesJsonStr,
+    "Created At": job.createdAt || new Date().toISOString(),
+    "Updated At": job.updatedAt || new Date().toISOString(),
+    "Created By": job.createdBy || "Admin"
+  };
+  
+  var rowData = [];
+  for (var c = 0; c < headers.length; c++) {
+    rowData.push(getMapValueByHeader(jobMap, headers[c]));
+  }
+  
+  if (rowIndex !== -1) {
+    sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    sheet.appendRow(rowData);
+  }
+  
+  return { status: "success", jobId: targetId };
+}
+
+function saveJobsBatch(ss, jobs) {
+  if (!Array.isArray(jobs)) return { status: "error", message: "Invalid array" };
+  jobs.forEach(function(j) {
+    saveJob(ss, j);
+  });
+  return { status: "success", count: jobs.length };
+}
+
+function updateJobStatus(ss, jobId, status) {
+  var sheet = ss.getSheetByName("Jobs");
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  
+  var idIndex = -1;
+  var statusIndex = -1;
+  var updatedAtIndex = -1;
+  for (var c = 0; c < headers.length; c++) {
+    var normH = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (normH === "jobid" || normH === "id") {
+      idIndex = c;
+    } else if (normH === "status") {
+      statusIndex = c;
+    } else if (normH === "updatedat" || normH === "updateddate") {
+      updatedAtIndex = c;
+    }
+  }
+  if (idIndex === -1) idIndex = 0;
+  if (statusIndex === -1) statusIndex = 6;
+  
+  var cleanTargetId = String(jobId).trim();
+  for (var i = 1; i < data.length; i++) {
+    var rowId = String(data[i][idIndex]).trim();
+    if (rowId === cleanTargetId) {
+      sheet.getRange(i + 1, statusIndex + 1).setValue(status);
+      if (updatedAtIndex !== -1) {
+        sheet.getRange(i + 1, updatedAtIndex + 1).setValue(new Date().toISOString());
+      }
+      return { status: "success", jobId: jobId, updated: true };
+    }
+  }
+  return { status: "error", message: "Job not found" };
+}
+
+function saveJobColumns(ss, columns) {
+  var sheet = ss.getSheetByName("JobColumns");
+  var expectedHeaders = ["Column ID", "Name", "Type", "Position", "Required", "Is System Field", "Is Hidden", "Options", "Created Date"];
+  var data = ensureHeaders(sheet, expectedHeaders);
+  var headers = data[0];
+  
+  if (!Array.isArray(columns)) return { status: "error", message: "Invalid columns array" };
+
+  var maxRows = sheet.getMaxRows();
+  if (maxRows > 1) {
+    try {
+      sheet.deleteRows(2, maxRows - 1);
+    } catch(e) {}
+  }
+  
+  columns.forEach(function(col) {
+    var optionsStr = "";
+    if (Array.isArray(col.options)) {
+      optionsStr = col.options.join(", ");
+    } else if (col.options) {
+      optionsStr = String(col.options);
+    }
+    
+    var colMap = {
+      "Column ID": col.id,
+      "Name": col.name || "",
+      "Type": col.type || "text",
+      "Position": col.position !== undefined ? col.position : 0,
+      "Required": col.required ? "TRUE" : "FALSE",
+      "Is System Field": col.isSystemField ? "TRUE" : "FALSE",
+      "Is Hidden": col.isHidden ? "TRUE" : "FALSE",
+      "Options": optionsStr,
+      "Created Date": col.createdDate || new Date().toISOString()
+    };
+    
+    var row = [];
+    for (var c = 0; c < headers.length; c++) {
+      row.push(getMapValueByHeader(colMap, headers[c]));
+    }
+    sheet.appendRow(row);
+  });
+  
+  return { status: "success", count: columns.length };
+}
+
+function saveJobItemColumns(ss, columns) {
+  var sheet = ss.getSheetByName("JobItemColumns");
+  var expectedHeaders = ["Column ID", "Name", "Type", "Position", "Required", "Is System Field", "Is Hidden", "Calculation", "Options"];
+  var data = ensureHeaders(sheet, expectedHeaders);
+  var headers = data[0];
+  
+  if (!Array.isArray(columns)) return { status: "error", message: "Invalid columns array" };
+
+  var maxRows = sheet.getMaxRows();
+  if (maxRows > 1) {
+    try {
+      sheet.deleteRows(2, maxRows - 1);
+    } catch(e) {}
+  }
+  
+  columns.forEach(function(col) {
+    var optionsStr = "";
+    if (Array.isArray(col.options)) {
+      optionsStr = col.options.join(", ");
+    } else if (col.options) {
+      optionsStr = String(col.options);
+    }
+    
+    var colMap = {
+      "Column ID": col.id,
+      "Name": col.name || "",
+      "Type": col.type || "text",
+      "Position": col.position !== undefined ? col.position : 0,
+      "Required": col.required ? "TRUE" : "FALSE",
+      "Is System Field": col.isSystemField ? "TRUE" : "FALSE",
+      "Is Hidden": col.isHidden ? "TRUE" : "FALSE",
+      "Calculation": col.calculation || "none",
+      "Options": optionsStr
+    };
+    
+    var row = [];
+    for (var c = 0; c < headers.length; c++) {
+      row.push(getMapValueByHeader(colMap, headers[c]));
+    }
+    sheet.appendRow(row);
+  });
+  
+  return { status: "success", count: columns.length };
+}
+
 function getJsonOutput(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
@@ -1296,6 +1545,66 @@ function getJsonOutput(obj) {
                 <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
                 <div className="flex flex-wrap gap-1">
                   {["Enquiry ID", "Enquiry Number", "Product ID", "Product Name", "Product Category", "Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Quantity", "Preferred Branding Method", "Preferred Color", "Preferred Size", "Notes", "Status", "Created At"].map(col => (
+                    <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
+                      {col}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sheet 8: Jobs */}
+            <div className="border border-gray-200 bg-gray-50 p-3 space-y-2 rounded-xl">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                <span className="font-mono text-[11px] font-bold text-black bg-white px-2 py-0.5 border border-black rounded-md">
+                  📋 Tab 8: Jobs
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono">Job Management board cards and production workflow</span>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
+                <div className="flex flex-wrap gap-1">
+                  {["Job ID", "Company ID", "Company Name", "Order ID", "Order Number", "Source", "Status", "Position", "Values JSON", "Items JSON", "Activities JSON", "Created At", "Updated At", "Created By"].map(col => (
+                    <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
+                      {col}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sheet 9: JobColumns */}
+            <div className="border border-gray-200 bg-gray-50 p-3 space-y-2 rounded-xl">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                <span className="font-mono text-[11px] font-bold text-black bg-white px-2 py-0.5 border border-black rounded-md">
+                  🗂️ Tab 9: JobColumns
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono">Custom schema columns and field attributes for Jobs</span>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
+                <div className="flex flex-wrap gap-1">
+                  {["Column ID", "Name", "Type", "Position", "Required", "Is System Field", "Is Hidden", "Options", "Created Date"].map(col => (
+                    <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
+                      {col}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sheet 10: JobItemColumns */}
+            <div className="border border-gray-200 bg-gray-50 p-3 space-y-2 rounded-xl">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                <span className="font-mono text-[11px] font-bold text-black bg-white px-2 py-0.5 border border-black rounded-md">
+                  📑 Tab 10: JobItemColumns
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono">Sub-item schema columns and calculations</span>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
+                <div className="flex flex-wrap gap-1">
+                  {["Column ID", "Name", "Type", "Position", "Required", "Is System Field", "Is Hidden", "Calculation", "Options"].map(col => (
                     <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
                       {col}
                     </span>
