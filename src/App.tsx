@@ -5,9 +5,26 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Product, CompanyProfile, Order, CartItem, AppsScriptConfig, SystemSettings, CatalogProduct, QuoteEnquiry, OrderPortal, AppNotification, getDisplayPurchaserName } from './types';
+import {
+  Product,
+  CompanyProfile,
+  Order,
+  CartItem,
+  AppsScriptConfig,
+  SystemSettings,
+  CatalogProduct,
+  QuoteEnquiry,
+  OrderPortal,
+  AppNotification,
+  Job,
+  JobColumn,
+  JobItemColumn,
+  JobStatus,
+  getDisplayPurchaserName
+} from './types';
 import { INITIAL_PRODUCTS, INITIAL_COMPANIES, INITIAL_ORDERS, INITIAL_PORTALS } from './data/mockData';
 import { INITIAL_CATALOG_PRODUCTS, INITIAL_QUOTE_ENQUIRIES, sanitizeCatalogProduct } from './data/initialCatalog';
+import { INITIAL_JOBS, DEFAULT_JOB_COLUMNS, DEFAULT_JOB_ITEM_COLUMNS, createJobFromOrder } from './data/initialJobs';
 import { DEFAULT_QUOTE_NOTES } from './constants/quoteDefaults';
 import { sheetsService } from './lib/sheetsService';
 import { EMBEDDED_APPS_SCRIPT_URL } from './config';
@@ -21,11 +38,12 @@ import SettingsPanel from './components/SettingsPanel';
 import Cart from './components/Cart';
 import LoginScreen from './components/LoginScreen';
 import AdminDashboard from './components/AdminDashboard';
+import NavigationDrawer from './components/NavigationDrawer';
 import OrderPortals from './components/OrderPortals';
 import PublicOrderPortal from './components/PublicOrderPortal';
 import { getProductUnitPrice } from './utils/pricing';
 import { getItemColorImage } from './utils/colorUtils';
-import { Check, AlertCircle, ShoppingBag, ArrowRight, Printer, RefreshCw, LogOut, Store } from 'lucide-react';
+import { Check, AlertCircle, ShoppingBag, ArrowRight, Printer, RefreshCw, Store } from 'lucide-react';
 
 function getThemeStyles(colorHex: string) {
   let primary = colorHex || '#000000';
@@ -276,7 +294,16 @@ export default function App() {
 
   const [orders, setOrders] = useState<Order[]>(() => {
     const cached = localStorage.getItem('rp_orders');
-    return cached ? JSON.parse(cached) : INITIAL_ORDERS;
+    if (cached) {
+      try {
+        const parsed: Order[] = JSON.parse(cached);
+        // Filter out legacy default mock orders
+        return parsed.filter(o => !['ord-1001', 'ord-1002', 'ord-1003'].includes(o.id));
+      } catch {
+        return [];
+      }
+    }
+    return INITIAL_ORDERS;
   });
 
   const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>(() => {
@@ -307,9 +334,72 @@ export default function App() {
     return [];
   });
 
+  const [jobs, setJobs] = useState<Job[]>(() => {
+    const cached = localStorage.getItem('rp_jobs');
+    if (cached) {
+      try {
+        const parsed: Job[] = JSON.parse(cached);
+        // Filter out legacy default mock jobs
+        const filtered = parsed.filter(j => !['JOB-10452', 'JOB-10453', 'JOB-10454', 'JOB-10455', 'JOB-10456'].includes(j.id));
+        // Deduplicate any identical Job IDs so each job row has a unique identifier
+        const seenIds = new Set<string>();
+        let maxNum = 10450;
+        filtered.forEach(j => {
+          const match = (j.id || '').match(/JOB-(\d+)/i);
+          if (match && match[1]) {
+            const num = parseInt(match[1], 10);
+            if (!isNaN(num) && num > maxNum) maxNum = num;
+          }
+        });
+        const sanitized = filtered.map(j => {
+          if (!j.id || seenIds.has(j.id)) {
+            maxNum += 1;
+            const newId = `JOB-${maxNum}`;
+            seenIds.add(newId);
+            return {
+              ...j,
+              id: newId,
+              items: (j.items || []).map(it => ({ ...it, jobId: newId }))
+            };
+          }
+          seenIds.add(j.id);
+          return j;
+        });
+        return sanitized;
+      } catch {
+        return [];
+      }
+    }
+    return INITIAL_JOBS;
+  });
+
+  const [jobColumns, setJobColumns] = useState<JobColumn[]>(() => {
+    const cached = localStorage.getItem('rp_job_columns');
+    return cached ? JSON.parse(cached) : DEFAULT_JOB_COLUMNS;
+  });
+
+  const [jobItemColumns, setJobItemColumns] = useState<JobItemColumn[]>(() => {
+    const cached = localStorage.getItem('rp_job_item_columns');
+    return cached ? JSON.parse(cached) : DEFAULT_JOB_ITEM_COLUMNS;
+  });
+
+  const [highlightJobId, setHighlightJobId] = useState<string | undefined>(undefined);
+
   useEffect(() => {
     localStorage.setItem('rp_notifications', JSON.stringify(notifications));
   }, [notifications]);
+
+  useEffect(() => {
+    localStorage.setItem('rp_jobs', JSON.stringify(jobs));
+  }, [jobs]);
+
+  useEffect(() => {
+    localStorage.setItem('rp_job_columns', JSON.stringify(jobColumns));
+  }, [jobColumns]);
+
+  useEffect(() => {
+    localStorage.setItem('rp_job_item_columns', JSON.stringify(jobItemColumns));
+  }, [jobItemColumns]);
 
   const handleMarkNotificationAsRead = (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
@@ -354,6 +444,11 @@ export default function App() {
   const [highlightQuoteId, setHighlightQuoteId] = useState<string | undefined>(undefined);
   const [highlightEnquiryNumber, setHighlightEnquiryNumber] = useState<string | undefined>(undefined);
   const [adminCatalogSection, setAdminCatalogSection] = useState<'catalog' | 'enquiries' | undefined>(undefined);
+  const [isAdminNavOpen, setIsAdminNavOpen] = useState<boolean>(false);
+
+  const handleAdminNavToggle = () => {
+    setIsAdminNavOpen(prev => !prev);
+  };
 
   const handleSelectNotification = (notif: AppNotification) => {
     const isQuoteNotif =
@@ -444,6 +539,10 @@ export default function App() {
       colorTheme: parsed.colorTheme || 'classic_noir',
       adminEmail: (parsed.adminEmail && parsed.adminEmail.trim() !== '') ? parsed.adminEmail : 'regie.yoonet@gmail.com',
       logoUrl: parsed.logoUrl || '',
+      faviconUrl: parsed.faviconUrl || '',
+      companyTagline: parsed.companyTagline !== undefined ? parsed.companyTagline : '',
+      companyAddress: parsed.companyAddress !== undefined ? parsed.companyAddress : '',
+      taxId: parsed.taxId !== undefined ? parsed.taxId : '',
       adminUsername,
       adminPasscode
     };
@@ -515,6 +614,20 @@ export default function App() {
     }
     localStorage.setItem('rp_system_settings', JSON.stringify(settingsToStore));
   }, [systemSettings]);
+
+  // Dynamically update browser tab favicon across devices
+  useEffect(() => {
+    const faviconHref = systemSettings.faviconUrl || systemSettings.logoUrl;
+    if (faviconHref) {
+      let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = faviconHref;
+    }
+  }, [systemSettings.faviconUrl, systemSettings.logoUrl]);
 
   useEffect(() => {
     localStorage.setItem('rp_companies', JSON.stringify(companies));
@@ -860,6 +973,7 @@ export default function App() {
         let fetchedCatalogProducts = allData?.catalogProducts ?? null;
         let fetchedPortals = allData?.portals ?? null;
         let fetchedNotifications = allData?.notifications ?? null;
+        let fetchedJobs = allData?.jobs ?? null;
 
         // Fallback to parallel fetches if bulk endpoint was not available or empty
         if (!allData) {
@@ -871,7 +985,8 @@ export default function App() {
             fetchedQuotes,
             fetchedCatalogProducts,
             fetchedPortals,
-            fetchedNotifications
+            fetchedNotifications,
+            fetchedJobs
           ] = await Promise.all([
             sheetsService.fetchProducts(url).catch(() => null),
             sheetsService.fetchCompanies(url).catch(() => null),
@@ -880,7 +995,8 @@ export default function App() {
             sheetsService.fetchQuoteEnquiries(url).catch(() => null),
             sheetsService.fetchCatalogProducts(url).catch(() => null),
             sheetsService.fetchPortals(url).catch(() => null),
-            sheetsService.fetchNotifications(url).catch(() => null)
+            sheetsService.fetchNotifications(url).catch(() => null),
+            sheetsService.fetchJobs(url).catch(() => null)
           ]);
         }
 
@@ -980,16 +1096,58 @@ export default function App() {
             ? fetchedSettings.adminPasscode.trim()
             : (systemSettings.adminPasscode || 'admin123');
 
-          setSystemSettings({
-            hubName: fetchedSettings.hubName || 'ARH Print Hub',
-            shortHubName: fetchedSettings.shortHubName || 'ARH',
-            orderPrefix: fetchedSettings.orderPrefix || 'ARH-2026',
-            currencySymbol: fetchedSettings.currencySymbol || 'Php',
-            colorTheme: fetchedSettings.colorTheme || 'classic_noir',
-            adminEmail: fetchedSettings.adminEmail || '',
-            logoUrl: fetchedSettings.logoUrl || '',
-            adminUsername: currentAdminUser,
-            adminPasscode: currentAdminPass
+          setSystemSettings(prev => {
+            const nextTagline = (fetchedSettings.companyTagline !== undefined && fetchedSettings.companyTagline.trim() !== '')
+              ? fetchedSettings.companyTagline
+              : (prev.companyTagline || '');
+            const nextAddress = (fetchedSettings.companyAddress !== undefined && fetchedSettings.companyAddress.trim() !== '')
+              ? fetchedSettings.companyAddress
+              : (prev.companyAddress || '');
+            const nextTaxId = (fetchedSettings.taxId !== undefined && fetchedSettings.taxId.trim() !== '')
+              ? fetchedSettings.taxId
+              : (prev.taxId || '');
+            const nextHubName = (fetchedSettings.hubName && fetchedSettings.hubName.trim() !== '') ? fetchedSettings.hubName : (prev.hubName || 'ARH Print Hub');
+            const nextShortHubName = (fetchedSettings.shortHubName && fetchedSettings.shortHubName.trim() !== '') ? fetchedSettings.shortHubName : (prev.shortHubName || 'ARH');
+            const nextOrderPrefix = (fetchedSettings.orderPrefix && fetchedSettings.orderPrefix.trim() !== '') ? fetchedSettings.orderPrefix : (prev.orderPrefix || 'ARH-2026');
+            const nextCurrencySymbol = (fetchedSettings.currencySymbol && fetchedSettings.currencySymbol.trim() !== '') ? fetchedSettings.currencySymbol : (prev.currencySymbol || 'Php');
+            const nextColorTheme = fetchedSettings.colorTheme || prev.colorTheme || 'classic_noir';
+            const nextAdminEmail = (fetchedSettings.adminEmail !== undefined && fetchedSettings.adminEmail.trim() !== '') ? fetchedSettings.adminEmail : (prev.adminEmail || '');
+            const nextLogoUrl = (fetchedSettings.logoUrl !== undefined && fetchedSettings.logoUrl.trim() !== '') ? fetchedSettings.logoUrl : (prev.logoUrl || '');
+            const nextFaviconUrl = (fetchedSettings.faviconUrl !== undefined && fetchedSettings.faviconUrl.trim() !== '') ? fetchedSettings.faviconUrl : (prev.faviconUrl || '');
+
+            if (
+              prev.hubName === nextHubName &&
+              prev.shortHubName === nextShortHubName &&
+              prev.orderPrefix === nextOrderPrefix &&
+              prev.currencySymbol === nextCurrencySymbol &&
+              prev.colorTheme === nextColorTheme &&
+              prev.adminEmail === nextAdminEmail &&
+              prev.logoUrl === nextLogoUrl &&
+              prev.faviconUrl === nextFaviconUrl &&
+              prev.companyTagline === nextTagline &&
+              prev.companyAddress === nextAddress &&
+              prev.taxId === nextTaxId &&
+              prev.adminUsername === currentAdminUser &&
+              prev.adminPasscode === currentAdminPass
+            ) {
+              return prev;
+            }
+
+            return {
+              hubName: nextHubName,
+              shortHubName: nextShortHubName,
+              orderPrefix: nextOrderPrefix,
+              currencySymbol: nextCurrencySymbol,
+              colorTheme: nextColorTheme,
+              adminEmail: nextAdminEmail,
+              logoUrl: nextLogoUrl,
+              faviconUrl: nextFaviconUrl,
+              companyTagline: nextTagline,
+              companyAddress: nextAddress,
+              taxId: nextTaxId,
+              adminUsername: currentAdminUser,
+              adminPasscode: currentAdminPass
+            };
           });
         }
 
@@ -1048,6 +1206,15 @@ export default function App() {
             return Array.from(notifMap.values()).sort(
               (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
             );
+          });
+        }
+
+        // 9. Process jobs
+        if (fetchedJobs !== null) {
+          setJobs(prevJobs => {
+            const fetchedIds = new Set(fetchedJobs.map(j => j.id));
+            const unsyncedLocal = prevJobs.filter(j => !fetchedIds.has(j.id));
+            return [...unsyncedLocal, ...fetchedJobs];
           });
         }
 
@@ -1246,6 +1413,21 @@ export default function App() {
       }
     }
 
+    // Also synchronize any linked Job's status
+    for (const newOrd of newOrders) {
+      const oldOrd = orders.find(o => o.id === newOrd.id);
+      if (oldOrd && oldOrd.status !== newOrd.status) {
+        const linkedJob = jobs.find(j => j.orderId === newOrd.id || (j.orderNumber && newOrd.orderNumber && j.orderNumber === newOrd.orderNumber));
+        if (linkedJob && linkedJob.status !== newOrd.status) {
+          const updatedJobStatus = newOrd.status as JobStatus;
+          setJobs(prev => prev.map(j => j.id === linkedJob.id ? { ...j, status: updatedJobStatus, updatedAt: new Date().toISOString() } : j));
+          if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+            sheetsService.updateJobStatus(appsScriptConfig.webAppUrl, linkedJob.id, updatedJobStatus).catch(err => console.warn('Job status sync notice:', err));
+          }
+        }
+      }
+    }
+
     // 1. Update React state immediately for instant feedback and localStorage persistence
     setOrders(newOrders);
 
@@ -1271,6 +1453,102 @@ export default function App() {
         }
       }
     }
+  };
+
+  // Job Management Handlers
+  const handleSaveJob = (job: Job) => {
+    setJobs(prev => {
+      const exists = prev.some(j => j.id === job.id);
+      if (exists) {
+        return prev.map(j => j.id === job.id ? job : j);
+      }
+      return [job, ...prev];
+    });
+
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.saveJob(appsScriptConfig.webAppUrl, job);
+    }
+
+    // Synchronize linked Order if exists
+    if (job.orderId) {
+      const linkedOrder = orders.find(o => o.id === job.orderId || (o.orderNumber && job.orderNumber && o.orderNumber === job.orderNumber));
+      if (linkedOrder && linkedOrder.status !== job.status) {
+        const updatedOrders = orders.map(o => o.id === linkedOrder.id ? { ...o, status: job.status } : o);
+        handleUpdateOrders(updatedOrders);
+      }
+    }
+  };
+
+  const handleUpdateJobStatus = (jobId: string, status: JobStatus) => {
+    let targetJob: Job | undefined;
+    setJobs(prev => prev.map(j => {
+      if (j.id === jobId) {
+        targetJob = { ...j, status, updatedAt: new Date().toISOString() };
+        return targetJob;
+      }
+      return j;
+    }));
+
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.updateJobStatus(appsScriptConfig.webAppUrl, jobId, status);
+    }
+
+    // Synchronize linked Order if exists
+    if (targetJob && (targetJob.orderId || targetJob.orderNumber)) {
+      const linkedOrder = orders.find(o => o.id === targetJob!.orderId || (o.orderNumber && targetJob!.orderNumber && o.orderNumber === targetJob!.orderNumber));
+      if (linkedOrder && linkedOrder.status !== status) {
+        const updatedOrders = orders.map(o => o.id === linkedOrder.id ? { ...o, status } : o);
+        handleUpdateOrders(updatedOrders);
+      }
+    }
+  };
+
+  const handleDeleteJob = (jobId: string) => {
+    setJobs(prev => prev.filter(j => j.id !== jobId));
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.deleteJob(appsScriptConfig.webAppUrl, jobId);
+    }
+  };
+
+  const handleSaveJobsBatch = (newJobs: Job[]) => {
+    setJobs(newJobs);
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      const url = appsScriptConfig.webAppUrl;
+      jobs.forEach(oldJ => {
+        if (!newJobs.some(j => j.id === oldJ.id)) {
+          sheetsService.deleteJob(url, oldJ.id);
+        }
+      });
+      newJobs.forEach(j => {
+        sheetsService.saveJob(url, j);
+      });
+    }
+  };
+
+  const handleSaveJobColumns = (columns: JobColumn[]) => {
+    setJobColumns(columns);
+  };
+
+  const handleSaveJobItemColumns = (columns: JobItemColumn[]) => {
+    setJobItemColumns(columns);
+  };
+
+  const handleCreateJobFromOrder = (order: Order) => {
+    const existingJob = jobs.find(j => j.orderId === order.id || (j.orderNumber && order.orderNumber && j.orderNumber === order.orderNumber));
+    if (existingJob) {
+      setActiveTab('admin');
+      setHighlightJobId(existingJob.id);
+      return;
+    }
+
+    const newJob = createJobFromOrder(order, jobs);
+    setJobs(prev => [newJob, ...prev]);
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.saveJob(appsScriptConfig.webAppUrl, newJob);
+    }
+
+    setActiveTab('admin');
+    setHighlightJobId(newJob.id);
   };
 
   const handleUpdateSystemSettings = (newSettings: SystemSettings) => {
@@ -1351,6 +1629,10 @@ export default function App() {
       // 7. Sync order portals
       for (const portal of orderPortals) {
         await sheetsService.savePortal(url, portal);
+      }
+      // 8. Sync jobs
+      for (const job of jobs) {
+        await sheetsService.saveJob(url, job);
       }
       return true;
     } catch (e) {
@@ -1724,7 +2006,9 @@ export default function App() {
           quantity: Number(pastItem.quantity) || 1,
           selectedSize: pastItem.selectedSize,
           selectedColor: pastItem.selectedColor,
-          customDetails: pastItem.customDetails || {}
+          selectedAddOns: pastItem.selectedAddOns,
+          customDetails: pastItem.customDetails || {},
+          unitPrice: pastItem.price ?? pastItem.unitPrice ?? getProductUnitPrice(catalogProduct, pastItem.selectedSize, pastItem.selectedColor)
         });
       }
     });
@@ -2303,10 +2587,35 @@ export default function App() {
         onMarkAllNotificationsAsRead={handleMarkAllNotificationsAsRead}
         onClearNotifications={handleClearNotifications}
         onSelectNotification={handleSelectNotification}
+        onMobileNavToggle={handleAdminNavToggle}
       />
 
+      {/* Universal Slide-in Navigation Drawer for Client & Non-Admin Views */}
+      {activeTab !== 'admin' && activeTab !== 'sync' && (
+        <NavigationDrawer
+          isOpen={isAdminNavOpen}
+          onClose={() => setIsAdminNavOpen(false)}
+          company={activeCompany}
+          systemSettings={systemSettings}
+          userRole={loggedInUser.role}
+          activeTab={activeTab}
+          onSelectTab={(tab) => {
+            setActiveTab(tab);
+            setIsAdminNavOpen(false);
+          }}
+          counts={{
+            catalog: scopedProducts.length,
+            browse: catalogProducts.length,
+            portals: orderPortals.filter(p => p.companyId === activeCompany.id).length,
+            history: orders.filter(o => o.companyName?.toLowerCase() === activeCompany.name?.toLowerCase()).length,
+            quotes: quoteEnquiries.filter(q => q.companyName?.toLowerCase() === activeCompany.name?.toLowerCase()).length
+          }}
+          onLogout={handleLogout}
+        />
+      )}
+
       {/* Main App Workspace Stage */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-8 sm:px-8">
+      <main className={`flex-1 w-full mx-auto px-4 py-8 sm:px-8 ${activeTab === 'admin' || activeTab === 'sync' ? 'max-w-[1600px]' : 'max-w-7xl'}`}>
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -2322,6 +2631,17 @@ export default function App() {
                 orders={orders}
                 catalogProducts={catalogProducts}
                 quoteEnquiries={quoteEnquiries}
+                jobs={jobs}
+                jobColumns={jobColumns}
+                jobItemColumns={jobItemColumns}
+                onSaveJob={handleSaveJob}
+                onUpdateJobStatus={handleUpdateJobStatus}
+                onDeleteJob={handleDeleteJob}
+                onSaveJobsBatch={handleSaveJobsBatch}
+                onSaveJobColumns={handleSaveJobColumns}
+                onSaveJobItemColumns={handleSaveJobItemColumns}
+                onCreateJobFromOrder={handleCreateJobFromOrder}
+                highlightJobId={highlightJobId}
                 onAddCatalogProduct={handleAddCatalogProduct}
                 onUpdateCatalogProduct={handleUpdateCatalogProduct}
                 onDeleteCatalogProduct={handleDeleteCatalogProduct}
@@ -2350,6 +2670,9 @@ export default function App() {
                 highlightEnquiryNumber={highlightEnquiryNumber}
                 highlightOrderNumber={highlightOrderNumber}
                 highlightOrderId={highlightOrderId}
+                isMobileNavOpen={isAdminNavOpen}
+                onToggleMobileNav={(open) => setIsAdminNavOpen(typeof open === 'boolean' ? open : !isAdminNavOpen)}
+                onLogout={handleLogout}
               />
             )}
 
@@ -2420,18 +2743,6 @@ export default function App() {
           </motion.div>
         </AnimatePresence>
       </main>
-
-      {/* Floating Sign Out Button */}
-      {loggedInUser && (
-        <button
-          onClick={handleLogout}
-          className="fixed bottom-6 right-6 bg-black text-white hover:bg-white hover:text-black border border-black px-4 py-2.5 rounded-full text-xs uppercase font-extrabold tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-lg z-40 hover:scale-105 active:scale-95"
-          id="floating-logout-btn"
-        >
-          <LogOut className="w-4 h-4 shrink-0" />
-          <span>Sign Out</span>
-        </button>
-      )}
 
       {/* Checkout Side-Panel Drawer */}
       <Cart

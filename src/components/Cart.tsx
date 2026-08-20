@@ -194,6 +194,8 @@ export default function Cart({
                   <div className="divide-y divide-gray-100 border-y divide-dashed border-gray-200">
                     {cartItems.map((item) => {
                       const isChecked = !uncheckedItemIds.includes(item.id);
+                      const itemUnitPrice = Number(item.unitPrice ?? getProductUnitPrice(item.product, item.selectedSize, item.selectedColor)) || 0;
+                      const itemLineTotal = itemUnitPrice * (Number(item.quantity) || 0);
                       return (
                         <div key={item.id} className={`py-4 space-y-2 transition-opacity duration-200 ${isChecked ? '' : 'opacity-50'}`} id={`cart-row-${item.id}`}>
                           <div className="flex items-start justify-between gap-3">
@@ -220,7 +222,7 @@ export default function Cart({
                                   {item.product.name}
                                 </h5>
                                 <span className="text-[10px] font-mono text-gray-500 block mt-0.5">
-                                  Php {(Number(item.unitPrice ?? getProductUnitPrice(item.product, item.selectedSize, item.selectedColor)) || 0).toFixed(2)} per {item.product.unit}
+                                  Php {itemUnitPrice.toFixed(2)} per {item.product.unit}
                                 </span>
                               </div>
                             </div>
@@ -246,6 +248,15 @@ export default function Cart({
                               <span className="bg-white px-1.5 py-0.5 border border-gray-200">
                                 Color: <strong>{item.selectedColor}</strong>
                               </span>
+                            )}
+                            {item.selectedAddOns && item.selectedAddOns.length > 0 && (
+                              <div className="w-full flex flex-wrap gap-1 mt-0.5">
+                                {item.selectedAddOns.map((addOn, aIdx) => (
+                                  <span key={aIdx} className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 text-[9px] font-bold">
+                                    +{addOn.name} (+Php {Number(addOn.price || 0).toFixed(2)})
+                                  </span>
+                                ))}
+                              </div>
                             )}
                             {Object.entries(item.customDetails).map(([key, value]) => (
                               value ? (
@@ -281,7 +292,7 @@ export default function Cart({
                             
                             <div className="font-mono text-xs text-right">
                               <span className="text-gray-400">Total: </span>
-                              <span className="font-bold text-black">Php {((Number(item.product.basePrice) || 0) * (Number(item.quantity) || 0)).toFixed(2)}</span>
+                              <span className="font-bold text-black">Php {itemLineTotal.toFixed(2)}</span>
                             </div>
                           </div>
                         </div>

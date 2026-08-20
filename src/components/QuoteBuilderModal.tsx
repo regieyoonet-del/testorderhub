@@ -36,6 +36,12 @@ interface QuoteBuilderModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSaveQuote: (updatedEnquiry: QuoteEnquiry) => void;
+  hubName?: string;
+  appLogoUrl?: string;
+  adminEmail?: string;
+  companyTagline?: string;
+  companyAddress?: string;
+  taxId?: string;
 }
 
 export default function QuoteBuilderModal({
@@ -43,7 +49,13 @@ export default function QuoteBuilderModal({
   currencySymbol = 'Php',
   isOpen,
   onClose,
-  onSaveQuote
+  onSaveQuote,
+  hubName = 'ARH PRINT HUB',
+  appLogoUrl,
+  adminEmail,
+  companyTagline,
+  companyAddress,
+  taxId
 }: QuoteBuilderModalProps) {
   if (!isOpen || !enquiry) return null;
 
@@ -667,15 +679,31 @@ ${quoteNotes}
                   {/* Document Header */}
                   <div className="flex flex-col sm:flex-row justify-between items-start border-b-2 border-black pb-6 gap-4">
                     <div>
+                      {appLogoUrl && (
+                        <img
+                          src={appLogoUrl}
+                          alt={hubName}
+                          className="h-8 w-auto object-contain mb-2 max-w-[160px]"
+                        />
+                      )}
                       <h1 className="text-xl font-black uppercase tracking-tight text-black">
-                        ARH PRINT HUB
+                        {hubName || 'ARH PRINT HUB'}
                       </h1>
-                      <div className="text-xs text-gray-600 font-mono">
-                        Corporate Printing & Promotional Merchandise Solutions
-                      </div>
-                      <div className="text-[11px] text-gray-500 font-mono mt-1">
-                        Email: regie.yoonet@gmail.com | Manila, Philippines
-                      </div>
+                      {companyTagline && (
+                        <div className="text-xs text-gray-600 font-mono">
+                          {companyTagline}
+                        </div>
+                      )}
+                      {(companyAddress || adminEmail) && (
+                        <div className="text-[11px] text-gray-500 font-mono mt-0.5">
+                          {[adminEmail ? `Email: ${adminEmail}` : '', companyAddress].filter(Boolean).join(' | ')}
+                        </div>
+                      )}
+                      {taxId && (
+                        <div className="text-[10px] text-gray-400 font-mono font-bold mt-0.5">
+                          {taxId}
+                        </div>
+                      )}
                     </div>
 
                     <div className="text-right font-mono">
@@ -777,18 +805,6 @@ ${quoteNotes}
                         <span>GRAND TOTAL:</span>
                         <span className="text-black">{currencySymbol} {grandTotal.toLocaleString()}</span>
                       </div>
-                    </div>
-                  </div>
-
-                  {/* Signatures Footer */}
-                  <div className="grid grid-cols-2 gap-8 pt-8 border-t border-gray-200 text-center font-mono text-[11px] text-gray-500">
-                    <div>
-                      <div className="border-b border-gray-400 w-3/4 mx-auto mb-2" />
-                      <span>Authorized Signature (ARH Print Hub)</span>
-                    </div>
-                    <div>
-                      <div className="border-b border-gray-400 w-3/4 mx-auto mb-2" />
-                      <span>Conforme & Date (Client Acceptance)</span>
                     </div>
                   </div>
                 </div>

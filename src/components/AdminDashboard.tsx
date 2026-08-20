@@ -4,10 +4,25 @@
  */
 
 import React, { useState } from 'react';
-import { Product, CompanyProfile, Order, SystemSettings, AppsScriptConfig, CatalogProduct, QuoteEnquiry, getDisplayPurchaserName } from '../types';
+import {
+  Product,
+  CompanyProfile,
+  Order,
+  SystemSettings,
+  AppsScriptConfig,
+  CatalogProduct,
+  QuoteEnquiry,
+  Job,
+  JobColumn,
+  JobItemColumn,
+  JobStatus,
+  getDisplayPurchaserName
+} from '../types';
 import AppsScriptInstructions from './AppsScriptInstructions';
 import SettingsPanel from './SettingsPanel';
 import AdminProductCatalog from './AdminProductCatalog';
+import JobManagementBoard from './JobManagementBoard';
+import { createJobFromOrder } from '../data/initialJobs';
 import {
   ResponsiveContainer,
   BarChart as RechartsBarChart,
@@ -59,16 +74,26 @@ import {
   ExternalLink,
   MapPin,
   Receipt,
-  Printer
+  Printer,
+  Calculator,
+  ChevronLeft,
+  ChevronRight,
+  Menu,
+  LogOut,
+  Kanban
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ClientDashboardModal from './ClientDashboardModal';
 import ReceiptGenerator from './ReceiptGenerator';
+import QuoteBuilder from './QuoteBuilder';
 
 interface AdminDashboardProps {
   products: Product[];
   companies: CompanyProfile[];
   orders: Order[];
+  jobs?: Job[];
+  jobColumns?: JobColumn[];
+  jobItemColumns?: JobItemColumn[];
   catalogProducts?: CatalogProduct[];
   quoteEnquiries?: QuoteEnquiry[];
   onAddCatalogProduct?: (product: CatalogProduct) => void;
@@ -83,6 +108,13 @@ interface AdminDashboardProps {
   onDeleteCompany: (companyId: string) => void;
   onUpdateProducts: (products: Product[]) => void;
   onUpdateOrders: (orders: Order[]) => void;
+  onSaveJob?: (job: Job) => void;
+  onUpdateJobStatus?: (jobId: string, status: JobStatus) => void;
+  onDeleteJob?: (jobId: string) => void;
+  onSaveJobsBatch?: (jobs: Job[]) => void;
+  onSaveJobColumns?: (columns: JobColumn[]) => void;
+  onSaveJobItemColumns?: (columns: JobItemColumn[]) => void;
+  onCreateJobFromOrder?: (order: Order) => void;
   onSimulateClient: (companyId: string) => void;
   systemSettings: SystemSettings;
   onUpdateSystemSettings: (settings: SystemSettings) => void;
@@ -91,17 +123,24 @@ interface AdminDashboardProps {
   onForceSyncAll: () => Promise<boolean>;
   onPullFromSheets?: () => Promise<void>;
   isSyncingSheets?: boolean;
-  initialTab?: 'clients' | 'catalog' | 'orders' | 'analytics' | 'receipt' | 'settings' | 'sync';
+  initialTab?: 'jobs' | 'clients' | 'catalog' | 'orders' | 'analytics' | 'receipt' | 'quotes' | 'settings' | 'sync';
   initialCatalogSection?: 'catalog' | 'enquiries';
   highlightEnquiryNumber?: string;
   highlightOrderNumber?: string;
   highlightOrderId?: string;
+  highlightJobId?: string;
+  isMobileNavOpen?: boolean;
+  onToggleMobileNav?: (open?: boolean) => void;
+  onLogout?: () => void;
 }
 
 export default function AdminDashboard({
   products,
   companies,
   orders,
+  jobs = [],
+  jobColumns = [],
+  jobItemColumns = [],
   catalogProducts = [],
   quoteEnquiries = [],
   onAddCatalogProduct = () => {},
@@ -116,6 +155,13 @@ export default function AdminDashboard({
   onDeleteCompany,
   onUpdateProducts,
   onUpdateOrders,
+  onSaveJob,
+  onUpdateJobStatus,
+  onDeleteJob,
+  onSaveJobsBatch,
+  onSaveJobColumns,
+  onSaveJobItemColumns,
+  onCreateJobFromOrder,
   onSimulateClient,
   systemSettings,
   onUpdateSystemSettings,
@@ -128,15 +174,45 @@ export default function AdminDashboard({
   initialCatalogSection,
   highlightEnquiryNumber,
   highlightOrderNumber,
-  highlightOrderId
+  highlightOrderId,
+  highlightJobId,
+  isMobileNavOpen,
+  onToggleMobileNav,
+  onLogout
 }: AdminDashboardProps) {
-  const [adminTab, setAdminTab] = useState<'clients' | 'catalog' | 'orders' | 'analytics' | 'receipt' | 'settings' | 'sync'>(initialTab || 'clients');
+  const [adminTab, setAdminTab] = useState<'jobs' | 'clients' | 'catalog' | 'orders' | 'analytics' | 'receipt' | 'quotes' | 'settings' | 'sync'>(initialTab || 'jobs');
+
+  const [internalDrawerOpen, setInternalDrawerOpen] = useState(false);
+  const isDrawerOpen = isMobileNavOpen !== undefined ? isMobileNavOpen : internalDrawerOpen;
+  const setDrawerOpen = (open: boolean) => {
+    if (onToggleMobileNav) {
+      onToggleMobileNav(open);
+    }
+    setInternalDrawerOpen(open);
+  };
+
+  // Close drawer on Escape key
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isDrawerOpen) {
+        setDrawerOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isDrawerOpen]);
 
   React.useEffect(() => {
     if (initialTab) {
       setAdminTab(initialTab);
     }
   }, [initialTab]);
+
+  React.useEffect(() => {
+    if (highlightJobId) {
+      setAdminTab('jobs');
+    }
+  }, [highlightJobId]);
 
   React.useEffect(() => {
     if (highlightOrderNumber || highlightOrderId) {
@@ -161,6 +237,7 @@ export default function AdminDashboard({
   }, [highlightOrderNumber, highlightOrderId, orders]);
 
   // Admin Settings Tab state
+  const isSettingsDirtyRef = React.useRef(false);
   const [adminUser, setAdminUser] = useState(() => systemSettings.adminUsername || 'admin');
   const [adminPass, setAdminPass] = useState(() => systemSettings.adminPasscode || 'admin123');
   const [hubName, setHubName] = useState(systemSettings.hubName);
@@ -170,20 +247,34 @@ export default function AdminDashboard({
   const [colorTheme, setColorTheme] = useState(systemSettings.colorTheme || 'classic_noir');
   const [adminEmail, setAdminEmail] = useState(systemSettings.adminEmail || '');
   const [appLogoUrl, setAppLogoUrl] = useState(systemSettings.logoUrl || '');
+  const [appFaviconUrl, setAppFaviconUrl] = useState(systemSettings.faviconUrl || '');
+  const [companyTagline, setCompanyTagline] = useState(systemSettings.companyTagline ?? '');
+  const [companyAddress, setCompanyAddress] = useState(systemSettings.companyAddress ?? '');
+  const [taxId, setTaxId] = useState(systemSettings.taxId ?? '');
   const [settingsSuccessMsg, setSettingsSuccessMsg] = useState('');
+
+  const onSettingsInputChange = <T,>(setter: React.Dispatch<React.SetStateAction<T>>, val: T) => {
+    isSettingsDirtyRef.current = true;
+    setter(val);
+  };
 
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
     setSettingsSuccessMsg('');
+    isSettingsDirtyRef.current = false;
 
     onUpdateSystemSettings({
       hubName: hubName.trim(),
       shortHubName: shortHubName.trim(),
+      companyTagline: companyTagline.trim(),
+      companyAddress: companyAddress.trim(),
+      taxId: taxId.trim(),
       orderPrefix: orderPrefix.trim(),
       currencySymbol: currencySymbol.trim(),
       colorTheme: colorTheme,
       adminEmail: adminEmail.trim(),
       logoUrl: appLogoUrl.trim(),
+      faviconUrl: appFaviconUrl.trim(),
       adminUsername: adminUser.trim(),
       adminPasscode: adminPass.trim()
     });
@@ -193,20 +284,26 @@ export default function AdminDashboard({
   };
 
   React.useEffect(() => {
-    setHubName(systemSettings.hubName);
-    setShortHubName(systemSettings.shortHubName);
-    setOrderPrefix(systemSettings.orderPrefix);
-    setCurrencySymbol(systemSettings.currencySymbol);
-    if (systemSettings.colorTheme) {
-      setColorTheme(systemSettings.colorTheme);
-    }
-    setAdminEmail(systemSettings.adminEmail || '');
-    setAppLogoUrl(systemSettings.logoUrl || '');
-    if (systemSettings.adminUsername) {
-      setAdminUser(systemSettings.adminUsername);
-    }
-    if (systemSettings.adminPasscode) {
-      setAdminPass(systemSettings.adminPasscode);
+    if (!isSettingsDirtyRef.current) {
+      setHubName(systemSettings.hubName);
+      setShortHubName(systemSettings.shortHubName);
+      setOrderPrefix(systemSettings.orderPrefix);
+      setCurrencySymbol(systemSettings.currencySymbol);
+      if (systemSettings.colorTheme) {
+        setColorTheme(systemSettings.colorTheme);
+      }
+      setAdminEmail(systemSettings.adminEmail || '');
+      setAppLogoUrl(systemSettings.logoUrl || '');
+      setAppFaviconUrl(systemSettings.faviconUrl || '');
+      setCompanyTagline(systemSettings.companyTagline ?? '');
+      setCompanyAddress(systemSettings.companyAddress ?? '');
+      setTaxId(systemSettings.taxId ?? '');
+      if (systemSettings.adminUsername) {
+        setAdminUser(systemSettings.adminUsername);
+      }
+      if (systemSettings.adminPasscode) {
+        setAdminPass(systemSettings.adminPasscode);
+      }
     }
   }, [systemSettings]);
   
@@ -608,47 +705,164 @@ export default function AdminDashboard({
       p.category.toLowerCase().includes(productSearch.toLowerCase())
   );
 
+  const navItems = [
+    { id: 'jobs', label: 'Job Management', icon: Kanban, count: jobs.length },
+    { id: 'clients', label: 'Client Accounts', icon: Users, count: companies.length },
+    { id: 'catalog', label: 'ARH Products', icon: Layers, count: catalogProducts.length },
+    { id: 'orders', label: 'Orders', icon: ClipboardList, count: directCompanyOrders.length },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3, count: null },
+    { id: 'receipt', label: 'Receipt Generator', icon: Receipt, count: null },
+    { id: 'quotes', label: 'Quote Builder', icon: Calculator, count: null },
+    { id: 'settings', label: 'Admin Settings', icon: Settings, count: null },
+    { id: 'sync', label: 'Google Sheet Sync', icon: FileSpreadsheet, count: null }
+  ];
+
   return (
-    <div className="space-y-8 animate-fade-in">
-      {/* Admin Subtabs */}
-      <div className="flex border-b border-gray-200 overflow-x-auto custom-scrollbar pb-2 pt-1">
-        {[
-          { id: 'clients', label: 'Client Accounts', icon: Users, count: companies.length },
-          { id: 'catalog', label: 'ARH Products', icon: Layers, count: catalogProducts.length },
-          { id: 'orders', label: 'Orders', icon: ClipboardList, count: directCompanyOrders.length },
-          { id: 'analytics', label: 'Analytics', icon: BarChart3, count: null },
-          { id: 'receipt', label: 'Receipt Generator', icon: Receipt, count: null },
-          { id: 'settings', label: 'Admin Settings', icon: Settings, count: null },
-          { id: 'sync', label: 'Google Sheet Sync', icon: FileSpreadsheet, count: null }
-        ].map((subtab) => {
-          const Icon = subtab.icon;
-          const isActive = adminTab === subtab.id;
-          return (
-            <button
-              key={subtab.id}
-              onClick={() => {
-                setAdminTab(subtab.id as any);
-                setShowClientForm(false);
-                setShowProductForm(false);
-              }}
-              className={`flex items-center space-x-2 py-3 px-4 font-sans text-xs uppercase tracking-wider font-bold transition-all border-b-2 whitespace-nowrap focus:outline-none cursor-pointer ${
-                isActive
-                  ? 'border-black text-black'
-                  : 'border-transparent text-gray-400 hover:text-black hover:border-gray-200'
-              }`}
-              id={`admin-tab-btn-${subtab.id}`}
+    <div className="w-full relative animate-fade-in" id="admin-workspace-layout">
+      {/* 1. Slide-in Navigation Drawer & Backdrop (All Screen Sizes) */}
+      <AnimatePresence>
+        {isDrawerOpen && (
+          <div className="fixed inset-0 z-50 flex" id="admin-nav-drawer-root">
+            {/* Dimmed Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.6 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+              onClick={() => setDrawerOpen(false)}
+              aria-hidden="true"
+            />
+
+            {/* Slide-in Drawer */}
+            <motion.div
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="relative w-80 max-w-[85vw] bg-white border-r-2 border-black h-full flex flex-col p-5 shadow-2xl z-10 justify-between overflow-y-auto"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Admin Navigation Menu"
             >
-              <Icon className="w-4 h-4" />
-              <span>{subtab.label}</span>
-              {subtab.count !== null && (
-                <span className="bg-gray-100 text-gray-600 font-mono text-[9px] px-1.5 py-0.5 rounded-full font-bold ml-1 border border-gray-200">
-                  {subtab.count}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+              <div>
+                {/* Drawer Header */}
+                <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-4">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="bg-black text-white p-2 rounded-xl font-mono font-bold text-xs flex items-center justify-center">
+                      ARH
+                    </div>
+                    <div>
+                      <span className="text-xs font-extrabold uppercase text-black block leading-none">Admin Menu</span>
+                      <span className="text-[10px] font-mono text-gray-400">Navigation Hub</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDrawerOpen(false)}
+                    className="p-2.5 rounded-xl text-gray-400 hover:text-black hover:bg-gray-100 transition-all cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center border border-gray-200"
+                    aria-label="Close navigation menu"
+                    id="close-admin-nav-drawer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Drawer Nav Items */}
+                <nav className="space-y-2" role="navigation" aria-label="Admin Navigation Sections">
+                  {navItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = adminTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          setAdminTab(item.id as any);
+                          setShowClientForm(false);
+                          setShowProductForm(false);
+                          setDrawerOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl font-sans text-xs uppercase tracking-wider font-bold transition-all min-h-[44px] cursor-pointer ${
+                          isActive
+                            ? 'bg-black text-white shadow-xs'
+                            : 'text-gray-700 hover:text-black hover:bg-gray-100'
+                        }`}
+                        aria-current={isActive ? 'page' : undefined}
+                        id={`admin-nav-item-${item.id}`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <Icon className="w-4 h-4 shrink-0" />
+                          <span>{item.label}</span>
+                        </div>
+                        {item.count !== null && (
+                          <span
+                            className={`font-mono text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                              isActive
+                                ? 'bg-white/20 text-white border-white/20'
+                                : 'bg-gray-100 text-gray-700 border-gray-200'
+                            }`}
+                          >
+                            {item.count}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </nav>
+              </div>
+
+              {/* Drawer Bottom Section with Sign Out & Footer */}
+              <div className="pt-4 border-t border-gray-200 mt-auto space-y-3">
+                {onLogout && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDrawerOpen(false);
+                      onLogout();
+                    }}
+                    className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-2xl bg-black text-white hover:bg-gray-800 border border-black font-sans text-xs uppercase tracking-wider font-extrabold transition-all cursor-pointer shadow-xs active:scale-98"
+                    id="admin-sidebar-signout-btn"
+                  >
+                    <LogOut className="w-4 h-4 shrink-0" />
+                    <span>Sign Out</span>
+                  </button>
+                )}
+                <div className="text-center font-mono text-[10px] text-gray-400">
+                  {systemSettings?.hubName || 'ARH Print Hub'} Admin v2.0
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 2. Main Stage Content Area */}
+      <div className="w-full space-y-8 transition-all duration-300" id="admin-main-stage">
+      {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
+      {/* JOB MANAGEMENT / PRODUCTION BOARD PANEL */}
+      {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
+      {adminTab === 'jobs' && (
+        <JobManagementBoard
+          jobs={jobs}
+          jobColumns={jobColumns}
+          jobItemColumns={jobItemColumns}
+          companies={companies}
+          orders={orders}
+          onSaveJob={onSaveJob || (() => {})}
+          onUpdateJobStatus={onUpdateJobStatus || (() => {})}
+          onDeleteJob={onDeleteJob || (() => {})}
+          onSaveJobsBatch={onSaveJobsBatch}
+          onSaveJobColumns={onSaveJobColumns}
+          onSaveJobItemColumns={onSaveJobItemColumns}
+          onSelectOrder={(ord) => {
+            setAdminTab('orders');
+            setSelectedOrder(ord);
+          }}
+          currencySymbol={currencySymbol}
+          highlightJobId={highlightJobId}
+        />
+      )}
 
       {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
       {/* PRODUCT CATALOG PANEL */}
@@ -667,6 +881,12 @@ export default function AdminDashboard({
           currencySymbol={currencySymbol}
           initialSection={initialCatalogSection}
           highlightEnquiryNumber={highlightEnquiryNumber}
+          hubName={hubName}
+          appLogoUrl={appLogoUrl}
+          adminEmail={adminEmail}
+          companyTagline={companyTagline}
+          companyAddress={companyAddress}
+          taxId={taxId}
         />
       )}
 
@@ -880,7 +1100,7 @@ export default function AdminDashboard({
                     id={`client-card-${co.id}`}
                   >
                     <div className="space-y-3">
-                      {/* Logo and credentials header */}
+                      {/* Logo header */}
                       <div className="flex items-start justify-between">
                         {co.logoUrl ? (
                           <img
@@ -894,10 +1114,6 @@ export default function AdminDashboard({
                             {co.name.substring(0, 2)}
                           </div>
                         )}
-                        <span className="text-[9px] bg-gray-50 text-gray-600 px-2 py-1 rounded-md font-mono font-bold border border-gray-100 flex items-center gap-1">
-                          <Key className="w-3 h-3 text-gray-400" />
-                          {co.username} : {co.passcode}
-                        </span>
                       </div>
 
                       <div className="space-y-1">
@@ -1284,6 +1500,51 @@ export default function AdminDashboard({
                             )}
                           </div>
 
+                          {/* Linked Production Job indicator */}
+                          {(() => {
+                            const linkedJob = jobs.find(j => j.orderId === ord.id || (j.orderNumber && ord.orderNumber && j.orderNumber === ord.orderNumber));
+                            if (linkedJob) {
+                              return (
+                                <div className="flex items-center justify-between bg-neutral-50 border border-neutral-200 rounded-lg px-2 py-1 text-[9px] font-mono">
+                                  <span className="text-gray-500 font-bold">
+                                    Job: <strong className="text-black">{linkedJob.id}</strong>
+                                    <span className="ml-1 text-[8px] px-1 py-0.2 rounded bg-neutral-200 text-neutral-800">{linkedJob.status}</span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setAdminTab('jobs');
+                                    }}
+                                    className="text-black font-extrabold hover:underline inline-flex items-center gap-0.5 cursor-pointer text-[9px]"
+                                    title="View this job in Job Management Board"
+                                  >
+                                    <span>View Job</span>
+                                    <ArrowRight className="w-2.5 h-2.5" />
+                                  </button>
+                                </div>
+                              );
+                            }
+                            return (
+                              <div className="flex items-center justify-between bg-gray-50/70 border border-dashed border-gray-200 rounded-lg px-2 py-1 text-[9px] font-mono">
+                                <span className="text-gray-400">No Job Created</span>
+                                {onCreateJobFromOrder && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onCreateJobFromOrder(ord);
+                                    }}
+                                    className="bg-black hover:bg-neutral-800 text-white font-bold px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider cursor-pointer"
+                                    title="Create Production Job from this Order"
+                                  >
+                                    + Create Job
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
+
                           {/* Order items count & Billing total */}
                           <div className="flex justify-between items-center border-t border-dashed border-gray-100 pt-2 text-xs font-mono">
                             <span className="text-[9px] text-gray-400 font-bold">{ord.items.length} line-item(s)</span>
@@ -1659,7 +1920,7 @@ export default function AdminDashboard({
                   <input
                     type="text"
                     value={hubName}
-                    onChange={(e) => setHubName(e.target.value)}
+                    onChange={(e) => onSettingsInputChange(setHubName, e.target.value)}
                     required
                     placeholder="e.g. ARH Print Hub"
                     className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-semibold text-black focus:outline-none"
@@ -1670,22 +1931,77 @@ export default function AdminDashboard({
                   <input
                     type="text"
                     value={shortHubName}
-                    onChange={(e) => setShortHubName(e.target.value)}
+                    onChange={(e) => onSettingsInputChange(setShortHubName, e.target.value)}
                     required
                     placeholder="e.g. ARH"
                     maxLength={5}
                     className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-semibold text-black focus:outline-none"
                   />
                 </div>
-                 <div className="space-y-1 md:col-span-2">
-                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Portal Main Logo URL (URL, base64, or attach below)</label>
+
+                <div className="space-y-1 md:col-span-2">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Company Tagline / Sub-header</label>
                   <input
                     type="text"
-                    value={appLogoUrl}
-                    onChange={(e) => setAppLogoUrl(e.target.value)}
-                    placeholder="https://images.unsplash.com/... or a direct image web link"
-                    className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-mono font-semibold text-black focus:outline-none"
+                    value={companyTagline}
+                    onChange={(e) => onSettingsInputChange(setCompanyTagline, e.target.value)}
+                    placeholder="e.g. Corporate Apparel & Custom Merchandise Solutions"
+                    className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-semibold text-black focus:outline-none"
                   />
+                  <p className="text-[9px] text-gray-400 font-mono">
+                    Displayed directly beneath your company name on quotes, receipts, and invoices.
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Company Address / Location</label>
+                  <input
+                    type="text"
+                    value={companyAddress}
+                    onChange={(e) => onSettingsInputChange(setCompanyAddress, e.target.value)}
+                    placeholder="e.g. Manila, Philippines"
+                    className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-semibold text-black focus:outline-none"
+                  />
+                  <p className="text-[9px] text-gray-400 font-mono">
+                    Official business address for documents and billing.
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Tax / TIN ID</label>
+                  <input
+                    type="text"
+                    value={taxId}
+                    onChange={(e) => onSettingsInputChange(setTaxId, e.target.value)}
+                    placeholder="e.g. TIN: 009-876-543-000"
+                    className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-semibold text-black focus:outline-none font-mono"
+                  />
+                  <p className="text-[9px] text-gray-400 font-mono">
+                    Official Tax Identification Number for official receipts and quotations.
+                  </p>
+                </div>
+
+                 <div className="space-y-1 md:col-span-2">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Portal Main Logo URL (URL, base64, or attach below)</label>
+                  <div className="flex items-center gap-2">
+                    {appLogoUrl && (
+                      <div className="w-9 h-9 rounded-lg border border-gray-200 bg-white flex items-center justify-center p-1 shrink-0 overflow-hidden shadow-2xs">
+                        <img
+                          src={appLogoUrl}
+                          alt="Logo Preview"
+                          className="w-full h-full object-contain"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    )}
+                    <input
+                      type="text"
+                      value={appLogoUrl}
+                      onChange={(e) => onSettingsInputChange(setAppLogoUrl, e.target.value)}
+                      placeholder="https://images.unsplash.com/... or a direct image web link"
+                      className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-mono font-semibold text-black focus:outline-none"
+                    />
+                  </div>
                   <div className="flex items-center gap-2 mt-1.5">
                     <label className="cursor-pointer bg-neutral-900 text-white hover:bg-neutral-800 rounded-lg px-2.5 py-1.5 text-[10px] font-mono uppercase font-bold tracking-wider inline-flex items-center gap-1.5 transition-colors shrink-0">
                       <Paperclip className="w-3 h-3" />
@@ -1700,7 +2016,7 @@ export default function AdminDashboard({
                             const reader = new FileReader();
                             reader.onloadend = () => {
                               const base64String = reader.result as string;
-                              setAppLogoUrl(base64String);
+                              onSettingsInputChange(setAppLogoUrl, base64String);
                             };
                             reader.readAsDataURL(file);
                           }
@@ -1709,6 +2025,54 @@ export default function AdminDashboard({
                     </label>
                     <span className="text-[9px] text-gray-500 font-mono truncate">
                       Convert local image file to offline logo.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-1 md:col-span-2">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Portal Favicon URL (Browser Tab Icon, base64, or attach below)</label>
+                  <div className="flex items-center gap-2">
+                    {appFaviconUrl && (
+                      <div className="w-9 h-9 rounded-lg border border-gray-200 bg-white flex items-center justify-center p-1 shrink-0 overflow-hidden shadow-2xs">
+                        <img
+                          src={appFaviconUrl}
+                          alt="Favicon Preview"
+                          className="w-full h-full object-contain"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    )}
+                    <input
+                      type="text"
+                      value={appFaviconUrl}
+                      onChange={(e) => onSettingsInputChange(setAppFaviconUrl, e.target.value)}
+                      placeholder="https://... or .ico / .png / image URL for browser tab icon"
+                      className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-mono font-semibold text-black focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <label className="cursor-pointer bg-neutral-900 text-white hover:bg-neutral-800 rounded-lg px-2.5 py-1.5 text-[10px] font-mono uppercase font-bold tracking-wider inline-flex items-center gap-1.5 transition-colors shrink-0">
+                      <Paperclip className="w-3 h-3" />
+                      <span>Attach Favicon File</span>
+                      <input
+                        type="file"
+                        accept="image/png,image/x-icon,image/svg+xml,image/jpeg,image/webp,image/*,.ico"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              const base64String = reader.result as string;
+                              onSettingsInputChange(setAppFaviconUrl, base64String);
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                    <span className="text-[9px] text-gray-500 font-mono truncate">
+                      Sets the browser tab icon across all devices (PNG, ICO, SVG, JPG). Saved to Google Sheets.
                     </span>
                   </div>
                 </div>
@@ -1726,7 +2090,7 @@ export default function AdminDashboard({
                   <input
                     type="text"
                     value={orderPrefix}
-                    onChange={(e) => setOrderPrefix(e.target.value)}
+                    onChange={(e) => onSettingsInputChange(setOrderPrefix, e.target.value)}
                     required
                     placeholder="e.g. ARH-2026"
                     className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-semibold text-black focus:outline-none"
@@ -1737,7 +2101,7 @@ export default function AdminDashboard({
                   <input
                     type="text"
                     value={currencySymbol}
-                    onChange={(e) => setCurrencySymbol(e.target.value)}
+                    onChange={(e) => onSettingsInputChange(setCurrencySymbol, e.target.value)}
                     required
                     placeholder="e.g. Php"
                     className="w-full bg-white border border-gray-200 focus:border-black rounded-lg px-3 py-2 text-xs font-semibold text-black focus:outline-none"
@@ -1759,7 +2123,7 @@ export default function AdminDashboard({
                       <input
                         type="color"
                         value={colorTheme.startsWith('#') ? colorTheme : '#000000'}
-                        onChange={(e) => setColorTheme(e.target.value)}
+                        onChange={(e) => onSettingsInputChange(setColorTheme, e.target.value)}
                         className="absolute inset-0 w-[200%] h-[200%] -translate-x-1/4 -translate-y-1/4 cursor-pointer"
                         title="Click to choose a color"
                       />
@@ -1769,7 +2133,7 @@ export default function AdminDashboard({
                       <input
                         type="text"
                         value={colorTheme}
-                        onChange={(e) => setColorTheme(e.target.value)}
+                        onChange={(e) => onSettingsInputChange(setColorTheme, e.target.value)}
                         placeholder="#000000"
                         required
                         className="w-32 bg-white border border-gray-200 focus:border-black rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-black uppercase focus:outline-none"
@@ -1801,7 +2165,7 @@ export default function AdminDashboard({
                       <button
                         key={themeOpt.id}
                         type="button"
-                        onClick={() => setColorTheme(themeOpt.id)}
+                        onClick={() => onSettingsInputChange(setColorTheme, themeOpt.id)}
                         className={`flex items-center gap-2 p-2 border rounded-xl text-left cursor-pointer transition-all ${
                           colorTheme.toLowerCase() === themeOpt.id.toLowerCase()
                             ? 'border-black ring-1 ring-black bg-white font-extrabold'
@@ -1830,7 +2194,7 @@ export default function AdminDashboard({
                   <input
                     type="email"
                     value={adminEmail}
-                    onChange={(e) => setAdminEmail(e.target.value)}
+                    onChange={(e) => onSettingsInputChange(setAdminEmail, e.target.value)}
                     placeholder="e.g. admin@yourdomain.com"
                     className="w-full bg-white border border-gray-200 focus:border-black rounded-lg pl-9 pr-3 py-2 text-xs font-semibold text-black focus:outline-none font-mono"
                   />
@@ -1854,7 +2218,7 @@ export default function AdminDashboard({
                     <input
                       type="text"
                       value={adminUser}
-                      onChange={(e) => setAdminUser(e.target.value)}
+                      onChange={(e) => onSettingsInputChange(setAdminUser, e.target.value)}
                       required
                       className="w-full bg-white border border-gray-200 focus:border-black rounded-lg pl-9 pr-3 py-2 text-xs font-semibold text-black focus:outline-none font-mono"
                     />
@@ -1867,7 +2231,7 @@ export default function AdminDashboard({
                     <input
                       type="text"
                       value={adminPass}
-                      onChange={(e) => setAdminPass(e.target.value)}
+                      onChange={(e) => onSettingsInputChange(setAdminPass, e.target.value)}
                       required
                       className="w-full bg-white border border-gray-200 focus:border-black rounded-lg pl-9 pr-3 py-2 text-xs font-semibold text-black focus:outline-none font-mono"
                     />
@@ -1898,6 +2262,27 @@ export default function AdminDashboard({
           currencySymbol={currencySymbol}
           appLogoUrl={appLogoUrl}
           adminEmail={adminEmail}
+          companyTagline={companyTagline}
+          companyAddress={companyAddress}
+          taxId={taxId}
+        />
+      )}
+
+      {/* Quote Builder Tab */}
+      {adminTab === 'quotes' && (
+        <QuoteBuilder
+          companies={companies}
+          products={products}
+          catalogProducts={catalogProducts}
+          quoteEnquiries={quoteEnquiries}
+          hubName={hubName}
+          currencySymbol={currencySymbol}
+          appLogoUrl={appLogoUrl}
+          adminEmail={adminEmail}
+          companyTagline={companyTagline}
+          companyAddress={companyAddress}
+          taxId={taxId}
+          onSaveQuoteEnquiry={onSaveQuoteEnquiry}
         />
       )}
 
@@ -1918,6 +2303,7 @@ export default function AdminDashboard({
           />
         </div>
       )}
+      </div>
 
       {/* Full Order Details Modal */}
       <AnimatePresence>
@@ -2044,6 +2430,64 @@ export default function AdminDashboard({
                   <p className="text-gray-700 leading-relaxed italic">"{selectedOrder.notes}"</p>
                 </div>
               )}
+
+              {/* Production Job Card */}
+              {(() => {
+                const linkedJob = jobs.find(j => j.orderId === selectedOrder.id || (j.orderNumber && selectedOrder.orderNumber && j.orderNumber === selectedOrder.orderNumber));
+                if (linkedJob) {
+                  return (
+                    <div className="bg-neutral-50 border border-neutral-200 rounded-2xl p-4 text-xs font-mono space-y-2 text-left">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] uppercase tracking-wider text-gray-500 font-bold block">Linked Production Job</span>
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-black text-white">
+                          {linkedJob.status}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <div className="text-sm font-extrabold text-black">{linkedJob.id} - {linkedJob.values['col-job-name'] || 'Production Job'}</div>
+                          <div className="text-[10px] text-gray-500 mt-0.5">
+                            Due: <strong className="text-neutral-900">{linkedJob.values['col-in-hand-date'] ? new Date(linkedJob.values['col-in-hand-date']).toLocaleDateString() : 'No date'}</strong> | Sub-Items: <strong className="text-neutral-900">{(linkedJob.items || []).length}</strong>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedOrder(null);
+                            setAdminTab('jobs');
+                          }}
+                          className="bg-black hover:bg-neutral-800 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
+                          id="btn-open-linked-job"
+                        >
+                          <span>Open in Production Board</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="bg-gray-50 border border-dashed border-gray-200 rounded-2xl p-4 text-xs font-mono flex items-center justify-between gap-4 text-left">
+                    <div>
+                      <span className="text-[9px] uppercase tracking-wider text-gray-400 font-bold block">Production Pipeline</span>
+                      <p className="text-gray-600 text-xs">No linked production job has been created yet for this order.</p>
+                    </div>
+                    {onCreateJobFromOrder && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onCreateJobFromOrder(selectedOrder);
+                        }}
+                        className="bg-black hover:bg-neutral-800 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs"
+                        id="btn-create-linked-job"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Create Production Job</span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Order Line Items */}
               <div className="space-y-3">

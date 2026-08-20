@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product, CartItem } from '../types';
 import { getItemColorImage } from '../utils/colorUtils';
+import { getProductUnitPrice } from '../utils/pricing';
 import { Check, ShoppingCart, Info, AlertTriangle, ArrowRight } from 'lucide-react';
 
 interface QuickReorderProps {
@@ -78,12 +79,15 @@ export default function QuickReorder({ products, onAddToCart }: QuickReorderProp
           });
         }
 
+        const unitPrice = getProductUnitPrice(p, size, color);
+
         itemsToAdd.push({
           product: p,
           quantity: qty,
           selectedSize: size,
           selectedColor: color,
-          customDetails: defaultCustoms
+          customDetails: defaultCustoms,
+          unitPrice
         });
       }
     });
@@ -284,8 +288,15 @@ export default function QuickReorder({ products, onAddToCart }: QuickReorderProp
                 <div className="col-span-1 md:col-span-1 text-right flex justify-between md:block">
                   <span className="text-[10px] text-gray-400 uppercase font-mono md:hidden">Item Cost:</span>
                   <div className="font-mono text-xs">
-                    <span className="text-black font-bold">Php {(product.basePrice * currentQty).toFixed(2)}</span>
-                    <span className="text-[9px] text-gray-400 block">Php {product.basePrice.toFixed(2)}/u</span>
+                    {(() => {
+                      const itemUnitPrice = getProductUnitPrice(product, selectedSizes[product.id], selectedColors[product.id]);
+                      return (
+                        <>
+                          <span className="text-black font-bold">Php {(itemUnitPrice * currentQty).toFixed(2)}</span>
+                          <span className="text-[9px] text-gray-400 block">Php {itemUnitPrice.toFixed(2)}/u</span>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

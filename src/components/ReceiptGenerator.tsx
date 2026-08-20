@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Order, CompanyProfile } from '../types';
+import { printElement } from '../utils/printUtils';
 import {
   Printer,
   Plus,
@@ -40,6 +41,9 @@ export interface ReceiptGeneratorProps {
   currencySymbol: string;
   appLogoUrl?: string;
   adminEmail?: string;
+  companyTagline?: string;
+  companyAddress?: string;
+  taxId?: string;
 }
 
 export const ReceiptGenerator: React.FC<ReceiptGeneratorProps> = ({
@@ -49,18 +53,37 @@ export const ReceiptGenerator: React.FC<ReceiptGeneratorProps> = ({
   currencySymbol,
   appLogoUrl,
   adminEmail,
+  companyTagline,
+  companyAddress,
+  taxId,
 }) => {
   // Selected order to load from
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
+  const receiptPrintableRef = useRef<HTMLDivElement>(null);
 
-  // Receipt customization fields
+  // Receipt customization fields (Populated from Admin Settings)
+  const isHeaderDirtyRef = useRef(false);
   const [receiptType, setReceiptType] = useState<string>('OFFICIAL RECEIPT');
   const [businessName, setBusinessName] = useState<string>(hubName || 'ARH PRINT HUB');
-  const [businessSub, setBusinessSub] = useState<string>('Corporate Apparel & Custom Merchandise Solutions');
-  const [businessAddress, setBusinessAddress] = useState<string>('Manila, Philippines');
+  const [businessSub, setBusinessSub] = useState<string>(companyTagline ?? '');
+  const [businessAddress, setBusinessAddress] = useState<string>(companyAddress ?? '');
   const [businessContact, setBusinessContact] = useState<string>(adminEmail ? `${adminEmail} | +63 912 345 6789` : 'support@arhprinthub.com | +63 912 345 6789');
-  const [tinNumber, setTinNumber] = useState<string>('TIN: 009-876-543-000');
+  const [tinNumber, setTinNumber] = useState<string>(taxId ?? '');
   const [showLogo, setShowLogo] = useState<boolean>(true);
+
+  // Sync with Admin Settings on external update only if not modified locally
+  const prevSettingsRef = useRef({ hubName, companyTagline, companyAddress, taxId, adminEmail });
+  useEffect(() => {
+    const prev = prevSettingsRef.current;
+    if (!isHeaderDirtyRef.current) {
+      if (hubName !== undefined && hubName !== '' && hubName !== prev.hubName) setBusinessName(hubName);
+      if (companyTagline !== undefined && companyTagline !== prev.companyTagline) setBusinessSub(companyTagline);
+      if (companyAddress !== undefined && companyAddress !== prev.companyAddress) setBusinessAddress(companyAddress);
+      if (taxId !== undefined && taxId !== prev.taxId) setTinNumber(taxId);
+      if (adminEmail !== undefined && adminEmail !== '' && adminEmail !== prev.adminEmail) setBusinessContact(`${adminEmail} | +63 912 345 6789`);
+    }
+    prevSettingsRef.current = { hubName, companyTagline, companyAddress, taxId, adminEmail };
+  }, [hubName, companyTagline, companyAddress, taxId, adminEmail]);
 
   // Receipt Reference
   const [receiptNumber, setReceiptNumber] = useState<string>(`REC-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`);
@@ -87,8 +110,8 @@ export const ReceiptGenerator: React.FC<ReceiptGeneratorProps> = ({
   const [taxRate, setTaxRate] = useState<number>(0); // e.g. 12%
 
   // Footer & Signatures
-  const [notes, setNotes] = useState<string>('Thank you for choosing ARH Print Hub! Items delivered in good condition.');
-  const [signatoryName, setSignatoryName] = useState<string>('Authorized Manager');
+  const [notes, setNotes] = useState<string>('');
+  const [signatoryName, setSignatoryName] = useState<string>('');
   const [showSignatureLine, setShowSignatureLine] = useState<boolean>(true);
 
   // Update businessName if hubName prop changes initially
@@ -180,10 +203,10 @@ export const ReceiptGenerator: React.FC<ReceiptGeneratorProps> = ({
       ...prev,
       {
         id: `item-${Date.now()}`,
-        name: 'New Custom Merchandise',
-        details: 'Custom Specifications',
+        name: '',
+        details: '',
         quantity: 1,
-        unitPrice: 100.00
+        unitPrice: 0
       }
     ]);
   };
@@ -214,6 +237,8 @@ export const ReceiptGenerator: React.FC<ReceiptGeneratorProps> = ({
     setDeliveryAddress('');
     setPaymentMethod('Bank Transfer / GCash');
     setPaymentStatus('PAID');
+    setNotes('');
+    setSignatoryName('');
     setShippingFee(0);
     setDiscountAmount(0);
     setTaxRate(0);
@@ -227,7 +252,7 @@ export const ReceiptGenerator: React.FC<ReceiptGeneratorProps> = ({
 
   // Trigger print
   const handlePrint = () => {
-    window.print();
+    printElement(receiptPrintableRef.current, `Receipt_${receiptNumber}_${(customerName || 'Client').replace(/[^a-zA-Z0-9_-]/g, '_')}`);
   };
 
   return (
@@ -329,7 +354,10 @@ export const ReceiptGenerator: React.FC<ReceiptGeneratorProps> = ({
                 <input
                   type="text"
                   value={businessName}
-                  onChange={(e) => setBusinessName(e.target.value)}
+                  onChange={(e) => {
+                    isHeaderDirtyRef.current = true;
+                    setBusinessName(e.target.value);
+                  }}
                   className="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-black focus:border-black focus:outline-none"
                 />
               </div>
@@ -339,7 +367,10 @@ export const ReceiptGenerator: React.FC<ReceiptGeneratorProps> = ({
                 <input
                   type="text"
                   value={businessSub}
-                  onChange={(e) => setBusinessSub(e.target.value)}
+                  onChange={(e) => {
+                    isHeaderDirtyRef.current = true;
+                    setBusinessSub(e.target.value);
+                  }}
                   className="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-black focus:border-black focus:outline-none"
                 />
               </div>
@@ -349,7 +380,10 @@ export const ReceiptGenerator: React.FC<ReceiptGeneratorProps> = ({
                 <input
                   type="text"
                   value={businessAddress}
-                  onChange={(e) => setBusinessAddress(e.target.value)}
+                  onChange={(e) => {
+                    isHeaderDirtyRef.current = true;
+                    setBusinessAddress(e.target.value);
+                  }}
                   className="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-black focus:border-black focus:outline-none"
                 />
               </div>
@@ -359,7 +393,10 @@ export const ReceiptGenerator: React.FC<ReceiptGeneratorProps> = ({
                 <input
                   type="text"
                   value={tinNumber}
-                  onChange={(e) => setTinNumber(e.target.value)}
+                  onChange={(e) => {
+                    isHeaderDirtyRef.current = true;
+                    setTinNumber(e.target.value);
+                  }}
                   className="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-black focus:border-black focus:outline-none"
                 />
               </div>
@@ -369,7 +406,10 @@ export const ReceiptGenerator: React.FC<ReceiptGeneratorProps> = ({
                 <input
                   type="text"
                   value={businessContact}
-                  onChange={(e) => setBusinessContact(e.target.value)}
+                  onChange={(e) => {
+                    isHeaderDirtyRef.current = true;
+                    setBusinessContact(e.target.value);
+                  }}
                   className="w-full bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-black focus:border-black focus:outline-none"
                 />
               </div>
@@ -702,7 +742,7 @@ export const ReceiptGenerator: React.FC<ReceiptGeneratorProps> = ({
           </div>
 
           {/* The Printable Area Container */}
-          <div className="printable-area bg-white border-2 border-black rounded-3xl p-8 md:p-10 shadow-xl space-y-8 text-black font-sans relative overflow-hidden" id="receipt-printable-canvas">
+          <div ref={receiptPrintableRef} className="printable-area bg-white border-2 border-black rounded-3xl p-8 md:p-10 shadow-xl space-y-8 text-black font-sans relative overflow-hidden" id="receipt-printable-canvas">
             
             {/* Top Header Section */}
             <div className="border-b-2 border-black pb-6 space-y-4">
@@ -720,12 +760,16 @@ export const ReceiptGenerator: React.FC<ReceiptGeneratorProps> = ({
                   <h1 className="text-2xl font-black uppercase tracking-tight text-black leading-tight">
                     {businessName}
                   </h1>
-                  <p className="text-xs text-gray-600 font-medium">
-                    {businessSub}
-                  </p>
-                  <p className="text-[11px] text-gray-500 font-mono">
-                    {businessAddress} • {businessContact}
-                  </p>
+                  {businessSub && (
+                    <p className="text-xs text-gray-600 font-medium">
+                      {businessSub}
+                    </p>
+                  )}
+                  {(businessAddress || businessContact) && (
+                    <p className="text-[11px] text-gray-500 font-mono">
+                      {[businessAddress, businessContact].filter(Boolean).join(' • ')}
+                    </p>
+                  )}
                   {tinNumber && (
                     <p className="text-[10px] text-gray-400 font-mono font-bold">
                       {tinNumber}

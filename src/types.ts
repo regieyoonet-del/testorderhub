@@ -92,6 +92,84 @@ export interface Order {
   notes?: string;
   portalId?: string;
   portalName?: string;
+  jobId?: string;
+}
+
+export type JobStatus = 'Pending' | 'Approved' | 'In Production' | 'Shipped' | 'Completed' | 'Canceled';
+
+export type JobSource = 'Company Order' | 'Manual';
+
+export type JobFieldType =
+  | 'text'
+  | 'long_text'
+  | 'number'
+  | 'currency'
+  | 'dropdown'
+  | 'status'
+  | 'date'
+  | 'person'
+  | 'company'
+  | 'link'
+  | 'checkbox';
+
+export interface JobColumn {
+  id: string;
+  name: string;
+  type: JobFieldType;
+  position: number;
+  required?: boolean;
+  isSystemField?: boolean;
+  isHidden?: boolean;
+  options?: string[];
+  createdDate?: string;
+}
+
+export interface JobItemColumn {
+  id: string;
+  name: string;
+  type: JobFieldType;
+  position: number;
+  required?: boolean;
+  isSystemField?: boolean;
+  isHidden?: boolean;
+  calculation?: 'total_qty' | 'total_amount' | string;
+  options?: string[];
+}
+
+export interface JobItem {
+  id: string;
+  jobId: string;
+  position: number;
+  values: Record<string, any>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface JobActivity {
+  id: string;
+  jobId: string;
+  user: string;
+  action: string;
+  oldValue?: string;
+  newValue?: string;
+  timestamp: string;
+}
+
+export interface Job {
+  id: string; // e.g. 'JOB-10452'
+  companyId?: string;
+  companyName?: string;
+  orderId?: string;
+  orderNumber?: string;
+  source: JobSource;
+  status: JobStatus;
+  position: number;
+  values: Record<string, any>;
+  items?: JobItem[];
+  activities?: JobActivity[];
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
 }
 
 export interface CompanyProfile {
@@ -202,8 +280,12 @@ export interface SystemSettings {
   colorTheme?: string;
   adminEmail?: string;
   logoUrl?: string;
+  faviconUrl?: string;
   adminUsername?: string;
   adminPasscode?: string;
+  companyTagline?: string;
+  companyAddress?: string;
+  taxId?: string;
 }
 
 export interface OrderPortal {

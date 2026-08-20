@@ -176,7 +176,7 @@ export default function ProductCatalog({ products, onAddToCart, onUpdateProduct,
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3.5 py-1.5 text-xs font-sans uppercase font-bold tracking-wider border transition-all whitespace-nowrap focus:outline-none cursor-pointer shrink-0 ${
+              className={`px-3.5 py-1.5 text-xs font-sans uppercase font-bold tracking-wider border rounded-xl transition-all whitespace-nowrap focus:outline-none cursor-pointer shrink-0 ${
                 selectedCategory === cat
                   ? 'bg-black text-white border-black shadow-xs'
                   : 'bg-white text-gray-500 border-gray-200 hover:text-black hover:border-black'

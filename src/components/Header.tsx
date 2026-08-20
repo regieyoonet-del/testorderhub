@@ -7,19 +7,9 @@ import React from 'react';
 import { CompanyProfile, SystemSettings, AppNotification } from '../types';
 import NotificationBell from './NotificationBell';
 import {
-  Printer,
   ShoppingCart,
-  Settings,
   Repeat,
-  History,
-  LayoutGrid,
-  Building2,
-  LogOut,
-  ShieldAlert,
-  Sliders,
-  Layers,
-  FileText,
-  Globe
+  Menu
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -41,6 +31,7 @@ interface HeaderProps {
   onMarkAllNotificationsAsRead?: () => void;
   onClearNotifications?: () => void;
   onSelectNotification?: (notif: AppNotification) => void;
+  onMobileNavToggle?: () => void;
 }
 
 export default function Header({
@@ -61,7 +52,8 @@ export default function Header({
   onMarkNotificationAsRead,
   onMarkAllNotificationsAsRead,
   onClearNotifications,
-  onSelectNotification
+  onSelectNotification,
+  onMobileNavToggle
 }: HeaderProps) {
   return (
     <header className="bg-white border-b-2 border-black sticky top-0 z-40">
@@ -69,6 +61,17 @@ export default function Header({
       <div className="max-w-7xl mx-auto px-4 py-4 sm:py-5 sm:px-8 flex items-center justify-between gap-4">
         {/* Brand Typography */}
         <div className="flex items-center space-x-3 select-none min-w-0">
+          {onMobileNavToggle && (
+            <button
+              type="button"
+              onClick={onMobileNavToggle}
+              className="p-2.5 rounded-2xl text-black hover:bg-gray-100 transition-all cursor-pointer flex items-center justify-center min-w-[44px] min-h-[44px] shrink-0 border-2 border-black active:scale-95 shadow-xs"
+              aria-label="Toggle Navigation Menu"
+              id="header-menu-toggle-btn"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          )}
           {userRole === 'client' && selectedCompany ? (
             <>
               {selectedCompany.logoUrl ? (
@@ -155,55 +158,6 @@ export default function Header({
           )}
         </div>
       </div>
-
-      {/* Tabs Navigation */}
-      {(userRole === 'client' || (userRole === 'admin' && activeTab !== 'admin' && activeTab !== 'sync')) && (
-        <div className="border-t border-gray-100 max-w-7xl mx-auto px-4 sm:px-8">
-          <nav className="flex overflow-x-auto space-x-1 custom-scrollbar pb-1.5 pt-1">
-            {userRole === 'admin' && (
-              <button
-                onClick={() => setActiveTab('admin')}
-                className={`flex items-center space-x-2 py-3 px-4 font-sans text-xs uppercase tracking-wider font-extrabold transition-all border-b-2 whitespace-nowrap focus:outline-none cursor-pointer ${
-                  activeTab === 'admin'
-                    ? 'border-black text-black'
-                    : 'border-transparent text-gray-400 hover:text-black hover:border-gray-200'
-                }`}
-                id="tab-btn-admin"
-              >
-                <Sliders className="w-3.5 h-3.5 text-black" />
-                <span>Admin Dashboard</span>
-              </button>
-            )}
-
-            {[
-              { id: 'catalog', label: 'My Catalog', icon: LayoutGrid },
-              { id: 'browse', label: 'ARH Products', icon: Layers },
-              { id: 'portals', label: 'Order Portals', icon: Globe },
-              { id: 'history', label: 'Order History', icon: History },
-              { id: 'quote-history', label: 'Quote Requests', icon: FileText },
-              { id: 'settings', label: 'Settings', icon: Settings }
-            ].map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-2 py-3 px-4 font-sans text-xs uppercase tracking-wider font-bold transition-all border-b-2 whitespace-nowrap focus:outline-none cursor-pointer ${
-                    isActive
-                      ? 'border-black text-black'
-                      : 'border-transparent text-gray-400 hover:text-black hover:border-gray-200'
-                  }`}
-                  id={`tab-btn-${tab.id}`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-      )}
     </header>
   );
 }

@@ -226,6 +226,12 @@ function getMapValueByHeader(map, header) {
     if (map.hasOwnProperty("Logo URL")) return map["Logo URL"];
     if (map.hasOwnProperty("LogoUrl")) return map["LogoUrl"];
   }
+  if (normHeader === "appfaviconurl" || normHeader === "faviconurl" || normHeader === "favicon") {
+    if (map.hasOwnProperty("App Favicon URL")) return map["App Favicon URL"];
+    if (map.hasOwnProperty("Favicon URL")) return map["Favicon URL"];
+    if (map.hasOwnProperty("FaviconUrl")) return map["FaviconUrl"];
+    if (map.hasOwnProperty("Favicon")) return map["Favicon"];
+  }
   if (normHeader === "brandingmethods" || normHeader === "brandingmethod" || normHeader === "branding") {
     if (map.hasOwnProperty("Branding Methods")) return map["Branding Methods"];
     if (map.hasOwnProperty("Branding Method")) return map["Branding Method"];
@@ -260,7 +266,7 @@ function initSheets(ss) {
     "CatalogProducts": ["Product ID", "SKU", "Name", "Category", "Description", "Image URL", "Image URLs", "MOQ", "Lead Time", "Branding Methods", "Colors", "Sizes", "Status"],
     "Companies": ["Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Delivery Address", "Username", "Passcode", "PO Required", "Logo URL", "Approved Products", "Custom Products"],
     "Portals": ["Portal ID", "Company ID", "Company Name", "Portal Name", "Description", "Status", "Product IDs", "Portal Pricing", "Variant Pricing", "Created At", "Updated At", "Share Token"],
-    "Admin": ["Hub Name", "Short Hub Name", "Order Prefix", "Currency Symbol", "Admin Username", "Admin Passcode", "Color Theme", "Admin Email", "App Logo URL"],
+    "Admin": ["Hub Name", "Short Hub Name", "Company Tagline", "Company Address", "Tax TIN ID", "Order Prefix", "Currency Symbol", "Admin Username", "Admin Passcode", "Color Theme", "Admin Email", "App Logo URL", "App Favicon URL"],
     "Quotes": ["Enquiry ID", "Enquiry Number", "Product ID", "Product Name", "Product Category", "Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Quantity", "Preferred Branding Method", "Preferred Color", "Preferred Size", "Notes", "Status", "Created At", "Quoted Unit Price", "Quoted Total Price", "Quoted Tax", "Quoted Shipping", "Quote Notes", "Quoted Valid Until", "Quoted At", "Quoted Line Items", "Requested Product Addition", "Requested Product Addition At", "Requested Product Notes"],
     "Notifications": ["Notification ID", "Recipient Type", "Company Name", "Title", "Message", "Timestamp", "Read", "Order ID", "Order Number", "Type"]
   };
@@ -932,7 +938,7 @@ function updateQuoteEnquiryStatus(ss, enquiryId, status) {
 
 function saveAdminSettings(ss, settings, adminUser, adminPass) {
   var sheet = ss.getSheetByName("Admin");
-  var expectedHeaders = ["Hub Name", "Short Hub Name", "Order Prefix", "Currency Symbol", "Admin Username", "Admin Passcode", "Color Theme", "Admin Email", "App Logo URL"];
+  var expectedHeaders = ["Hub Name", "Short Hub Name", "Company Tagline", "Company Address", "Tax TIN ID", "Order Prefix", "Currency Symbol", "Admin Username", "Admin Passcode", "Color Theme", "Admin Email", "App Logo URL", "App Favicon URL"];
   var data = ensureHeaders(sheet, expectedHeaders);
   var headers = data[0];
   
@@ -948,13 +954,17 @@ function saveAdminSettings(ss, settings, adminUser, adminPass) {
   var adminMap = {
     "Hub Name": settings.hubName,
     "Short Hub Name": settings.shortHubName,
+    "Company Tagline": settings.companyTagline || "",
+    "Company Address": settings.companyAddress || "",
+    "Tax TIN ID": settings.taxId || settings.tinNumber || "",
     "Order Prefix": settings.orderPrefix,
     "Currency Symbol": settings.currencySymbol,
     "Admin Username": adminUser || "admin",
     "Admin Passcode": adminPass || "1234",
     "Color Theme": settings.colorTheme || "classic_noir",
     "Admin Email": settings.adminEmail || "",
-    "App Logo URL": settings.logoUrl || ""
+    "App Logo URL": settings.logoUrl || "",
+    "App Favicon URL": settings.faviconUrl || ""
   };
   
   var rowData = [];
@@ -1265,7 +1275,7 @@ function getJsonOutput(obj) {
               <div className="space-y-1">
                 <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
                 <div className="flex flex-wrap gap-1">
-                  {["Hub Name", "Short Hub Name", "Order Prefix", "Currency Symbol", "Admin Username", "Admin Passcode", "Color Theme"].map(col => (
+                  {["Hub Name", "Short Hub Name", "Company Tagline", "Company Address", "Tax TIN ID", "Order Prefix", "Currency Symbol", "Admin Username", "Admin Passcode", "Color Theme", "Admin Email", "App Logo URL", "App Favicon URL"].map(col => (
                     <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
                       {col}
                     </span>

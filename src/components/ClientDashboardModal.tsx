@@ -6,6 +6,19 @@
 import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
+  Legend
+} from 'recharts';
 import { CompanyProfile, Order, Product, ProductAddOn, getDisplayPurchaserName } from '../types';
 import { INITIAL_PRODUCTS } from '../data/mockData';
 import ProductDetailsPage from './ProductDetailsPage';
@@ -38,7 +51,18 @@ import {
   Edit2,
   Trash2,
   Paperclip,
-  Image as ImageIcon
+  Image as ImageIcon,
+  BarChart3,
+  TrendingUp,
+  Award,
+  ShoppingBag,
+  PieChart as PieChartIcon,
+  ArrowUpRight,
+  CheckCircle2,
+  Layers,
+  Calendar,
+  Sparkles,
+  Filter
 } from 'lucide-react';
 
 interface ClientDashboardModalProps {
@@ -101,7 +125,7 @@ export default function ClientDashboardModal({
   onSimulateClient
 }: ClientDashboardModalProps) {
   // Modal internal active tabs
-  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'products' | 'orders'>('overview');
+  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'analytics' | 'products' | 'orders'>('overview');
   const [productViewMode, setProductViewMode] = useState<'carousel' | 'compact'>('carousel');
   const [selectedProductForDetails, setSelectedProductForDetails] = useState<Product | null>(null);
   
@@ -470,6 +494,169 @@ export default function ClientDashboardModal({
     };
   }, [companyOrders]);
 
+  // Comprehensive Analytics Calculation for Company Sales & Spending
+  const analyticsData = useMemo(() => {
+    let totalSpend = 0;
+    let totalUnitsPurchased = 0;
+
+    const spendByStatus = {
+      Completed: 0,
+      Shipped: 0,
+      'In Production': 0,
+      Approved: 0,
+      Pending: 0
+    };
+
+    const productSalesMap = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        category: string;
+        imageUrl: string;
+        totalQty: number;
+        totalRevenue: number;
+        ordersCount: number;
+        sizesBought: Record<string, number>;
+        colorsBought: Record<string, number>;
+      }
+    >();
+
+    const categorySpendMap = new Map<string, { spend: number; qty: number }>();
+    const monthlyMap = new Map<string, { monthKey: string; monthName: string; spend: number; ordersCount: number; unitsCount: number }>();
+
+    companyOrders.forEach((ord) => {
+      const ordSpend = Number(ord.totalAmount) || 0;
+      totalSpend += ordSpend;
+
+      // Status Spend
+      const st = ord.status;
+      if (st in spendByStatus) {
+        spendByStatus[st as keyof typeof spendByStatus] += ordSpend;
+      }
+
+      // Monthly Timeline
+      const dt = new Date(ord.createdAt);
+      const monthKey = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`;
+      const monthName = dt.toLocaleString('en-US', { month: 'short', year: '2-digit' });
+
+      if (!monthlyMap.has(monthKey)) {
+        monthlyMap.set(monthKey, { monthKey, monthName, spend: 0, ordersCount: 0, unitsCount: 0 });
+      }
+      const mData = monthlyMap.get(monthKey)!;
+      mData.spend += ordSpend;
+      mData.ordersCount += 1;
+
+      // Line items
+      if (Array.isArray(ord.items)) {
+        ord.items.forEach((it: any) => {
+          const qty = Number(it.quantity) || 1;
+          const unitPrice = Number(it.unitPrice ?? it.price) || 0;
+          const lineRevenue = qty * unitPrice;
+          const pName = it.productName || it.name || 'Custom Product';
+          const pKey = (it.productId || pName).toLowerCase().trim();
+
+          totalUnitsPurchased += qty;
+          mData.unitsCount += qty;
+
+          // Master Product lookup
+          const matchingMaster = masterProducts.find(
+            p => p.name.toLowerCase() === pName.toLowerCase() || p.id === it.productId
+          );
+          const category = it.category || matchingMaster?.category || 'Uniforms';
+          const imageUrl = it.imageUrl || matchingMaster?.imageUrl || matchingMaster?.imageUrls?.[0] || '';
+
+          // Category spend
+          if (!categorySpendMap.has(category)) {
+            categorySpendMap.set(category, { spend: 0, qty: 0 });
+          }
+          const catData = categorySpendMap.get(category)!;
+          catData.spend += lineRevenue;
+          catData.qty += qty;
+
+          // Product sales breakdown
+          if (!productSalesMap.has(pKey)) {
+            productSalesMap.set(pKey, {
+              id: it.productId || pKey,
+              name: pName,
+              category,
+              imageUrl,
+              totalQty: 0,
+              totalRevenue: 0,
+              ordersCount: 0,
+              sizesBought: {},
+              colorsBought: {}
+            });
+          }
+
+          const prodStats = productSalesMap.get(pKey)!;
+          prodStats.totalQty += qty;
+          prodStats.totalRevenue += lineRevenue;
+          prodStats.ordersCount += 1;
+          if (imageUrl && !prodStats.imageUrl) {
+            prodStats.imageUrl = imageUrl;
+          }
+
+          if (it.selectedSize || it.size) {
+            const sz = it.selectedSize || it.size;
+            prodStats.sizesBought[sz] = (prodStats.sizesBought[sz] || 0) + qty;
+          }
+          if (it.selectedColor || it.color) {
+            const clr = it.selectedColor || it.color;
+            prodStats.colorsBought[clr] = (prodStats.colorsBought[clr] || 0) + qty;
+          }
+        });
+      }
+    });
+
+    // Product rankings by quantity sold
+    const productRankings = Array.from(productSalesMap.values()).sort((a, b) => b.totalQty - a.totalQty);
+    const topSellingItem = productRankings.length > 0 ? productRankings[0] : null;
+
+    // Monthly timeline list
+    const monthlyTimeline = Array.from(monthlyMap.values())
+      .sort((a, b) => a.monthKey.localeCompare(b.monthKey))
+      .map(m => ({
+        month: m.monthName,
+        Spending: Math.round(m.spend * 100) / 100,
+        Orders: m.ordersCount,
+        Units: m.unitsCount
+      }));
+
+    // Category breakdown list
+    const PIE_COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EC4899', '#6366F1'];
+    const categoryBreakdown = Array.from(categorySpendMap.entries())
+      .map(([cat, data], idx) => ({
+        name: cat,
+        value: Math.round(data.spend * 100) / 100,
+        qty: data.qty,
+        percentage: totalSpend > 0 ? Math.round((data.spend / totalSpend) * 100) : 0,
+        color: PIE_COLORS[idx % PIE_COLORS.length]
+      }))
+      .sort((a, b) => b.value - a.value);
+
+    // Top items for bar chart
+    const topItemsChartData = productRankings.slice(0, 6).map(item => ({
+      name: item.name.length > 18 ? item.name.substring(0, 16) + '...' : item.name,
+      fullName: item.name,
+      'Units Sold': item.totalQty,
+      'Total Spend': Math.round(item.totalRevenue * 100) / 100
+    }));
+
+    return {
+      totalSpend,
+      totalOrders: companyOrders.length,
+      avgOrderValue: companyOrders.length > 0 ? totalSpend / companyOrders.length : 0,
+      totalUnitsPurchased,
+      productRankings,
+      topSellingItem,
+      monthlyTimeline,
+      categoryBreakdown,
+      topItemsChartData,
+      spendByStatus
+    };
+  }, [companyOrders, masterProducts]);
+
   // Products assigned/added to this company
   const clientProducts = useMemo(() => {
     const enabledIds = company.enabledProductIds;
@@ -621,6 +808,7 @@ export default function ClientDashboardModal({
         <div className="border-b border-gray-200 px-6 md:px-8 bg-white shrink-0 flex overflow-x-auto custom-scrollbar pb-1.5 pt-1">
           {[
             { id: 'overview', label: 'Overview & Metrics', icon: Building2 },
+            { id: 'analytics', label: 'Analytics', icon: BarChart3 },
             { id: 'products', label: 'Products', icon: Grid, count: enabledProductsCount },
             { id: 'orders', label: 'All Past Orders', icon: ClipboardList, count: companyOrders.length }
           ].map((subtab) => {
@@ -808,7 +996,445 @@ export default function ClientDashboardModal({
             </div>
           )}
 
-          {/* 2. ALLOCATED CATALOG SPECS TAB */}
+          {/* 2. ANALYTICS & SPENDING TAB */}
+          {activeSubTab === 'analytics' && (
+            <div className="space-y-6 animate-fade-in">
+              {/* Analytics Header Summary Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-2 shadow-xs">
+                  <div className="flex items-center justify-between text-gray-400">
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider">Total Company Spend</span>
+                    <DollarSign className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <div>
+                    <span className="block text-xl md:text-2xl font-black font-mono text-black">
+                      Php {analyticsData.totalSpend.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-[9px] text-gray-500 font-mono block mt-0.5">
+                      Across {analyticsData.totalOrders} total orders
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-2 shadow-xs">
+                  <div className="flex items-center justify-between text-gray-400">
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider">Total Units Purchased</span>
+                    <ShoppingBag className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <span className="block text-xl md:text-2xl font-black font-mono text-black">
+                      {analyticsData.totalUnitsPurchased.toLocaleString()} pcs
+                    </span>
+                    <span className="text-[9px] text-gray-500 font-mono block mt-0.5">
+                      Aggregated physical items
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-2 shadow-xs">
+                  <div className="flex items-center justify-between text-gray-400">
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider">Avg Order Spending</span>
+                    <TrendingUp className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <span className="block text-xl md:text-2xl font-black font-mono text-black">
+                      Php {analyticsData.avgOrderValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-[9px] text-gray-500 font-mono block mt-0.5">
+                      Average invoice value
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-amber-300 bg-amber-50/30 rounded-2xl p-4 space-y-2 shadow-xs">
+                  <div className="flex items-center justify-between text-amber-700">
+                    <span className="text-[10px] uppercase font-mono font-bold tracking-wider">#1 Top Selling Item</span>
+                    <Award className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <div>
+                    <span className="block text-sm font-black text-black truncate" title={analyticsData.topSellingItem?.name || 'N/A'}>
+                      {analyticsData.topSellingItem ? analyticsData.topSellingItem.name : 'No orders yet'}
+                    </span>
+                    {analyticsData.topSellingItem ? (
+                      <span className="text-[10px] font-mono text-amber-800 font-bold block mt-0.5">
+                        {analyticsData.topSellingItem.totalQty.toLocaleString()} units sold
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-gray-400 font-mono block mt-0.5">No item data</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* #1 MOST SOLD ITEM SPOTLIGHT CARD */}
+              {analyticsData.topSellingItem ? (
+                <div className="bg-gradient-to-br from-neutral-900 via-black to-neutral-900 text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden space-y-6 border border-neutral-800">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full filter blur-3xl pointer-events-none"></div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-800 pb-4">
+                    <div className="flex items-center gap-3">
+                      <span className="bg-gradient-to-r from-amber-400 to-amber-500 text-black text-xs font-mono font-black px-3.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
+                        <Award className="w-4 h-4 text-black" />
+                        <span>#1 TOP SELLING ITEM</span>
+                      </span>
+                      <span className="text-xs font-mono text-neutral-400">
+                        Most Ordered Product for {company.name}
+                      </span>
+                    </div>
+
+                    <div className="text-right font-mono">
+                      <span className="text-[10px] text-neutral-400 uppercase font-bold block">Item Revenue Share</span>
+                      <span className="text-sm font-black text-amber-400">
+                        {analyticsData.totalSpend > 0
+                          ? Math.round((analyticsData.topSellingItem.totalRevenue / analyticsData.totalSpend) * 100)
+                          : 0}% of total company spend
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col lg:flex-row items-center gap-6">
+                    {/* Item Image */}
+                    <div className="w-28 h-28 md:w-36 md:h-36 bg-neutral-800 rounded-2xl overflow-hidden shrink-0 border border-neutral-700 flex items-center justify-center relative shadow-inner">
+                      {analyticsData.topSellingItem.imageUrl ? (
+                        <img
+                          src={analyticsData.topSellingItem.imageUrl}
+                          alt={analyticsData.topSellingItem.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <Package className="w-12 h-12 text-neutral-600" />
+                      )}
+                    </div>
+
+                    {/* Item Highlights */}
+                    <div className="flex-1 space-y-4 text-center sm:text-left">
+                      <div>
+                        <span className="text-xs font-mono font-bold text-amber-400 uppercase tracking-widest block">
+                          {analyticsData.topSellingItem.category}
+                        </span>
+                        <h3 className="text-2xl md:text-3xl font-black text-white tracking-tight mt-0.5">
+                          {analyticsData.topSellingItem.name}
+                        </h3>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-neutral-800/80 rounded-2xl p-4 border border-neutral-700 font-mono text-left">
+                        <div>
+                          <span className="text-[9px] uppercase font-bold text-neutral-400 block">Total Units Sold</span>
+                          <span className="text-lg md:text-xl font-black text-amber-400">
+                            {analyticsData.topSellingItem.totalQty.toLocaleString()} pcs
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] uppercase font-bold text-neutral-400 block">Total Spending</span>
+                          <span className="text-lg md:text-xl font-black text-white">
+                            Php {analyticsData.topSellingItem.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] uppercase font-bold text-neutral-400 block">Orders Included In</span>
+                          <span className="text-lg md:text-xl font-black text-white">
+                            {analyticsData.topSellingItem.ordersCount} orders
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] uppercase font-bold text-neutral-400 block">Volume Share</span>
+                          <span className="text-lg md:text-xl font-black text-emerald-400">
+                            {analyticsData.totalUnitsPurchased > 0
+                              ? Math.round((analyticsData.topSellingItem.totalQty / analyticsData.totalUnitsPurchased) * 100)
+                              : 0}%
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Sizes / Colors Popularity */}
+                      {(Object.keys(analyticsData.topSellingItem.sizesBought).length > 0 ||
+                        Object.keys(analyticsData.topSellingItem.colorsBought).length > 0) && (
+                        <div className="flex flex-wrap items-center gap-3 text-xs font-mono pt-1">
+                          {Object.keys(analyticsData.topSellingItem.sizesBought).length > 0 && (
+                            <div className="flex items-center gap-1.5 bg-neutral-800 px-3 py-1.5 rounded-xl border border-neutral-700">
+                              <span className="text-neutral-400 text-[10px]">Top Sizes:</span>
+                              <span className="text-white font-bold">
+                                {Object.entries(analyticsData.topSellingItem.sizesBought)
+                                  .sort((a, b) => Number(b[1]) - Number(a[1]))
+                                  .slice(0, 3)
+                                  .map(([sz, count]) => `${sz} (${count})`)
+                                  .join(', ')}
+                              </span>
+                            </div>
+                          )}
+
+                          {Object.keys(analyticsData.topSellingItem.colorsBought).length > 0 && (
+                            <div className="flex items-center gap-1.5 bg-neutral-800 px-3 py-1.5 rounded-xl border border-neutral-700">
+                              <span className="text-neutral-400 text-[10px]">Top Colors:</span>
+                              <span className="text-white font-bold">
+                                {Object.entries(analyticsData.topSellingItem.colorsBought)
+                                  .sort((a, b) => Number(b[1]) - Number(a[1]))
+                                  .slice(0, 3)
+                                  .map(([clr, count]) => `${clr} (${count})`)
+                                  .join(', ')}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white border border-gray-200 rounded-3xl p-8 text-center space-y-2">
+                  <BarChart3 className="w-10 h-10 text-gray-300 mx-auto" />
+                  <p className="text-sm font-extrabold text-black uppercase font-mono">No product sales logged yet</p>
+                  <p className="text-xs text-gray-500 font-mono">Place purchase orders for this company to generate sales &amp; item ranking analytics.</p>
+                </div>
+              )}
+
+              {/* VISUAL CHARTS GRID */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Monthly Spending & Order Volume Chart */}
+                <div className="bg-white border border-gray-200 rounded-3xl p-6 space-y-4 shadow-xs">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <div>
+                      <h4 className="font-extrabold text-xs uppercase font-mono text-black flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-emerald-600" />
+                        Monthly Spending Trend
+                      </h4>
+                      <p className="text-[10px] text-gray-400 font-mono">Company spending trajectory over time</p>
+                    </div>
+                  </div>
+
+                  {analyticsData.monthlyTimeline.length > 0 ? (
+                    <div className="h-64 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={analyticsData.monthlyTimeline} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                          <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#6b7280' }} />
+                          <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: '#000', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px', fontFamily: 'monospace' }}
+                            formatter={(value: any) => [`Php ${Number(value).toLocaleString()}`, 'Spending']}
+                          />
+                          <Bar dataKey="Spending" fill="#000000" radius={[6, 6, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <div className="h-48 flex items-center justify-center text-xs text-gray-400 font-mono">
+                      No monthly timeline data available.
+                    </div>
+                  )}
+                </div>
+
+                {/* Top Sold Items Units Chart */}
+                <div className="bg-white border border-gray-200 rounded-3xl p-6 space-y-4 shadow-xs">
+                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                    <div>
+                      <h4 className="font-extrabold text-xs uppercase font-mono text-black flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4 text-blue-600" />
+                        Most Sold Items Comparison (Units)
+                      </h4>
+                      <p className="text-[10px] text-gray-400 font-mono">Top products ranked by total pieces purchased</p>
+                    </div>
+                  </div>
+
+                  {analyticsData.topItemsChartData.length > 0 ? (
+                    <div className="h-64 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={analyticsData.topItemsChartData} layout="vertical" margin={{ top: 10, right: 10, left: 20, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f3f4f6" />
+                          <XAxis type="number" tick={{ fontSize: 10, fill: '#6b7280' }} />
+                          <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: '#111827', fontWeight: 700 }} width={110} />
+                          <Tooltip
+                            contentStyle={{ backgroundColor: '#000', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px', fontFamily: 'monospace' }}
+                            formatter={(value: any) => [`${value} pcs`, 'Units Sold']}
+                          />
+                          <Bar dataKey="Units Sold" fill="#3B82F6" radius={[0, 6, 6, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <div className="h-48 flex items-center justify-center text-xs text-gray-400 font-mono">
+                      No item sales data logged.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* CATEGORY SPENDING & STATUS BREAKDOWN */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Category Share Progress Bars */}
+                <div className="lg:col-span-7 bg-white border border-gray-200 rounded-3xl p-6 space-y-4 shadow-xs">
+                  <h4 className="font-extrabold text-xs uppercase font-mono text-black pb-3 border-b border-gray-100 flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <PieChartIcon className="w-4 h-4 text-purple-600" />
+                      Spending by Product Category
+                    </span>
+                    <span className="text-[10px] text-gray-400">Distribution</span>
+                  </h4>
+
+                  {analyticsData.categoryBreakdown.length > 0 ? (
+                    <div className="space-y-4">
+                      {analyticsData.categoryBreakdown.map((cat) => (
+                        <div key={cat.name} className="space-y-1.5 font-mono">
+                          <div className="flex justify-between text-xs">
+                            <span className="font-extrabold text-black flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }}></span>
+                              {cat.name}
+                            </span>
+                            <div className="space-x-2">
+                              <span className="text-gray-500">{cat.qty} pcs</span>
+                              <span className="font-bold text-black">
+                                Php {cat.value.toLocaleString('en-US', { minimumFractionDigits: 2 })} ({cat.percentage}%)
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{ width: `${cat.percentage}%`, backgroundColor: cat.color }}
+                            ></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-8 text-center text-xs text-gray-400 font-mono">
+                      No category spending recorded.
+                    </div>
+                  )}
+                </div>
+
+                {/* Spending by Status */}
+                <div className="lg:col-span-5 bg-white border border-gray-200 rounded-3xl p-6 space-y-4 shadow-xs">
+                  <h4 className="font-extrabold text-xs uppercase font-mono text-black pb-3 border-b border-gray-100 flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-amber-600" />
+                    Spending by Order Status
+                  </h4>
+
+                  <div className="space-y-3 font-mono text-xs">
+                    <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-2xl">
+                      <span className="font-bold text-green-900 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-green-600" />
+                        Dispatched / Completed
+                      </span>
+                      <span className="font-black text-green-950">
+                        Php {(analyticsData.spendByStatus.Completed + analyticsData.spendByStatus.Shipped).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 bg-amber-50 border border-amber-200 rounded-2xl">
+                      <span className="font-bold text-amber-900 flex items-center gap-1.5">
+                        <Clock className="w-4 h-4 text-amber-600" />
+                        In Production
+                      </span>
+                      <span className="font-black text-amber-950">
+                        Php {analyticsData.spendByStatus['In Production'].toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-2xl">
+                      <span className="font-bold text-gray-700 flex items-center gap-1.5">
+                        <ClipboardList className="w-4 h-4 text-gray-500" />
+                        Pending / Approved
+                      </span>
+                      <span className="font-black text-black">
+                        Php {(analyticsData.spendByStatus.Pending + analyticsData.spendByStatus.Approved).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* DETAILED ITEM RANKING LEADERBOARD TABLE */}
+              <div className="bg-white border border-gray-200 rounded-3xl p-6 space-y-4 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3">
+                  <div>
+                    <h4 className="font-extrabold text-sm uppercase font-mono text-black flex items-center gap-2">
+                      <Award className="w-4 h-4 text-amber-500" />
+                      All Ordered Products Sales Ranking
+                    </h4>
+                    <p className="text-xs text-gray-500 font-mono">
+                      Comprehensive sales and item frequency breakdown for {company.name}
+                    </p>
+                  </div>
+                </div>
+
+                {analyticsData.productRankings.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-gray-400 font-mono">
+                    No products have been ordered yet.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs font-mono border-collapse">
+                      <thead>
+                        <tr className="border-b border-gray-200 text-gray-500 uppercase text-[10px] font-bold">
+                          <th className="py-2.5 px-3">Rank</th>
+                          <th className="py-2.5 px-3">Product Name</th>
+                          <th className="py-2.5 px-3">Category</th>
+                          <th className="py-2.5 px-3 text-right">Units Sold</th>
+                          <th className="py-2.5 px-3 text-right">Total Revenue</th>
+                          <th className="py-2.5 px-3 text-right">Volume Share</th>
+                          <th className="py-2.5 px-3 text-right">Orders Count</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {analyticsData.productRankings.map((item, index) => (
+                          <tr key={item.id} className="hover:bg-gray-50/80 transition-colors">
+                            <td className="py-3 px-3">
+                              <span className={`w-6 h-6 rounded-full text-[10px] font-black flex items-center justify-center ${
+                                index === 0 ? 'bg-amber-400 text-black shadow-xs' :
+                                index === 1 ? 'bg-gray-200 text-gray-800' :
+                                index === 2 ? 'bg-amber-800/20 text-amber-900' :
+                                'bg-gray-100 text-gray-500'
+                              }`}>
+                                #{index + 1}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-lg bg-gray-100 overflow-hidden shrink-0 border border-gray-200 flex items-center justify-center">
+                                  {item.imageUrl ? (
+                                    <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <Package className="w-4 h-4 text-gray-400" />
+                                  )}
+                                </div>
+                                <span className="font-extrabold text-black">{item.name}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className="bg-gray-100 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                {item.category}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-right font-black text-black">
+                              {item.totalQty.toLocaleString()} pcs
+                            </td>
+                            <td className="py-3 px-3 text-right font-black text-emerald-700">
+                              Php {item.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-3 px-3 text-right text-gray-600">
+                              {analyticsData.totalUnitsPurchased > 0
+                                ? Math.round((item.totalQty / analyticsData.totalUnitsPurchased) * 100)
+                                : 0}%
+                            </td>
+                            <td className="py-3 px-3 text-right text-gray-500">
+                              {item.ordersCount} orders
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 3. ALLOCATED CATALOG SPECS TAB */}
           {activeSubTab === 'products' && (
             <div className="space-y-4">
               {showProductForm ? (

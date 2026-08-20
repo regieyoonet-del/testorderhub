@@ -49,6 +49,12 @@ interface AdminProductCatalogProps {
   currencySymbol?: string;
   initialSection?: 'catalog' | 'enquiries';
   highlightEnquiryNumber?: string;
+  hubName?: string;
+  appLogoUrl?: string;
+  adminEmail?: string;
+  companyTagline?: string;
+  companyAddress?: string;
+  taxId?: string;
 }
 
 const DEFAULT_CATEGORIES = [
@@ -102,7 +108,13 @@ export default function AdminProductCatalog({
   onAddProductToCompanyCatalog,
   currencySymbol = 'Php',
   initialSection,
-  highlightEnquiryNumber
+  highlightEnquiryNumber,
+  hubName,
+  appLogoUrl,
+  adminEmail,
+  companyTagline,
+  companyAddress,
+  taxId
 }: AdminProductCatalogProps) {
   const [activeSection, setActiveSection] = useState<'catalog' | 'enquiries'>(initialSection || 'catalog');
 
@@ -961,6 +973,12 @@ export default function AdminProductCatalog({
         currencySymbol={currencySymbol}
         isOpen={!!selectedQuoteForBuilder}
         onClose={() => setSelectedQuoteForBuilder(null)}
+        hubName={hubName}
+        appLogoUrl={appLogoUrl}
+        adminEmail={adminEmail}
+        companyTagline={companyTagline}
+        companyAddress={companyAddress}
+        taxId={taxId}
         onSaveQuote={(updatedEnquiry) => {
           if (onSaveQuoteEnquiry) {
             onSaveQuoteEnquiry(updatedEnquiry);
