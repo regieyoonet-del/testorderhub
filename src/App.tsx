@@ -472,20 +472,42 @@ export default function App() {
 
   const [appsScriptConfig, setAppsScriptConfig] = useState<AppsScriptConfig>(() => {
     const cached = localStorage.getItem('rp_apps_script_config');
-    let parsedConfig: AppsScriptConfig = cached ? JSON.parse(cached) : { webAppUrl: EMBEDDED_APPS_SCRIPT_URL, isConnected: true };
+    let parsedConfig: AppsScriptConfig | null = null;
+    if (cached) {
+      try {
+        parsedConfig = JSON.parse(cached);
+      } catch {}
+    }
 
     // Check if script URL was passed in query parameters (e.g., ?script=... or ?appsScriptUrl=...)
     const params = new URLSearchParams(window.location.search);
     const urlScript = params.get('script') || params.get('appsScriptUrl') || params.get('webAppUrl');
     const envScript = (((import.meta as any).env?.VITE_APPS_SCRIPT_URL) as string) || '';
 
-    const effectiveUrl = (urlScript && urlScript.trim()) || parsedConfig.webAppUrl || (envScript && envScript.trim()) || EMBEDDED_APPS_SCRIPT_URL;
-    parsedConfig = {
+    // EMBEDDED_APPS_SCRIPT_URL is the canonical source of truth for the active deployment.
+    // Outdated URLs stored in localStorage migrate automatically to the embedded URL,
+    // while query parameter overrides or explicitly entered custom URLs are honored.
+    let effectiveUrl = EMBEDDED_APPS_SCRIPT_URL;
+    if (urlScript && urlScript.trim()) {
+      effectiveUrl = urlScript.trim();
+    } else if (envScript && envScript.trim()) {
+      effectiveUrl = envScript.trim();
+    } else if (parsedConfig?.isCustomUrl && parsedConfig.webAppUrl && parsedConfig.webAppUrl.trim()) {
+      effectiveUrl = parsedConfig.webAppUrl.trim();
+    } else if (EMBEDDED_APPS_SCRIPT_URL && EMBEDDED_APPS_SCRIPT_URL.trim()) {
+      effectiveUrl = EMBEDDED_APPS_SCRIPT_URL.trim();
+    } else if (parsedConfig?.webAppUrl) {
+      effectiveUrl = parsedConfig.webAppUrl.trim();
+    }
+
+    const finalConfig: AppsScriptConfig = {
       webAppUrl: effectiveUrl.trim(),
-      isConnected: true
+      isConnected: true,
+      isCustomUrl: parsedConfig?.isCustomUrl || false,
+      lastSyncTime: parsedConfig?.lastSyncTime
     };
-    localStorage.setItem('rp_apps_script_config', JSON.stringify(parsedConfig));
-    return parsedConfig;
+    localStorage.setItem('rp_apps_script_config', JSON.stringify(finalConfig));
+    return finalConfig;
   });
 
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => {
@@ -1189,12 +1211,23 @@ export default function App() {
           });
         }
 
-        // 9. Process jobs & columns
+        // 9. Process jobs & columns (Google Sheets is the authoritative persistent source of truth)
         if (fetchedJobs !== null && Array.isArray(fetchedJobs)) {
           setJobs(prevJobs => {
             const fetchedIds = new Set(fetchedJobs.map(j => j.id));
-            const unsyncedLocal = prevJobs.filter(j => !fetchedIds.has(j.id));
-            return [...unsyncedLocal, ...fetchedJobs];
+            const now = Date.now();
+
+            // Only retain local jobs if they were created very recently (within 60 seconds)
+            // and are genuinely in-flight before reaching Google Sheets. Stale/deleted local jobs are pruned.
+            const recentUnsyncedLocal = prevJobs.filter(j => {
+              if (fetchedIds.has(j.id)) return false;
+              const createdTimestamp = new Date(j.createdAt || 0).getTime();
+              const isRecent = !isNaN(createdTimestamp) && (now - createdTimestamp < 60000);
+              return isRecent;
+            });
+
+            const merged = [...recentUnsyncedLocal, ...fetchedJobs];
+            return merged.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
           });
         }
 
@@ -1266,7 +1299,13 @@ export default function App() {
   };
 
   const handleUpdateConfig = (newConfig: AppsScriptConfig) => {
-    setAppsScriptConfig(newConfig);
+    const isCustom = Boolean(newConfig.webAppUrl && newConfig.webAppUrl.trim() !== EMBEDDED_APPS_SCRIPT_URL.trim());
+    const updated: AppsScriptConfig = {
+      ...newConfig,
+      isCustomUrl: isCustom
+    };
+    setAppsScriptConfig(updated);
+    localStorage.setItem('rp_apps_script_config', JSON.stringify(updated));
   };
 
   const handleAddCompany = (newCo: CompanyProfile) => {

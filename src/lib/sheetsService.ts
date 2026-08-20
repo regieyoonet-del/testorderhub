@@ -1641,7 +1641,7 @@ export const sheetsService = {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const timeoutId = setTimeout(() => controller.abort(), 7000);
 
       const response = await fetch(`${cleanedUrl}?action=getAllData`, {
         method: 'GET',

@@ -201,6 +201,7 @@ export interface CartItem {
 export interface AppsScriptConfig {
   webAppUrl: string;
   isConnected: boolean;
+  isCustomUrl?: boolean;
   lastSyncTime?: string;
 }
 
