@@ -333,6 +333,153 @@ const InlineCellTextarea: React.FC<InlineCellTextareaProps> = ({
   );
 };
 
+const BUILT_IN_JOB_COLUMN_IDS = new Set([
+  'col-job-name',
+  'col-company',
+  'col-job-type',
+  'col-status',
+  'col-date-added',
+  'col-in-hand-date',
+  'col-artwork-link',
+  'col-designer',
+  'col-priority',
+  'col-notes'
+]);
+
+const BUILT_IN_ITEM_COLUMN_IDS = new Set([
+  'col-sub-design',
+  'col-sub-brand',
+  'col-sub-garment',
+  'col-sub-sku',
+  'col-sub-colour',
+  'col-sub-onesize',
+  'col-sub-xs',
+  'col-sub-s',
+  'col-sub-m',
+  'col-sub-l',
+  'col-sub-xl',
+  'col-sub-2xl',
+  'col-sub-3xl',
+  'col-sub-4xl',
+  'col-sub-total-qty',
+  'col-sub-amount-piece',
+  'col-sub-total-amount'
+]);
+
+function renderCustomCell(
+  col: JobColumn | JobItemColumn,
+  val: any,
+  onCommit: (val: any, immediate?: boolean) => void,
+  idPrefix: string
+) {
+  switch (col.type) {
+    case 'number':
+      return (
+        <InlineCellNumberInput
+          value={val}
+          onCommit={onCommit}
+          placeholder="0"
+          className="w-full text-center bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-gray-200 focus:border-black rounded-lg px-1.5 py-0.5 font-mono text-[11px] text-gray-800 focus:outline-none"
+          id={`${idPrefix}-num-${col.id}`}
+        />
+      );
+    case 'currency':
+      return (
+        <InlineCellNumberInput
+          isFloat={true}
+          step="0.01"
+          value={val}
+          onCommit={onCommit}
+          placeholder="0.00"
+          className="w-full text-right bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-gray-200 focus:border-black rounded-lg px-1.5 py-0.5 font-mono text-[11px] text-gray-800 focus:outline-none"
+          id={`${idPrefix}-curr-${col.id}`}
+        />
+      );
+    case 'dropdown':
+      return (
+        <select
+          value={val ?? ''}
+          onChange={e => onCommit(e.target.value, true)}
+          className="w-full bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-gray-200 focus:border-black rounded-lg px-1.5 py-1 font-mono text-[11px] text-gray-700 focus:outline-none cursor-pointer"
+          id={`${idPrefix}-select-${col.id}`}
+        >
+          <option value="">- Select -</option>
+          {(col.options || []).map(opt => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      );
+    case 'date':
+      return (
+        <InlineCellInput
+          type="date"
+          value={val}
+          onCommit={onCommit}
+          className="w-full bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-gray-200 focus:border-black rounded-lg px-1.5 py-0.5 font-mono text-[11px] text-gray-700 focus:outline-none"
+          id={`${idPrefix}-date-${col.id}`}
+        />
+      );
+    case 'checkbox':
+      return (
+        <div className="flex justify-center items-center py-1">
+          <input
+            type="checkbox"
+            checked={Boolean(val)}
+            onChange={e => onCommit(e.target.checked, true)}
+            className="w-4 h-4 text-black rounded border-gray-300 focus:ring-black cursor-pointer"
+            id={`${idPrefix}-check-${col.id}`}
+          />
+        </div>
+      );
+    case 'link':
+      return val ? (
+        <div className="flex items-center space-x-1">
+          <a
+            href={String(val).startsWith('http') ? String(val) : `https://${val}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            className="inline-flex items-center gap-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold transition-all max-w-[120px] truncate"
+          >
+            <span className="truncate">{String(val).replace(/^https?:\/\//, '')}</span>
+            <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+          </a>
+          <InlineCellInput
+            value={val}
+            onCommit={onCommit}
+            className="w-4 h-4 p-0 opacity-0 hover:opacity-100 focus:opacity-100 font-mono text-[10px]"
+            placeholder="Edit"
+            id={`${idPrefix}-link-${col.id}`}
+          />
+        </div>
+      ) : (
+        <InlineCellInput
+          placeholder="URL..."
+          value={val}
+          onCommit={onCommit}
+          className="w-full bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-gray-200 focus:border-black rounded-lg px-1 py-0.5 font-mono text-[10px] text-gray-400 placeholder:text-gray-300 focus:outline-none"
+          id={`${idPrefix}-link-empty-${col.id}`}
+        />
+      );
+    case 'long_text':
+    case 'person':
+    case 'company':
+    case 'text':
+    default:
+      return (
+        <InlineCellInput
+          value={val}
+          onCommit={onCommit}
+          placeholder={`${col.name}...`}
+          className="w-full bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-gray-200 focus:border-black rounded-lg px-1.5 py-0.5 font-mono text-[11px] text-gray-800 focus:outline-none"
+          id={`${idPrefix}-text-${col.id}`}
+        />
+      );
+  }
+}
+
 export default function JobManagementBoard({
   jobs,
   jobColumns = DEFAULT_JOB_COLUMNS,
@@ -1008,6 +1155,15 @@ export default function JobManagementBoard({
     return currentItemColumns.filter(c => !c.isHidden);
   }, [currentItemColumns]);
 
+  // Active custom columns that are dynamically appended to the tables
+  const customJobColumns = useMemo(() => {
+    return visibleJobColumns.filter(c => !c.isSystemField && !BUILT_IN_JOB_COLUMN_IDS.has(c.id));
+  }, [visibleJobColumns]);
+
+  const customSubColumns = useMemo(() => {
+    return visibleItemColumns.filter(c => !c.isSystemField && !BUILT_IN_ITEM_COLUMN_IDS.has(c.id));
+  }, [visibleItemColumns]);
+
   return (
     <div className="w-full space-y-6 font-sans" id="job-management-root">
       {/* -------------------------------------------------------------------------------- */}
@@ -1336,6 +1492,12 @@ export default function JobManagementBoard({
                           <th className="py-2.5 px-3 min-w-[90px]">Priority</th>
                           <th className="py-2.5 px-3 min-w-[90px]">Designer</th>
                           <th className="py-2.5 px-3 min-w-[90px]">Artwork</th>
+                          {/* Dynamic Custom Job Columns */}
+                          {customJobColumns.map(col => (
+                            <th key={col.id} className="py-2.5 px-3 min-w-[110px] font-mono font-bold text-gray-600">
+                              {col.name}
+                            </th>
+                          ))}
                           <th className="py-2.5 px-3 min-w-[60px] text-right">Items</th>
                           <th className="py-2.5 px-3 min-w-[90px] text-right">Total Amount</th>
                           <th className="py-2.5 pr-4 pl-2 w-12 text-center">Actions</th>
@@ -1612,6 +1774,18 @@ export default function JobManagementBoard({
                                   )}
                                 </td>
 
+                                {/* Dynamic Custom Job Column Cells */}
+                                {customJobColumns.map(col => (
+                                  <td key={col.id} className="py-3 px-3">
+                                    {renderCustomCell(
+                                      col,
+                                      job.values[col.id],
+                                      (val, immediate) => handleCellChange(job, col.id, val, immediate),
+                                      `job-${job.id}`
+                                    )}
+                                  </td>
+                                ))}
+
                                 {/* Items Count */}
                                 <td className="py-3 px-3 text-right font-mono text-xs font-bold text-gray-700">
                                   {totals.itemCount} ({totals.totalQuantity} pcs)
@@ -1642,7 +1816,7 @@ export default function JobManagementBoard({
                               {/* Expanded Row Content (Job Details, Sub-Items Monday Table, Activity Log) */}
                               {isExpanded && (
                                 <tr className="bg-gray-50/70 border-b-2 border-gray-200">
-                                  <td colSpan={13} className="p-4 md:p-6 space-y-4">
+                                  <td colSpan={13 + customJobColumns.length} className="p-4 md:p-6 space-y-4">
                                     <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs space-y-4">
                                       {/* Sub-Header Tabs for Expanded Job */}
                                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-gray-100">
@@ -1723,6 +1897,12 @@ export default function JobManagementBoard({
                                                   <th className="py-2 px-2 text-center w-14 font-extrabold bg-gray-200/60 text-black">Total Qty</th>
                                                   <th className="py-2 px-2 min-w-[80px] text-right">Price/pc</th>
                                                   <th className="py-2 px-2 min-w-[90px] text-right font-extrabold bg-emerald-50/60 text-emerald-900">Total Amt</th>
+                                                  {/* Dynamic Custom Sub-item Columns */}
+                                                  {customSubColumns.map(col => (
+                                                    <th key={col.id} className="py-2 px-2 min-w-[100px] font-mono font-bold text-gray-600">
+                                                      {col.name}
+                                                    </th>
+                                                  ))}
                                                   <th className="py-2 pr-3 pl-2 w-14 text-center">Actions</th>
                                                 </tr>
                                               </thead>
@@ -1841,6 +2021,18 @@ export default function JobManagementBoard({
                                                       <td className="py-2 px-2 text-right font-mono font-extrabold bg-emerald-50/40 text-emerald-900">
                                                         {currencySymbol} {subAmt.toFixed(2)}
                                                       </td>
+
+                                                      {/* Dynamic Custom Sub-item Column Cells */}
+                                                      {customSubColumns.map(col => (
+                                                        <td key={col.id} className="py-1 px-1">
+                                                          {renderCustomCell(
+                                                            col,
+                                                            item.values[col.id],
+                                                            (val, immediate) => handleSubItemCellChange(job, item.id, col.id, val, immediate),
+                                                            `item-${item.id}`
+                                                          )}
+                                                        </td>
+                                                      ))}
 
                                                       {/* Duplicate / Delete actions */}
                                                       <td className="py-1 pr-3 pl-1 text-center">

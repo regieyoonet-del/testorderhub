@@ -164,7 +164,8 @@ export function calculateSubItemTotalQty(
     c.type === 'number' &&
     c.id !== 'col-sub-total-qty' &&
     c.id !== 'col-sub-total-amount' &&
-    c.id !== 'col-sub-amount-piece'
+    c.id !== 'col-sub-amount-piece' &&
+    !c.id.startsWith('col-custom-')
   );
 
   let total = 0;
