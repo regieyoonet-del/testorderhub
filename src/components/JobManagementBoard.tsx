@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Job,
   JobColumn,
@@ -62,7 +62,7 @@ interface JobManagementBoardProps {
   jobItemColumns?: JobItemColumn[];
   companies: CompanyProfile[];
   orders: Order[];
-  onSaveJob: (job: Job) => void;
+  onSaveJob: (job: Job, immediate?: boolean) => void;
   onUpdateJobStatus: (jobId: string, status: JobStatus) => void;
   onDeleteJob: (jobId: string) => void;
   onSaveJobsBatch?: (jobs: Job[]) => void;
@@ -132,6 +132,206 @@ const ALL_STATUSES: JobStatus[] = [
   'Completed',
   'Canceled'
 ];
+
+interface InlineCellInputProps {
+  value: string | undefined | null;
+  onCommit: (val: string, immediate?: boolean) => void;
+  placeholder?: string;
+  className?: string;
+  id?: string;
+  type?: string;
+  autoFocus?: boolean;
+}
+
+const InlineCellInput: React.FC<InlineCellInputProps> = ({
+  value,
+  onCommit,
+  placeholder,
+  className,
+  id,
+  type = 'text',
+  autoFocus = false
+}) => {
+  const [localVal, setLocalVal] = useState<string>(value ?? '');
+  const [isFocused, setIsFocused] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setLocalVal(value ?? '');
+    }
+  }, [value, isFocused]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setLocalVal(val);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      onCommit(val, false);
+    }, 350);
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    onCommit(localVal, true);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      (e.target as HTMLInputElement).blur();
+    }
+  };
+
+  return (
+    <input
+      id={id}
+      type={type}
+      value={localVal}
+      onFocus={() => setIsFocused(true)}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      placeholder={placeholder}
+      className={className}
+      autoFocus={autoFocus}
+    />
+  );
+};
+
+interface InlineCellNumberInputProps {
+  value: number | undefined | null;
+  onCommit: (val: number, immediate?: boolean) => void;
+  min?: number | string;
+  step?: number | string;
+  placeholder?: string;
+  className?: string;
+  id?: string;
+  isFloat?: boolean;
+}
+
+const InlineCellNumberInput: React.FC<InlineCellNumberInputProps> = ({
+  value,
+  onCommit,
+  min = 0,
+  step = 1,
+  placeholder = '-',
+  className,
+  id,
+  isFloat = false
+}) => {
+  const formatInitial = (val: number | undefined | null): string => {
+    if (val === undefined || val === null || val === 0) return '';
+    return String(val);
+  };
+
+  const [localVal, setLocalVal] = useState<string>(() => formatInitial(value));
+  const [isFocused, setIsFocused] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setLocalVal(formatInitial(value));
+    }
+  }, [value, isFocused]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setLocalVal(val);
+
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      const num = val === '' ? 0 : (isFloat ? (parseFloat(val) || 0) : (parseInt(val, 10) || 0));
+      onCommit(num, false);
+    }, 350);
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    const num = localVal === '' ? 0 : (isFloat ? (parseFloat(localVal) || 0) : (parseInt(localVal, 10) || 0));
+    onCommit(num, true);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      (e.target as HTMLInputElement).blur();
+    }
+  };
+
+  return (
+    <input
+      id={id}
+      type="number"
+      min={min}
+      step={step}
+      value={localVal}
+      onFocus={() => setIsFocused(true)}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+};
+
+interface InlineCellTextareaProps {
+  value: string | undefined | null;
+  onCommit: (val: string, immediate?: boolean) => void;
+  rows?: number;
+  placeholder?: string;
+  className?: string;
+  id?: string;
+}
+
+const InlineCellTextarea: React.FC<InlineCellTextareaProps> = ({
+  value,
+  onCommit,
+  rows = 3,
+  placeholder,
+  className,
+  id
+}) => {
+  const [localVal, setLocalVal] = useState<string>(value ?? '');
+  const [isFocused, setIsFocused] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setLocalVal(value ?? '');
+    }
+  }, [value, isFocused]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setLocalVal(val);
+
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      onCommit(val, false);
+    }, 400);
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    onCommit(localVal, true);
+  };
+
+  return (
+    <textarea
+      id={id}
+      rows={rows}
+      value={localVal}
+      onFocus={() => setIsFocused(true)}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+};
 
 export default function JobManagementBoard({
   jobs,
@@ -382,7 +582,7 @@ export default function JobManagementBoard({
     });
   };
 
-  const handleCellChange = (job: Job, columnId: string, value: any) => {
+  const handleCellChange = (job: Job, columnId: string, value: any, immediate: boolean = false) => {
     const oldVal = job.values[columnId];
     if (oldVal === value) return;
 
@@ -412,7 +612,7 @@ export default function JobManagementBoard({
       updatedAt: now
     };
 
-    onSaveJob(updatedJob);
+    onSaveJob(updatedJob, immediate);
 
     if (columnId === 'col-status' && newStatus !== job.status) {
       onUpdateJobStatus(job.id, newStatus);
@@ -466,7 +666,7 @@ export default function JobManagementBoard({
   };
 
   // Sub-item Cell Change
-  const handleSubItemCellChange = (job: Job, itemId: string, columnId: string, value: any) => {
+  const handleSubItemCellChange = (job: Job, itemId: string, columnId: string, value: any, immediate: boolean = false) => {
     const updatedItems = (job.items || []).map(item => {
       if (item.id !== itemId) return item;
 
@@ -491,7 +691,7 @@ export default function JobManagementBoard({
       updatedAt: new Date().toISOString()
     };
 
-    onSaveJob(updatedJob);
+    onSaveJob(updatedJob, immediate);
   };
 
   // Add Sub-item to Job
@@ -1214,12 +1414,12 @@ export default function JobManagementBoard({
                                         </span>
                                       )}
                                     </div>
-                                    <input
-                                      type="text"
-                                      value={job.values['col-job-name'] || ''}
-                                      onChange={e => handleCellChange(job, 'col-job-name', e.target.value)}
+                                    <InlineCellInput
+                                      value={job.values['col-job-name']}
+                                      onCommit={(val, immediate) => handleCellChange(job, 'col-job-name', val, immediate)}
                                       className="w-full bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-gray-200 focus:border-black rounded-lg px-1.5 py-0.5 font-bold text-xs text-black focus:outline-none transition-colors"
                                       placeholder="Job Name..."
+                                      id={`input-job-name-${job.id}`}
                                     />
                                   </div>
                                 </td>
@@ -1330,15 +1530,16 @@ export default function JobManagementBoard({
                                 {/* In-Hand Date (Date Picker with Overdue indicator) */}
                                 <td className="py-3 px-3">
                                   <div className="flex items-center space-x-1.5">
-                                    <input
+                                    <InlineCellInput
                                       type="date"
-                                      value={job.values['col-in-hand-date'] || ''}
-                                      onChange={e => handleCellChange(job, 'col-in-hand-date', e.target.value)}
+                                      value={job.values['col-in-hand-date']}
+                                      onCommit={(val, immediate) => handleCellChange(job, 'col-in-hand-date', val, immediate)}
                                       className={`font-mono text-[11px] bg-transparent hover:bg-white focus:bg-white border rounded-lg px-1.5 py-0.5 focus:outline-none transition-colors ${
                                         overdue
                                           ? 'border-rose-300 bg-rose-50 text-rose-800 font-extrabold'
                                           : 'border-transparent hover:border-gray-200 text-gray-700'
                                       }`}
+                                      id={`input-in-hand-date-${job.id}`}
                                     />
                                     {overdue && (
                                       <span
@@ -1374,12 +1575,12 @@ export default function JobManagementBoard({
 
                                 {/* Designer */}
                                 <td className="py-3 px-3">
-                                  <input
-                                    type="text"
-                                    value={job.values['col-designer'] || ''}
-                                    onChange={e => handleCellChange(job, 'col-designer', e.target.value)}
+                                  <InlineCellInput
+                                    value={job.values['col-designer']}
+                                    onCommit={(val, immediate) => handleCellChange(job, 'col-designer', val, immediate)}
                                     placeholder="Designer..."
                                     className="w-full bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-gray-200 focus:border-black rounded-lg px-1.5 py-0.5 font-mono text-[11px] text-gray-800 focus:outline-none"
+                                    id={`input-designer-${job.id}`}
                                   />
                                 </td>
 
@@ -1401,12 +1602,12 @@ export default function JobManagementBoard({
                                       <ExternalLink className="w-2.5 h-2.5" />
                                     </a>
                                   ) : (
-                                    <input
-                                      type="text"
+                                    <InlineCellInput
                                       placeholder="Paste URL..."
-                                      value=""
-                                      onChange={e => handleCellChange(job, 'col-artwork-link', e.target.value)}
+                                      value={job.values['col-artwork-link']}
+                                      onCommit={(val, immediate) => handleCellChange(job, 'col-artwork-link', val, immediate)}
                                       className="w-full bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-gray-200 focus:border-black rounded-lg px-1 py-0.5 font-mono text-[10px] text-gray-400 placeholder:text-gray-300 focus:outline-none"
+                                      id={`input-artwork-${job.id}`}
                                     />
                                   )}
                                 </td>
@@ -1538,81 +1739,81 @@ export default function JobManagementBoard({
 
                                                       {/* Design Name */}
                                                       <td className="py-1 px-1">
-                                                        <input
-                                                          type="text"
-                                                          value={item.values['col-sub-design'] || ''}
-                                                          onChange={e => handleSubItemCellChange(job, item.id, 'col-sub-design', e.target.value)}
+                                                        <InlineCellInput
+                                                          value={item.values['col-sub-design']}
+                                                          onCommit={(val, immediate) => handleSubItemCellChange(job, item.id, 'col-sub-design', val, immediate)}
                                                           className="w-full bg-transparent hover:bg-gray-50 focus:bg-white border border-transparent focus:border-black rounded px-1.5 py-1 font-bold text-black focus:outline-none"
                                                           placeholder="Design..."
+                                                          id={`input-sub-design-${item.id}`}
                                                         />
                                                       </td>
 
                                                       {/* Brand */}
                                                       <td className="py-1 px-1">
-                                                        <input
-                                                          type="text"
-                                                          value={item.values['col-sub-brand'] || ''}
-                                                          onChange={e => handleSubItemCellChange(job, item.id, 'col-sub-brand', e.target.value)}
+                                                        <InlineCellInput
+                                                          value={item.values['col-sub-brand']}
+                                                          onCommit={(val, immediate) => handleSubItemCellChange(job, item.id, 'col-sub-brand', val, immediate)}
                                                           className="w-full bg-transparent hover:bg-gray-50 focus:bg-white border border-transparent focus:border-black rounded px-1.5 py-1 text-gray-700 focus:outline-none"
                                                           placeholder="Brand..."
+                                                          id={`input-sub-brand-${item.id}`}
                                                         />
                                                       </td>
 
                                                       {/* Garment / Type */}
                                                       <td className="py-1 px-1">
-                                                        <input
-                                                          type="text"
-                                                          value={item.values['col-sub-garment'] || ''}
-                                                          onChange={e => handleSubItemCellChange(job, item.id, 'col-sub-garment', e.target.value)}
+                                                        <InlineCellInput
+                                                          value={item.values['col-sub-garment']}
+                                                          onCommit={(val, immediate) => handleSubItemCellChange(job, item.id, 'col-sub-garment', val, immediate)}
                                                           className="w-full bg-transparent hover:bg-gray-50 focus:bg-white border border-transparent focus:border-black rounded px-1.5 py-1 text-gray-700 focus:outline-none"
                                                           placeholder="Garment..."
+                                                          id={`input-sub-garment-${item.id}`}
                                                         />
                                                       </td>
 
                                                       {/* SKU */}
                                                       <td className="py-1 px-1">
-                                                        <input
-                                                          type="text"
-                                                          value={item.values['col-sub-sku'] || ''}
-                                                          onChange={e => handleSubItemCellChange(job, item.id, 'col-sub-sku', e.target.value)}
+                                                        <InlineCellInput
+                                                          value={item.values['col-sub-sku']}
+                                                          onCommit={(val, immediate) => handleSubItemCellChange(job, item.id, 'col-sub-sku', val, immediate)}
                                                           className="w-full bg-transparent hover:bg-gray-50 focus:bg-white border border-transparent focus:border-black rounded px-1.5 py-1 font-mono text-[10px] text-gray-500 focus:outline-none"
                                                           placeholder="SKU..."
+                                                          id={`input-sub-sku-${item.id}`}
                                                         />
                                                       </td>
 
                                                       {/* Colour */}
                                                       <td className="py-1 px-1">
-                                                        <input
-                                                          type="text"
-                                                          value={item.values['col-sub-colour'] || ''}
-                                                          onChange={e => handleSubItemCellChange(job, item.id, 'col-sub-colour', e.target.value)}
+                                                        <InlineCellInput
+                                                          value={item.values['col-sub-colour']}
+                                                          onCommit={(val, immediate) => handleSubItemCellChange(job, item.id, 'col-sub-colour', val, immediate)}
                                                           className="w-full bg-transparent hover:bg-gray-50 focus:bg-white border border-transparent focus:border-black rounded px-1.5 py-1 text-gray-700 focus:outline-none"
                                                           placeholder="Colour..."
+                                                          id={`input-sub-colour-${item.id}`}
                                                         />
                                                       </td>
 
                                                       {/* ONE SIZE */}
                                                       <td className="py-1 px-0.5 bg-amber-50/30">
-                                                        <input
-                                                          type="number"
+                                                        <InlineCellNumberInput
                                                           min="0"
-                                                          value={item.values['col-sub-onesize'] ?? ''}
-                                                          onChange={e => handleSubItemCellChange(job, item.id, 'col-sub-onesize', Number(e.target.value) || 0)}
+                                                          value={item.values['col-sub-onesize']}
+                                                          onCommit={(val, immediate) => handleSubItemCellChange(job, item.id, 'col-sub-onesize', val, immediate)}
                                                           className="w-full text-center bg-transparent hover:bg-white focus:bg-white border border-transparent focus:border-black rounded py-1 font-mono font-bold text-gray-800 focus:outline-none"
                                                           placeholder="-"
+                                                          id={`input-sub-onesize-${item.id}`}
                                                         />
                                                       </td>
 
                                                       {/* XS through 4XL */}
                                                       {['xs', 's', 'm', 'l', 'xl', '2xl', '3xl', '4xl'].map(sz => (
                                                         <td key={sz} className="py-1 px-0.5">
-                                                          <input
-                                                            type="number"
+                                                          <InlineCellNumberInput
                                                             min="0"
-                                                            value={item.values[`col-sub-${sz}`] ?? ''}
-                                                            onChange={e => handleSubItemCellChange(job, item.id, `col-sub-${sz}`, Number(e.target.value) || 0)}
+                                                            value={item.values[`col-sub-${sz}`]}
+                                                            onCommit={(val, immediate) => handleSubItemCellChange(job, item.id, `col-sub-${sz}`, val, immediate)}
                                                             className="w-full text-center bg-transparent hover:bg-white focus:bg-white border border-transparent focus:border-black rounded py-1 font-mono text-gray-700 focus:outline-none"
                                                             placeholder="-"
+                                                            id={`input-sub-${sz}-${item.id}`}
                                                           />
                                                         </td>
                                                       ))}
@@ -1624,14 +1825,15 @@ export default function JobManagementBoard({
 
                                                       {/* Price / pc */}
                                                       <td className="py-1 px-1">
-                                                        <input
-                                                          type="number"
+                                                        <InlineCellNumberInput
                                                           step="0.01"
                                                           min="0"
-                                                          value={item.values['col-sub-amount-piece'] ?? ''}
-                                                          onChange={e => handleSubItemCellChange(job, item.id, 'col-sub-amount-piece', Number(e.target.value) || 0)}
+                                                          isFloat={true}
+                                                          value={item.values['col-sub-amount-piece']}
+                                                          onCommit={(val, immediate) => handleSubItemCellChange(job, item.id, 'col-sub-amount-piece', val, immediate)}
                                                           className="w-full text-right bg-transparent hover:bg-gray-50 focus:bg-white border border-transparent focus:border-black rounded px-1.5 py-1 font-mono text-gray-800 focus:outline-none"
                                                           placeholder="0.00"
+                                                          id={`input-sub-amount-piece-${item.id}`}
                                                         />
                                                       </td>
 
@@ -1712,12 +1914,13 @@ export default function JobManagementBoard({
 
                                           <div className="space-y-2 bg-gray-50 p-4 rounded-xl border border-gray-200">
                                             <h4 className="font-extrabold uppercase text-[10px] text-gray-500 font-mono">Production Notes & Specifications</h4>
-                                            <textarea
-                                              value={job.values['col-notes'] || ''}
-                                              onChange={e => handleCellChange(job, 'col-notes', e.target.value)}
+                                            <InlineCellTextarea
+                                              value={job.values['col-notes']}
+                                              onCommit={(val, immediate) => handleCellChange(job, 'col-notes', val, immediate)}
                                               rows={4}
                                               className="w-full bg-white border border-gray-200 focus:border-black rounded-lg p-2 text-xs text-black font-sans focus:outline-none"
                                               placeholder="Add internal production notes, ink pantones, machine specs, special finishing requirements..."
+                                              id={`textarea-notes-${job.id}`}
                                             />
                                           </div>
                                         </div>

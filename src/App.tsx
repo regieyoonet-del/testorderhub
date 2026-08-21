@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Product,
@@ -358,6 +358,7 @@ export default function App() {
   });
 
   const [highlightJobId, setHighlightJobId] = useState<string | undefined>(undefined);
+  const jobSaveDebounceTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   useEffect(() => {
     localStorage.setItem('rp_notifications', JSON.stringify(notifications));
@@ -1214,20 +1215,47 @@ export default function App() {
         // 9. Process jobs & columns (Google Sheets is the authoritative persistent source of truth)
         if (fetchedJobs !== null && Array.isArray(fetchedJobs)) {
           setJobs(prevJobs => {
+            const fetchedMap = new Map(fetchedJobs.map(j => [j.id, j]));
             const fetchedIds = new Set(fetchedJobs.map(j => j.id));
             const now = Date.now();
 
-            // Only retain local jobs if they were created very recently (within 60 seconds)
-            // and are genuinely in-flight before reaching Google Sheets. Stale/deleted local jobs are pruned.
-            const recentUnsyncedLocal = prevJobs.filter(j => {
-              if (fetchedIds.has(j.id)) return false;
-              const createdTimestamp = new Date(j.createdAt || 0).getTime();
-              const isRecent = !isNaN(createdTimestamp) && (now - createdTimestamp < 60000);
-              return isRecent;
+            // Check if any existing local job has in-progress edits or recent local updates (< 20s)
+            // that are newer than the fetched server snapshot. If so, preserve local data so typing is never interrupted!
+            const mergedExisting = prevJobs.map(localJob => {
+              const serverJob = fetchedMap.get(localJob.id);
+              if (!serverJob) return localJob;
+
+              const localUpdated = new Date(localJob.updatedAt || 0).getTime();
+              const serverUpdated = new Date(serverJob.updatedAt || 0).getTime();
+              const isRecentLocalEdit = (!isNaN(localUpdated) && (now - localUpdated < 20000) && localUpdated > serverUpdated);
+
+              if (isRecentLocalEdit) {
+                return localJob;
+              }
+              return serverJob;
             });
 
-            const merged = [...recentUnsyncedLocal, ...fetchedJobs];
-            return merged.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+            // Find brand new server jobs not present in local state
+            const prevIds = new Set(prevJobs.map(j => j.id));
+            const newServerJobs = fetchedJobs.filter(j => !prevIds.has(j.id));
+
+            // Only retain local jobs that haven't reached server yet if created within 60s
+            const activeExistingJobs = mergedExisting.filter(j => {
+              if (fetchedIds.has(j.id)) return true;
+              const createdTimestamp = new Date(j.createdAt || 0).getTime();
+              return !isNaN(createdTimestamp) && (now - createdTimestamp < 60000);
+            });
+
+            const merged = [...activeExistingJobs, ...newServerJobs];
+            // Deduplicate by ID
+            const seen = new Set<string>();
+            const deduplicated = merged.filter(j => {
+              if (seen.has(j.id)) return false;
+              seen.add(j.id);
+              return true;
+            });
+
+            return deduplicated.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
           });
         }
 
@@ -1483,24 +1511,44 @@ export default function App() {
   };
 
   // Job Management Handlers
-  const handleSaveJob = (job: Job) => {
+  const handleSaveJob = (job: Job, immediate: boolean = false) => {
+    const updatedJob: Job = {
+      ...job,
+      updatedAt: job.updatedAt || new Date().toISOString()
+    };
+
     setJobs(prev => {
-      const exists = prev.some(j => j.id === job.id);
+      const exists = prev.some(j => j.id === updatedJob.id);
       if (exists) {
-        return prev.map(j => j.id === job.id ? job : j);
+        return prev.map(j => j.id === updatedJob.id ? updatedJob : j);
       }
-      return [job, ...prev];
+      return [updatedJob, ...prev];
     });
 
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
-      sheetsService.saveJob(appsScriptConfig.webAppUrl, job);
+      const url = appsScriptConfig.webAppUrl;
+      const existingTimer = jobSaveDebounceTimers.current.get(updatedJob.id);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+      }
+
+      if (immediate) {
+        jobSaveDebounceTimers.current.delete(updatedJob.id);
+        sheetsService.saveJob(url, updatedJob).catch(err => console.warn('Job save sync notice:', err));
+      } else {
+        const timer = setTimeout(() => {
+          jobSaveDebounceTimers.current.delete(updatedJob.id);
+          sheetsService.saveJob(url, updatedJob).catch(err => console.warn('Job save sync notice:', err));
+        }, 500);
+        jobSaveDebounceTimers.current.set(updatedJob.id, timer);
+      }
     }
 
     // Synchronize linked Order if exists
-    if (job.orderId) {
-      const linkedOrder = orders.find(o => o.id === job.orderId || (o.orderNumber && job.orderNumber && o.orderNumber === job.orderNumber));
-      if (linkedOrder && linkedOrder.status !== job.status) {
-        const updatedOrders = orders.map(o => o.id === linkedOrder.id ? { ...o, status: job.status } : o);
+    if (updatedJob.orderId) {
+      const linkedOrder = orders.find(o => o.id === updatedJob.orderId || (o.orderNumber && updatedJob.orderNumber && o.orderNumber === updatedJob.orderNumber));
+      if (linkedOrder && linkedOrder.status !== updatedJob.status) {
+        const updatedOrders = orders.map(o => o.id === linkedOrder.id ? { ...o, status: updatedJob.status } : o);
         handleUpdateOrders(updatedOrders);
       }
     }
@@ -1531,6 +1579,11 @@ export default function App() {
   };
 
   const handleDeleteJob = (jobId: string) => {
+    const existingTimer = jobSaveDebounceTimers.current.get(jobId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      jobSaveDebounceTimers.current.delete(jobId);
+    }
     setJobs(prev => prev.filter(j => j.id !== jobId));
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
       sheetsService.deleteJob(appsScriptConfig.webAppUrl, jobId);
