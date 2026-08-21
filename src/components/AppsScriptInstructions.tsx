@@ -324,6 +324,61 @@ function initSheets(ss) {
       ensureHeaders(s, headers[name]);
     }
   }
+
+  // Seed default column definitions if JobColumns / JobItemColumns have no data rows
+  seedDefaultJobColumns(ss);
+  seedDefaultJobItemColumns(ss);
+}
+
+function seedDefaultJobColumns(ss) {
+  var sheet = ss.getSheetByName("JobColumns");
+  if (!sheet) return;
+  var data = sheet.getDataRange().getValues();
+  if (data.length > 1) return; // Already has data rows, do not overwrite custom columns!
+
+  var defaultCols = [
+    { id: "col-job-name", name: "Job Name", type: "text", position: 0, required: true, isSystemField: true, isHidden: false, options: [], createdDate: "2026-08-01T00:00:00.000Z" },
+    { id: "col-company", name: "Company", type: "company", position: 1, required: true, isSystemField: true, isHidden: false, options: [], createdDate: "2026-08-01T00:00:00.000Z" },
+    { id: "col-job-type", name: "Job Type", type: "dropdown", position: 2, required: false, isSystemField: false, isHidden: false, options: ["Screen Print", "DTF", "Sticker", "Digital Print", "Embroidery", "Sublimation", "Promotional Product", "Other"], createdDate: "2026-08-01T00:00:00.000Z" },
+    { id: "col-status", name: "Status", type: "status", position: 3, required: true, isSystemField: true, isHidden: false, options: ["Pending", "Approved", "In Production", "Shipped", "Completed", "Canceled"], createdDate: "2026-08-01T00:00:00.000Z" },
+    { id: "col-date-added", name: "Date Added", type: "date", position: 4, required: false, isSystemField: false, isHidden: false, options: [], createdDate: "2026-08-01T00:00:00.000Z" },
+    { id: "col-in-hand-date", name: "In-Hand Date", type: "date", position: 5, required: false, isSystemField: false, isHidden: false, options: [], createdDate: "2026-08-01T00:00:00.000Z" },
+    { id: "col-artwork-link", name: "Artwork Link", type: "link", position: 6, required: false, isSystemField: false, isHidden: false, options: [], createdDate: "2026-08-01T00:00:00.000Z" },
+    { id: "col-designer", name: "Designer", type: "person", position: 7, required: false, isSystemField: false, isHidden: false, options: ["Regie", "Alex M.", "Sarah K.", "Production Team"], createdDate: "2026-08-01T00:00:00.000Z" },
+    { id: "col-priority", name: "Priority", type: "dropdown", position: 8, required: false, isSystemField: false, isHidden: false, options: ["Urgent", "High", "Normal", "Low"], createdDate: "2026-08-01T00:00:00.000Z" },
+    { id: "col-notes", name: "Notes", type: "long_text", position: 9, required: false, isSystemField: false, isHidden: false, options: [], createdDate: "2026-08-01T00:00:00.000Z" }
+  ];
+
+  saveJobColumns(ss, defaultCols);
+}
+
+function seedDefaultJobItemColumns(ss) {
+  var sheet = ss.getSheetByName("JobItemColumns");
+  if (!sheet) return;
+  var data = sheet.getDataRange().getValues();
+  if (data.length > 1) return; // Already has data rows, do not overwrite custom columns!
+
+  var defaultItemCols = [
+    { id: "col-sub-design", name: "Design Name", type: "text", position: 0, required: true, isSystemField: false, isHidden: false, calculation: "none" },
+    { id: "col-sub-brand", name: "Brand", type: "text", position: 1, required: false, isSystemField: false, isHidden: false, calculation: "none" },
+    { id: "col-sub-garment", name: "Garment / Item Type", type: "text", position: 2, required: false, isSystemField: false, isHidden: false, calculation: "none" },
+    { id: "col-sub-sku", name: "SKU", type: "text", position: 3, required: false, isSystemField: false, isHidden: false, calculation: "none" },
+    { id: "col-sub-colour", name: "Colour", type: "text", position: 4, required: false, isSystemField: false, isHidden: false, calculation: "none" },
+    { id: "col-sub-onesize", name: "One Size", type: "number", position: 5, required: false, isSystemField: false, isHidden: false, calculation: "none" },
+    { id: "col-sub-xs", name: "XS", type: "number", position: 6, required: false, isSystemField: false, isHidden: false, calculation: "none" },
+    { id: "col-sub-s", name: "S", type: "number", position: 7, required: false, isSystemField: false, isHidden: false, calculation: "none" },
+    { id: "col-sub-m", name: "M", type: "number", position: 8, required: false, isSystemField: false, isHidden: false, calculation: "none" },
+    { id: "col-sub-l", name: "L", type: "number", position: 9, required: false, isSystemField: false, isHidden: false, calculation: "none" },
+    { id: "col-sub-xl", name: "XL", type: "number", position: 10, required: false, isSystemField: false, isHidden: false, calculation: "none" },
+    { id: "col-sub-2xl", name: "2XL", type: "number", position: 11, required: false, isSystemField: false, isHidden: false, calculation: "none" },
+    { id: "col-sub-3xl", name: "3XL", type: "number", position: 12, required: false, isSystemField: false, isHidden: false, calculation: "none" },
+    { id: "col-sub-4xl", name: "4XL", type: "number", position: 13, required: false, isSystemField: false, isHidden: false, calculation: "none" },
+    { id: "col-sub-total-qty", name: "Total Qty", type: "number", position: 14, required: false, isSystemField: true, isHidden: false, calculation: "total_qty" },
+    { id: "col-sub-amount-piece", name: "Amount / Piece", type: "currency", position: 15, required: false, isSystemField: false, isHidden: false, calculation: "none" },
+    { id: "col-sub-total-amount", name: "Total Amount", type: "currency", position: 16, required: false, isSystemField: true, isHidden: false, calculation: "total_amount" }
+  ];
+
+  saveJobItemColumns(ss, defaultItemCols);
 }
 
 function getTableData(ss, sheetName) {

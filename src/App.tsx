@@ -1259,12 +1259,22 @@ export default function App() {
           });
         }
 
-        if (fetchedJobColumns !== null && Array.isArray(fetchedJobColumns) && fetchedJobColumns.length > 0) {
-          setJobColumns(fetchedJobColumns);
+        if (fetchedJobColumns !== null && Array.isArray(fetchedJobColumns)) {
+          if (fetchedJobColumns.length > 0) {
+            setJobColumns(fetchedJobColumns);
+          } else if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+            // Sheet is connected but JobColumns table has no data rows: seed default column schema into Google Sheets
+            sheetsService.saveJobColumns(appsScriptConfig.webAppUrl, DEFAULT_JOB_COLUMNS);
+          }
         }
 
-        if (fetchedJobItemColumns !== null && Array.isArray(fetchedJobItemColumns) && fetchedJobItemColumns.length > 0) {
-          setJobItemColumns(fetchedJobItemColumns);
+        if (fetchedJobItemColumns !== null && Array.isArray(fetchedJobItemColumns)) {
+          if (fetchedJobItemColumns.length > 0) {
+            setJobItemColumns(fetchedJobItemColumns);
+          } else if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+            // Sheet is connected but JobItemColumns table has no data rows: seed default item column schema into Google Sheets
+            sheetsService.saveJobItemColumns(appsScriptConfig.webAppUrl, DEFAULT_JOB_ITEM_COLUMNS);
+          }
         }
 
         setLastSyncedTime(new Date().toLocaleTimeString());
