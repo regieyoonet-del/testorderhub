@@ -16,12 +16,20 @@ import {
   JobColumn,
   JobItemColumn,
   JobStatus,
+  StaffMember,
+  PayrollRecord,
+  ExpenseRecord,
+  RecurringExpense,
+  ExpenseCategory,
   getDisplayPurchaserName
 } from '../types';
 import AppsScriptInstructions from './AppsScriptInstructions';
 import SettingsPanel from './SettingsPanel';
 import AdminProductCatalog from './AdminProductCatalog';
 import JobManagementBoard from './JobManagementBoard';
+import StaffManagement from './StaffManagement';
+import ExpensesManagement from './ExpensesManagement';
+import AnalyticsDashboard from './AnalyticsDashboard';
 import { createJobFromOrder } from '../data/initialJobs';
 import {
   ResponsiveContainer,
@@ -115,6 +123,24 @@ interface AdminDashboardProps {
   onSaveJobColumns?: (columns: JobColumn[]) => void;
   onSaveJobItemColumns?: (columns: JobItemColumn[]) => void;
   onCreateJobFromOrder?: (order: Order) => void;
+  staff?: StaffMember[];
+  payroll?: PayrollRecord[];
+  expenses?: ExpenseRecord[];
+  recurringExpenses?: RecurringExpense[];
+  expenseCategories?: ExpenseCategory[];
+  onSaveStaff?: (staff: StaffMember) => void;
+  onSaveStaffBatch?: (staffList: StaffMember[]) => void;
+  onDeleteStaff?: (staffId: string) => void;
+  onSavePayroll?: (record: PayrollRecord) => void;
+  onSavePayrollBatch?: (records: PayrollRecord[]) => void;
+  onDeletePayroll?: (payrollId: string) => void;
+  onSaveExpense?: (expense: ExpenseRecord) => void;
+  onSaveExpensesBatch?: (expensesList: ExpenseRecord[]) => void;
+  onDeleteExpense?: (expenseId: string) => void;
+  onSaveRecurringExpense?: (recurring: RecurringExpense) => void;
+  onSaveRecurringExpensesBatch?: (recurringList: RecurringExpense[]) => void;
+  onDeleteRecurringExpense?: (recurringId: string) => void;
+  onSaveExpenseCategories?: (categories: ExpenseCategory[]) => void;
   onSimulateClient: (companyId: string) => void;
   systemSettings: SystemSettings;
   onUpdateSystemSettings: (settings: SystemSettings) => void;
@@ -123,7 +149,7 @@ interface AdminDashboardProps {
   onForceSyncAll: () => Promise<boolean>;
   onPullFromSheets?: () => Promise<void>;
   isSyncingSheets?: boolean;
-  initialTab?: 'jobs' | 'clients' | 'catalog' | 'orders' | 'analytics' | 'receipt' | 'quotes' | 'settings' | 'sync';
+  initialTab?: 'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'analytics' | 'receipt' | 'quotes' | 'settings' | 'sync';
   initialCatalogSection?: 'catalog' | 'enquiries';
   highlightEnquiryNumber?: string;
   highlightOrderNumber?: string;
@@ -162,6 +188,24 @@ export default function AdminDashboard({
   onSaveJobColumns,
   onSaveJobItemColumns,
   onCreateJobFromOrder,
+  staff = [],
+  payroll = [],
+  expenses = [],
+  recurringExpenses = [],
+  expenseCategories = [],
+  onSaveStaff = () => {},
+  onSaveStaffBatch,
+  onDeleteStaff,
+  onSavePayroll = () => {},
+  onSavePayrollBatch,
+  onDeletePayroll,
+  onSaveExpense = () => {},
+  onSaveExpensesBatch,
+  onDeleteExpense,
+  onSaveRecurringExpense = () => {},
+  onSaveRecurringExpensesBatch,
+  onDeleteRecurringExpense,
+  onSaveExpenseCategories = () => {},
   onSimulateClient,
   systemSettings,
   onUpdateSystemSettings,
@@ -180,7 +224,7 @@ export default function AdminDashboard({
   onToggleMobileNav,
   onLogout
 }: AdminDashboardProps) {
-  const [adminTab, setAdminTab] = useState<'jobs' | 'clients' | 'catalog' | 'orders' | 'analytics' | 'receipt' | 'quotes' | 'settings' | 'sync'>(initialTab || 'jobs');
+  const [adminTab, setAdminTab] = useState<'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'analytics' | 'receipt' | 'quotes' | 'settings' | 'sync'>(initialTab || 'jobs');
 
   const [internalDrawerOpen, setInternalDrawerOpen] = useState(false);
   const isDrawerOpen = isMobileNavOpen !== undefined ? isMobileNavOpen : internalDrawerOpen;
@@ -710,7 +754,9 @@ export default function AdminDashboard({
     { id: 'clients', label: 'Client Accounts', icon: Users, count: companies.length },
     { id: 'catalog', label: 'ARH Products', icon: Layers, count: catalogProducts.length },
     { id: 'orders', label: 'Orders', icon: ClipboardList, count: directCompanyOrders.length },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3, count: null },
+    { id: 'staff', label: 'Staff Management', icon: Users, count: (staff || []).length },
+    { id: 'expenses', label: 'Expenses & Outflow', icon: Receipt, count: (expenses || []).length },
+    { id: 'analytics', label: 'Financial Analytics', icon: BarChart3, count: null },
     { id: 'receipt', label: 'Receipt Generator', icon: Receipt, count: null },
     { id: 'quotes', label: 'Quote Builder', icon: Calculator, count: null },
     { id: 'settings', label: 'Admin Settings', icon: Settings, count: null },
@@ -1587,307 +1633,60 @@ export default function AdminDashboard({
       )}
 
       {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
-      {/* MASTER ANALYTICS DASHBOARD */}
+      {/* STAFF MANAGEMENT & PAYROLL PANEL */}
       {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
-      {adminTab === 'analytics' && (() => {
-        // Data Calculations
-        const totalRevenue = directCompanyOrders.reduce((sum, o) => sum + o.totalAmount, 0);
-        const totalOrders = directCompanyOrders.length;
-        const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-        
-        // Count total items ordered
-        const totalUnits = directCompanyOrders.reduce((sum, o) => {
-          return sum + o.items.reduce((itemSum, it) => itemSum + it.quantity, 0);
-        }, 0);
+      {adminTab === 'staff' && (
+        <StaffManagement
+          staff={staff}
+          payroll={payroll}
+          onSaveStaff={onSaveStaff}
+          onSaveStaffBatch={onSaveStaffBatch}
+          onDeleteStaff={onDeleteStaff}
+          onSavePayroll={onSavePayroll}
+          onSavePayrollBatch={onSavePayrollBatch}
+          onDeletePayroll={onDeletePayroll}
+          systemSettings={systemSettings}
+          currencySymbol={currencySymbol}
+        />
+      )}
 
-        // Revenue by Company
-        const revenueByCompany = companies.map(co => {
-          // match orders by companyName
-          const coOrders = directCompanyOrders.filter(o => o.companyName.toLowerCase() === co.name.toLowerCase());
-          const totalCoRevenue = coOrders.reduce((sum, o) => sum + o.totalAmount, 0);
-          const coOrderCount = coOrders.length;
-          return {
-            name: co.name.length > 15 ? co.name.substring(0, 15) + '...' : co.name,
-            fullName: co.name,
-            revenue: totalCoRevenue,
-            orders: coOrderCount
-          };
-        }).sort((a, b) => b.revenue - a.revenue);
+      {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
+      {/* EXPENSES & OUTFLOW PANEL */}
+      {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
+      {adminTab === 'expenses' && (
+        <ExpensesManagement
+          expenses={expenses}
+          expenseCategories={expenseCategories}
+          recurringExpenses={recurringExpenses}
+          onSaveExpense={onSaveExpense}
+          onSaveExpensesBatch={onSaveExpensesBatch}
+          onDeleteExpense={onDeleteExpense}
+          onSaveRecurringExpense={onSaveRecurringExpense}
+          onSaveRecurringExpensesBatch={onSaveRecurringExpensesBatch}
+          onDeleteRecurringExpense={onDeleteRecurringExpense}
+          onSaveExpenseCategories={onSaveExpenseCategories}
+          systemSettings={systemSettings}
+          currencySymbol={currencySymbol}
+        />
+      )}
 
-        // Orders by Status
-        const statusColors: { [key: string]: string } = {
-          'Pending': '#9ca3af',       // Gray
-          'Approved': '#a855f7',      // Purple
-          'In Production': '#f59e0b',  // Amber
-          'Shipped': '#3b82f6',        // Blue
-          'Completed': '#10b981'       // Green
-        };
-
-        const statusDistribution = ['Pending', 'Approved', 'In Production', 'Shipped', 'Completed'].map(st => {
-          const count = directCompanyOrders.filter(o => o.status === st).length;
-          const revenue = directCompanyOrders.filter(o => o.status === st).reduce((sum, o) => sum + o.totalAmount, 0);
-          return {
-            name: st,
-            value: count,
-            revenue: revenue,
-            color: statusColors[st] || '#6b7280'
-          };
-        }).filter(item => item.value > 0);
-
-        // Product Leaderboard
-        const productPerformanceMap: { [key: string]: { name: string, quantity: number, revenue: number } } = {};
-        directCompanyOrders.forEach(o => {
-          o.items.forEach(it => {
-            const key = it.productName;
-            if (!productPerformanceMap[key]) {
-              productPerformanceMap[key] = { name: key, quantity: 0, revenue: 0 };
-            }
-            productPerformanceMap[key].quantity += it.quantity;
-            productPerformanceMap[key].revenue += it.quantity * it.price;
-          });
-        });
-        const leaderboard = Object.values(productPerformanceMap)
-          .sort((a, b) => b.revenue - a.revenue)
-          .slice(0, 5);
-
-        return (
-          <div className="space-y-8 font-sans text-left" id="admin-analytics-dashboard">
-            {/* KPI Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-              
-              {/* Gross Billing */}
-              <div className="bg-white border-2 border-black rounded-[24px] p-6 shadow-sm space-y-2 relative overflow-hidden group hover:shadow-md transition-shadow">
-                <div className="flex justify-between items-start">
-                  <span className="text-[10px] font-bold font-mono tracking-wider uppercase text-gray-400">Gross B2B Revenue</span>
-                  <div className="p-2 bg-emerald-50 rounded-lg border border-emerald-100 text-emerald-600">
-                    <TrendingUp className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="space-y-0.5">
-                  <h4 className="text-2xl font-extrabold text-black font-mono">Php {totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h4>
-                  <p className="text-[10px] text-gray-500 font-mono">Total billing across all corporate orders</p>
-                </div>
-              </div>
-
-              {/* Active Corporate Accounts */}
-              <div className="bg-white border-2 border-black rounded-[24px] p-6 shadow-sm space-y-2 relative overflow-hidden group hover:shadow-md transition-shadow">
-                <div className="flex justify-between items-start">
-                  <span className="text-[10px] font-bold font-mono tracking-wider uppercase text-gray-400">Active Accounts</span>
-                  <div className="p-2 bg-blue-50 rounded-lg border border-blue-100 text-blue-600">
-                    <Users className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="space-y-0.5">
-                  <h4 className="text-2xl font-extrabold text-black font-mono">{companies.length}</h4>
-                  <p className="text-[10px] text-gray-500 font-mono">Registered clients in database</p>
-                </div>
-              </div>
-
-              {/* Total Order Volume */}
-              <div className="bg-white border-2 border-black rounded-[24px] p-6 shadow-sm space-y-2 relative overflow-hidden group hover:shadow-md transition-shadow">
-                <div className="flex justify-between items-start">
-                  <span className="text-[10px] font-bold font-mono tracking-wider uppercase text-gray-400">Pipeline Orders</span>
-                  <div className="p-2 bg-purple-50 rounded-lg border border-purple-100 text-purple-600">
-                    <ClipboardList className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="space-y-0.5">
-                  <h4 className="text-2xl font-extrabold text-black font-mono">{totalOrders}</h4>
-                  <p className="text-[10px] text-gray-500 font-mono">Total B2B transactions processed</p>
-                </div>
-              </div>
-
-              {/* Average Ticket Value */}
-              <div className="bg-white border-2 border-black rounded-[24px] p-6 shadow-sm space-y-2 relative overflow-hidden group hover:shadow-md transition-shadow">
-                <div className="flex justify-between items-start">
-                  <span className="text-[10px] font-bold font-mono tracking-wider uppercase text-gray-400">Average Order Value</span>
-                  <div className="p-2 bg-amber-50 rounded-lg border border-amber-100 text-amber-600">
-                    <DollarSign className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="space-y-0.5">
-                  <h4 className="text-2xl font-extrabold text-black font-mono">Php {averageOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h4>
-                  <p className="text-[10px] text-gray-500 font-mono">Average order billing value</p>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Charts Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
-              {/* Client Revenue Contribution Chart */}
-              <div className="bg-white border border-gray-200 rounded-[28px] p-6 space-y-4">
-                <div>
-                  <h4 className="font-extrabold uppercase font-mono text-xs text-black tracking-wider flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4" />
-                    B2B Revenue Contribution by Client
-                  </h4>
-                  <p className="text-[10px] text-gray-500 font-mono">Billing aggregated per company profile</p>
-                </div>
-                <div className="h-[280px] w-full">
-                  {revenueByCompany.length === 0 || revenueByCompany.every(c => c.revenue === 0) ? (
-                    <div className="h-full flex items-center justify-center text-gray-400 font-mono text-xs border border-dashed border-gray-200 rounded-2xl bg-gray-50/50">
-                      No client orders recorded.
-                    </div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RechartsBarChart
-                        data={revenueByCompany}
-                        margin={{ top: 10, right: 10, left: -10, bottom: 5 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                        <XAxis 
-                          dataKey="name" 
-                          stroke="#9ca3af" 
-                          fontSize={10} 
-                          tickLine={false} 
-                          axisLine={false}
-                        />
-                        <YAxis 
-                          stroke="#9ca3af" 
-                          fontSize={10} 
-                          tickLine={false} 
-                          axisLine={false}
-                          tickFormatter={(value) => `Php ${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`}
-                        />
-                        <Tooltip 
-                          formatter={(value: any) => [`Php ${Number(value).toFixed(2)}`, 'Billing Total']}
-                          labelClassName="font-mono text-xs text-gray-800 font-bold"
-                          contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb' }}
-                        />
-                        <Bar 
-                          dataKey="revenue" 
-                          fill="#000000" 
-                          radius={[4, 4, 0, 0]} 
-                          maxBarSize={45}
-                        />
-                      </RechartsBarChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-              </div>
-
-              {/* Order Dispatch Status Distribution */}
-              <div className="bg-white border border-gray-200 rounded-[28px] p-6 space-y-4">
-                <div>
-                  <h4 className="font-extrabold uppercase font-mono text-xs text-black tracking-wider flex items-center gap-2">
-                    <PieChart className="w-4 h-4" />
-                    Dispatch Pipeline Status Share
-                  </h4>
-                  <p className="text-[10px] text-gray-500 font-mono">Percentage distribution of orders in different states</p>
-                </div>
-                <div className="flex flex-col sm:flex-row items-center justify-around h-[280px] gap-4">
-                  {statusDistribution.length === 0 ? (
-                    <div className="h-full w-full flex items-center justify-center text-gray-400 font-mono text-xs border border-dashed border-gray-200 rounded-2xl bg-gray-50/50">
-                      No status records available.
-                    </div>
-                  ) : (
-                    <>
-                      <div className="w-[180px] h-[180px] shrink-0">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <RechartsPieChart>
-                            <Pie
-                              data={statusDistribution}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={50}
-                              outerRadius={80}
-                              paddingAngle={4}
-                              dataKey="value"
-                            >
-                              {statusDistribution.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} />
-                              ))}
-                            </Pie>
-                            <Tooltip 
-                              formatter={(value: any, name: string, props: any) => [
-                                `${value} order(s) (Php ${props.payload.revenue.toFixed(2)})`, 
-                                name
-                              ]}
-                              contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e5e7eb' }}
-                            />
-                          </RechartsPieChart>
-                        </ResponsiveContainer>
-                      </div>
-                      
-                      {/* Custom Legend */}
-                      <div className="space-y-2 max-h-[220px] overflow-y-auto pr-2 shrink-0 w-full sm:w-auto">
-                        {statusDistribution.map((entry, idx) => (
-                          <div key={idx} className="flex items-center space-x-3 text-xs font-mono">
-                            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
-                            <div className="flex flex-col">
-                              <span className="font-extrabold text-black uppercase text-[10px]">{entry.name}</span>
-                              <span className="text-[9px] text-gray-400 font-medium">
-                                {entry.value} Order(s) ({((entry.value / totalOrders) * 100).toFixed(0)}%)
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-            </div>
-
-            {/* Product Performance Leaderboard Section */}
-            <div className="bg-white border border-gray-200 rounded-[28px] p-6 space-y-4">
-              <div>
-                <h4 className="font-extrabold uppercase font-mono text-xs text-black tracking-wider flex items-center gap-2">
-                  <Package className="w-4 h-4" />
-                  Product Demand Performance Leaderboard
-                </h4>
-                <p className="text-[10px] text-gray-500 font-mono">Ranked by total purchase billing volume and item units ordered</p>
-              </div>
-
-              {leaderboard.length === 0 ? (
-                <div className="p-12 text-center text-gray-400 font-mono text-xs border border-dashed border-gray-200 rounded-2xl bg-gray-50/50">
-                  No line-item orders processed yet.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse font-sans text-xs">
-                    <thead>
-                      <tr className="bg-black text-white font-mono uppercase tracking-wider text-[9px] border-b border-black">
-                        <th className="p-4 rounded-l-2xl">Rank</th>
-                        <th className="p-4">Corporate Custom Merchandise</th>
-                        <th className="p-4 text-center">Total Quantity Ordered</th>
-                        <th className="p-4 text-right rounded-r-2xl">Total Revenue Generated</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {leaderboard.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-neutral-50 transition-colors">
-                          <td className="p-4 font-black font-mono text-black text-sm">
-                            #{idx + 1}
-                          </td>
-                          <td className="p-4">
-                            <div className="flex items-center space-x-3">
-                              <div className="w-8 h-8 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center font-mono font-bold text-[10px] text-black">
-                                {item.name.substring(0, 2).toUpperCase()}
-                              </div>
-                              <span className="font-extrabold text-neutral-800 uppercase tracking-tight">{item.name}</span>
-                            </div>
-                          </td>
-                          <td className="p-4 text-center font-mono font-bold text-gray-600">
-                            {item.quantity.toLocaleString()} units
-                          </td>
-                          <td className="p-4 text-right font-mono font-black text-black">
-                            Php {item.revenue.toFixed(2)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-          </div>
-        );
-      })()}
+      {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
+      {/* COMPREHENSIVE FINANCIAL & SALES ANALYTICS DASHBOARD */}
+      {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
+      {adminTab === 'analytics' && (
+        <AnalyticsDashboard
+          orders={directCompanyOrders}
+          companies={companies}
+          products={products}
+          staff={staff}
+          payroll={payroll}
+          expenses={expenses}
+          recurringExpenses={recurringExpenses}
+          expenseCategories={expenseCategories}
+          systemSettings={systemSettings}
+          currencySymbol={currencySymbol}
+        />
+      )}
 
       {adminTab === 'settings' && (
         <div className="max-w-4xl mx-auto animate-fade-in" id="admin-settings-tab">

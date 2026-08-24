@@ -374,3 +374,117 @@ export function getDisplayPurchaserName(
   return 'Storefront Customer';
 }
 
+// ----------------------------------------------------
+// STAFF & PAYROLL DATA MODELS
+// ----------------------------------------------------
+export type SalaryType = 'Monthly' | 'Daily' | 'Hourly';
+export type EmploymentStatus = 'Full-Time' | 'Part-Time' | 'Contract' | 'Probationary' | 'Intern' | 'Seasonal' | string;
+export type StaffStatus = 'Active' | 'Inactive';
+
+export interface StaffMember {
+  id: string; // e.g. 'STF-101'
+  fullName: string;
+  position: string;
+  department: string;
+  employmentStatus: EmploymentStatus;
+  dateStarted: string; // YYYY-MM-DD
+  salaryType: SalaryType;
+  basicSalary: number; // Rate per month / day / hour
+  allowances: number;
+  otherCompensation: number;
+  notes?: string;
+  status: StaffStatus;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type PayrollStatus = 'Draft' | 'Reviewed' | 'Finalized' | 'Paid' | 'Voided';
+
+export interface PayrollDeductionItem {
+  id: string;
+  name: string;
+  amount: number;
+}
+
+export interface PayrollRecord {
+  id: string; // e.g. 'PR-2026-001'
+  staffId: string;
+  staffName: string;
+  position?: string;
+  department?: string;
+  payPeriodStart: string; // YYYY-MM-DD
+  payPeriodEnd: string;   // YYYY-MM-DD
+  payDate: string;        // YYYY-MM-DD
+  basicPay: number;
+  allowances: number;
+  otherEarnings: number;
+  grossPay: number;       // basicPay + allowances + otherEarnings
+  deductions: number;     // Total deductions numeric value
+  itemizedDeductions?: PayrollDeductionItem[];
+  totalDeductions: number;
+  netPay: number;         // grossPay - totalDeductions
+  status: PayrollStatus;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// ----------------------------------------------------
+// EXPENSE MANAGEMENT & RECURRING PLANNER DATA MODELS
+// ----------------------------------------------------
+export type ExpenseType = 'Fixed / Recurring' | 'Variable' | 'One-Time' | 'Fixed';
+export type ExpensePaymentStatus = 'Pending' | 'Paid' | 'Voided';
+export type PaymentStatus = ExpensePaymentStatus;
+
+export interface ExpenseCategory {
+  id: string;
+  name: string;
+  isSystem?: boolean;
+  status?: 'Active' | 'Inactive';
+  description?: string;
+  defaultType?: ExpenseType;
+  isActive?: boolean;
+}
+
+export interface ExpenseRecord {
+  id: string; // e.g. 'EXP-001'
+  name: string;
+  category: string;
+  type?: ExpenseType;
+  amount: number;
+  date?: string; // YYYY-MM-DD
+  status?: ExpensePaymentStatus;
+  paymentDate?: string; // YYYY-MM-DD
+  vendor?: string;
+  referenceNumber?: string;
+  notes?: string;
+  recurringExpenseId?: string;
+  payrollId?: string; // Links to payroll record if created/integrated
+  createdAt?: string;
+  updatedAt?: string;
+  // Aliases for convenience/compatibility
+  expenseDate?: string;
+  expenseType?: ExpenseType;
+  paymentStatus?: ExpensePaymentStatus;
+}
+
+export type RecurringFrequency = 'Monthly' | 'Quarterly' | 'Semi-Annual' | 'Yearly' | 'Custom / Specific Months' | 'Custom';
+
+export interface RecurringExpenseRule {
+  id: string; // e.g. 'REC-EXP-001'
+  name: string;
+  category: string;
+  amount: number;
+  frequency: RecurringFrequency;
+  startDate: string; // YYYY-MM-DD
+  endDate?: string;   // YYYY-MM-DD (optional)
+  paymentsPerYear: number; // e.g., 12, 4, 2, 1
+  specificMonths?: number[]; // [1, 2... 12] where 1 is January
+  status: 'Active' | 'Inactive';
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type RecurringExpense = RecurringExpenseRule;
+

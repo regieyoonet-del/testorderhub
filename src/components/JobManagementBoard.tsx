@@ -538,21 +538,41 @@ export default function JobManagementBoard({
   const [dragOverStatus, setDragOverStatus] = useState<JobStatus | null>(null);
 
   // Dynamic Columns State
-  const [currentColumns, setCurrentColumns] = useState<JobColumn[]>(jobColumns);
-  const [currentItemColumns, setCurrentItemColumns] = useState<JobItemColumn[]>(jobItemColumns);
+  const [currentColumns, setCurrentColumns] = useState<JobColumn[]>(() => {
+    const map = new Map<string, JobColumn>();
+    for (const c of (jobColumns || [])) {
+      if (c && c.id) map.set(c.id, c);
+    }
+    return Array.from(map.values());
+  });
+  const [currentItemColumns, setCurrentItemColumns] = useState<JobItemColumn[]>(() => {
+    const map = new Map<string, JobItemColumn>();
+    for (const c of (jobItemColumns || [])) {
+      if (c && c.id) map.set(c.id, c);
+    }
+    return Array.from(map.values());
+  });
   const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
   const [editingCustomCompanyJobId, setEditingCustomCompanyJobId] = useState<string | null>(null);
 
-  // Synchronize when props update
+  // Synchronize when props update (with deduplication defense)
   React.useEffect(() => {
     if (jobColumns && jobColumns.length > 0) {
-      setCurrentColumns(jobColumns);
+      const map = new Map<string, JobColumn>();
+      for (const c of jobColumns) {
+        if (c && c.id) map.set(c.id, c);
+      }
+      setCurrentColumns(Array.from(map.values()));
     }
   }, [jobColumns]);
 
   React.useEffect(() => {
     if (jobItemColumns && jobItemColumns.length > 0) {
-      setCurrentItemColumns(jobItemColumns);
+      const map = new Map<string, JobItemColumn>();
+      for (const c of jobItemColumns) {
+        if (c && c.id) map.set(c.id, c);
+      }
+      setCurrentItemColumns(Array.from(map.values()));
     }
   }, [jobItemColumns]);
 
@@ -1146,13 +1166,23 @@ export default function JobManagementBoard({
     }
   };
 
-  // Visible Columns
+  // Visible Columns (with defensive uniqueness guarantee)
   const visibleJobColumns = useMemo(() => {
-    return currentColumns.filter(c => !c.isHidden);
+    const seen = new Set<string>();
+    return currentColumns.filter(c => {
+      if (c.isHidden || seen.has(c.id)) return false;
+      seen.add(c.id);
+      return true;
+    });
   }, [currentColumns]);
 
   const visibleItemColumns = useMemo(() => {
-    return currentItemColumns.filter(c => !c.isHidden);
+    const seen = new Set<string>();
+    return currentItemColumns.filter(c => {
+      if (c.isHidden || seen.has(c.id)) return false;
+      seen.add(c.id);
+      return true;
+    });
   }, [currentItemColumns]);
 
   // Active custom columns that are dynamically appended to the tables

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Order, Product, CompanyProfile, CatalogProduct, QuoteEnquiry, ColorOption, OrderPortal, OrderItem, AppNotification, Job, JobColumn, JobItem, JobItemColumn, JobActivity } from '../types';
+import { Order, Product, CompanyProfile, CatalogProduct, QuoteEnquiry, ColorOption, OrderPortal, OrderItem, AppNotification, Job, JobColumn, JobItem, JobItemColumn, JobActivity, StaffMember, PayrollRecord, ExpenseRecord, ExpenseCategory, RecurringExpenseRule } from '../types';
 import { INITIAL_CATALOG_PRODUCTS } from '../data/initialCatalog';
 import { parseColorList, resolveColorHex } from '../utils/colorUtils';
 import { DEFAULT_QUOTE_NOTES } from '../constants/quoteDefaults';
@@ -25,6 +25,11 @@ export interface AllSheetsData {
   jobItems: JobItem[] | null;
   jobItemColumns: JobItemColumn[] | null;
   jobActivities: JobActivity[] | null;
+  staff: StaffMember[] | null;
+  payroll: PayrollRecord[] | null;
+  expenses: ExpenseRecord[] | null;
+  expenseCategories: ExpenseCategory[] | null;
+  recurringExpenses: RecurringExpenseRule[] | null;
 }
 
 function parseArrayProp(val: any): string[] | undefined {
@@ -1399,7 +1404,7 @@ export const sheetsService = {
       if (!response.ok) return null;
       const rawData = await response.json();
       if (Array.isArray(rawData)) {
-        return rawData.map(item => ({
+        const mapped = rawData.map(item => ({
           id: String(getProp(item, ['ColumnID', 'columnId', 'id', 'Column ID']) || ''),
           name: String(getProp(item, ['Name', 'name', 'Column Name', 'ColumnName']) || ''),
           type: (getProp(item, ['Type', 'type', 'Field Type', 'FieldType']) || 'text') as any,
@@ -1409,7 +1414,14 @@ export const sheetsService = {
           isHidden: String(getProp(item, ['IsHidden', 'isHidden', 'Is Hidden'])).toLowerCase() === 'true' || getProp(item, ['IsHidden', 'isHidden']) === true,
           options: parseArrayProp(getProp(item, ['Options', 'options', 'OptionsJSON'])),
           createdDate: String(getProp(item, ['CreatedDate', 'createdDate', 'Created Date']) || new Date().toISOString())
-        }));
+        })).filter(col => Boolean(col.id));
+
+        // Deduplicate keeping latest occurrence per unique Column ID
+        const uniqueMap = new Map<string, JobColumn>();
+        for (const col of mapped) {
+          uniqueMap.set(col.id, col);
+        }
+        return Array.from(uniqueMap.values());
       }
       return null;
     } catch (error) {
@@ -1425,11 +1437,20 @@ export const sheetsService = {
     if (!url) return false;
     const cleanedUrl = resolveUrl(url);
     try {
+      // Deduplicate before sending
+      const uniqueMap = new Map<string, JobColumn>();
+      for (const col of (columns || [])) {
+        if (col && col.id) {
+          uniqueMap.set(col.id, col);
+        }
+      }
+      const deduped = Array.from(uniqueMap.values());
+
       await fetch(cleanedUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'saveJobColumns', columns })
+        body: JSON.stringify({ action: 'saveJobColumns', columns: deduped })
       });
       return true;
     } catch (error) {
@@ -1452,7 +1473,7 @@ export const sheetsService = {
       if (!response.ok) return null;
       const rawData = await response.json();
       if (Array.isArray(rawData)) {
-        return rawData.map(item => ({
+        const mapped = rawData.map(item => ({
           id: String(getProp(item, ['ColumnID', 'columnId', 'id', 'Column ID']) || ''),
           name: String(getProp(item, ['Name', 'name', 'Column Name', 'ColumnName']) || ''),
           type: (getProp(item, ['Type', 'type', 'Field Type', 'FieldType']) || 'text') as any,
@@ -1462,7 +1483,14 @@ export const sheetsService = {
           isHidden: String(getProp(item, ['IsHidden', 'isHidden', 'Is Hidden'])).toLowerCase() === 'true' || getProp(item, ['IsHidden', 'isHidden']) === true,
           calculation: getProp(item, ['Calculation', 'calculation']) ? String(getProp(item, ['Calculation', 'calculation'])) : undefined,
           options: parseArrayProp(getProp(item, ['Options', 'options', 'OptionsJSON']))
-        }));
+        })).filter(col => Boolean(col.id));
+
+        // Deduplicate keeping latest occurrence per unique Column ID
+        const uniqueMap = new Map<string, JobItemColumn>();
+        for (const col of mapped) {
+          uniqueMap.set(col.id, col);
+        }
+        return Array.from(uniqueMap.values());
       }
       return null;
     } catch (error) {
@@ -1478,15 +1506,44 @@ export const sheetsService = {
     if (!url) return false;
     const cleanedUrl = resolveUrl(url);
     try {
+      // Deduplicate before sending
+      const uniqueMap = new Map<string, JobItemColumn>();
+      for (const col of (columns || [])) {
+        if (col && col.id) {
+          uniqueMap.set(col.id, col);
+        }
+      }
+      const deduped = Array.from(uniqueMap.values());
+
       await fetch(cleanedUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'saveJobItemColumns', columns })
+        body: JSON.stringify({ action: 'saveJobItemColumns', columns: deduped })
       });
       return true;
     } catch (error) {
       console.warn('Google Sheets sync notice (saveJobItemColumns):', error);
+      return false;
+    }
+  },
+
+  /**
+   * One-time cleanup of historical duplicate column rows in Google Sheets.
+   */
+  async cleanDuplicateColumns(url: string): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cleanDuplicateColumns' })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (cleanDuplicateColumns):', error);
       return false;
     }
   },
@@ -1628,6 +1685,482 @@ export const sheetsService = {
       return true;
     } catch (error) {
       console.warn('Google Sheets sync notice (saveJobActivity):', error);
+      return false;
+    }
+  },
+
+  // ----------------------------------------------------
+  // STAFF MANAGEMENT SYNC METHODS
+  // ----------------------------------------------------
+
+  /**
+   * Fetch Staff members from Google Sheets.
+   */
+  async fetchStaff(url: string): Promise<StaffMember[] | null> {
+    if (!url) return null;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      const response = await fetch(`${cleanedUrl}?action=getStaff`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) return null;
+      const rawData = await response.json();
+      if (Array.isArray(rawData)) {
+        return rawData.map(item => ({
+          id: String(getProp(item, ['StaffID', 'staffId', 'id', 'Staff ID']) || `STF-${Date.now()}`),
+          fullName: String(getProp(item, ['FullName', 'fullName', 'Name', 'name', 'Full Name']) || ''),
+          position: String(getProp(item, ['Position', 'position', 'Role', 'role']) || ''),
+          department: String(getProp(item, ['Department', 'department', 'Dept']) || 'General'),
+          employmentStatus: String(getProp(item, ['EmploymentStatus', 'employmentStatus', 'StatusType', 'Employment Status']) || 'Full-Time'),
+          dateStarted: String(getProp(item, ['DateStarted', 'dateStarted', 'StartDate', 'Date Started']) || new Date().toISOString().split('T')[0]),
+          salaryType: (getProp(item, ['SalaryType', 'salaryType', 'Salary Type', 'PayType']) || 'Monthly') as any,
+          basicSalary: Number(getProp(item, ['BasicSalary', 'basicSalary', 'Basic Salary', 'Rate', 'Salary']) || 0),
+          allowances: Number(getProp(item, ['Allowances', 'allowances', 'Allowance']) || 0),
+          otherCompensation: Number(getProp(item, ['OtherCompensation', 'otherCompensation', 'Other Compensation', 'Bonuses']) || 0),
+          notes: String(getProp(item, ['Notes', 'notes', 'Remarks']) || ''),
+          status: (getProp(item, ['Status', 'status']) || 'Active') as any,
+          createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
+          updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
+        }));
+      }
+      return null;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (fetchStaff):', error);
+      return null;
+    }
+  },
+
+  /**
+   * Save a single Staff member to Google Sheets.
+   */
+  async saveStaff(url: string, staff: StaffMember): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveStaff', staff })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveStaff):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Save a batch of Staff members to Google Sheets.
+   */
+  async saveStaffBatch(url: string, staffMembers: StaffMember[]): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveStaffBatch', staffMembers })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveStaffBatch):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Delete a Staff member from Google Sheets.
+   */
+  async deleteStaff(url: string, staffId: string): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteStaff', staffId })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (deleteStaff):', error);
+      return false;
+    }
+  },
+
+  // ----------------------------------------------------
+  // PAYROLL SYNC METHODS
+  // ----------------------------------------------------
+
+  /**
+   * Fetch Payroll records from Google Sheets.
+   */
+  async fetchPayroll(url: string): Promise<PayrollRecord[] | null> {
+    if (!url) return null;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      const response = await fetch(`${cleanedUrl}?action=getPayroll`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) return null;
+      const rawData = await response.json();
+      if (Array.isArray(rawData)) {
+        return rawData.map(item => {
+          const itemizedDeductions = parseObjectProp(getProp(item, ['ItemizedDeductionsJSON', 'itemizedDeductions', 'Itemized Deductions JSON', 'Itemized Deductions']));
+          return {
+            id: String(getProp(item, ['PayrollID', 'payrollId', 'id', 'Payroll ID']) || `PR-${Date.now()}`),
+            staffId: String(getProp(item, ['StaffID', 'staffId', 'Staff ID']) || ''),
+            staffName: String(getProp(item, ['StaffName', 'staffName', 'Staff Name', 'EmployeeName']) || ''),
+            position: getProp(item, ['Position', 'position']) ? String(getProp(item, ['Position', 'position'])) : undefined,
+            department: getProp(item, ['Department', 'department']) ? String(getProp(item, ['Department', 'department'])) : undefined,
+            payPeriodStart: String(getProp(item, ['PayPeriodStart', 'payPeriodStart', 'Pay Period Start', 'PeriodStart']) || ''),
+            payPeriodEnd: String(getProp(item, ['PayPeriodEnd', 'payPeriodEnd', 'Pay Period End', 'PeriodEnd']) || ''),
+            payDate: String(getProp(item, ['PayDate', 'payDate', 'Pay Date', 'Date']) || ''),
+            basicPay: Number(getProp(item, ['BasicPay', 'basicPay', 'Basic Pay', 'BasicSalary']) || 0),
+            allowances: Number(getProp(item, ['Allowances', 'allowances', 'Allowance']) || 0),
+            otherEarnings: Number(getProp(item, ['OtherEarnings', 'otherEarnings', 'Other Earnings', 'Bonuses', 'Overtime']) || 0),
+            grossPay: Number(getProp(item, ['GrossPay', 'grossPay', 'Gross Pay']) || 0),
+            deductions: Number(getProp(item, ['Deductions', 'deductions', 'Total Deductions', 'totalDeductions']) || 0),
+            itemizedDeductions: Array.isArray(itemizedDeductions) ? itemizedDeductions : undefined,
+            totalDeductions: Number(getProp(item, ['TotalDeductions', 'totalDeductions', 'Total Deductions', 'deductions']) || 0),
+            netPay: Number(getProp(item, ['NetPay', 'netPay', 'Net Pay']) || 0),
+            status: (getProp(item, ['Status', 'status']) || 'Draft') as any,
+            notes: String(getProp(item, ['Notes', 'notes', 'Remarks']) || ''),
+            createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
+            updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
+          };
+        });
+      }
+      return null;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (fetchPayroll):', error);
+      return null;
+    }
+  },
+
+  /**
+   * Save a single Payroll record to Google Sheets.
+   */
+  async savePayroll(url: string, record: PayrollRecord): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'savePayroll', record })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (savePayroll):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Batch save Payroll records to Google Sheets.
+   */
+  async savePayrollBatch(url: string, records: PayrollRecord[]): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'savePayrollBatch', records })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (savePayrollBatch):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Delete a Payroll record from Google Sheets.
+   */
+  async deletePayroll(url: string, payrollId: string): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deletePayroll', payrollId })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (deletePayroll):', error);
+      return false;
+    }
+  },
+
+  // ----------------------------------------------------
+  // EXPENSES & RECURRING EXPENSES SYNC METHODS
+  // ----------------------------------------------------
+
+  /**
+   * Fetch Actual Expenses from Google Sheets.
+   */
+  async fetchExpenses(url: string): Promise<ExpenseRecord[] | null> {
+    if (!url) return null;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      const response = await fetch(`${cleanedUrl}?action=getExpenses`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) return null;
+      const rawData = await response.json();
+      if (Array.isArray(rawData)) {
+        return rawData.map(item => ({
+          id: String(getProp(item, ['ExpenseID', 'expenseId', 'id', 'Expense ID']) || `EXP-${Date.now()}`),
+          name: String(getProp(item, ['ExpenseName', 'expenseName', 'Name', 'name', 'Expense Name', 'Description']) || ''),
+          category: String(getProp(item, ['Category', 'category']) || 'Miscellaneous'),
+          type: (getProp(item, ['ExpenseType', 'expenseType', 'Type', 'type', 'Expense Type']) || 'Variable') as any,
+          amount: Number(getProp(item, ['Amount', 'amount', 'Cost', 'Total']) || 0),
+          date: String(getProp(item, ['ExpenseDate', 'expenseDate', 'Date', 'date', 'Expense Date']) || new Date().toISOString().split('T')[0]),
+          status: (getProp(item, ['PaymentStatus', 'paymentStatus', 'Status', 'status', 'Payment Status']) || 'Pending') as any,
+          paymentDate: getProp(item, ['PaymentDate', 'paymentDate', 'Payment Date']) ? String(getProp(item, ['PaymentDate', 'paymentDate', 'Payment Date'])) : undefined,
+          vendor: getProp(item, ['Vendor', 'vendor', 'Payee', 'payee', 'Supplier']) ? String(getProp(item, ['Vendor', 'vendor', 'Payee', 'payee', 'Supplier'])) : undefined,
+          referenceNumber: getProp(item, ['ReferenceNumber', 'referenceNumber', 'Ref #', 'Reference Number', 'ReceiptNo', 'InvoiceNo']) ? String(getProp(item, ['ReferenceNumber', 'referenceNumber', 'Ref #', 'Reference Number', 'ReceiptNo', 'InvoiceNo'])) : undefined,
+          notes: String(getProp(item, ['Notes', 'notes', 'Remarks']) || ''),
+          recurringExpenseId: getProp(item, ['RecurringExpenseID', 'recurringExpenseId', 'Recurring Expense ID']) ? String(getProp(item, ['RecurringExpenseID', 'recurringExpenseId', 'Recurring Expense ID'])) : undefined,
+          payrollId: getProp(item, ['PayrollID', 'payrollId', 'Payroll ID']) ? String(getProp(item, ['PayrollID', 'payrollId', 'Payroll ID'])) : undefined,
+          createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
+          updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
+        }));
+      }
+      return null;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (fetchExpenses):', error);
+      return null;
+    }
+  },
+
+  /**
+   * Save a single Expense record to Google Sheets.
+   */
+  async saveExpense(url: string, expense: ExpenseRecord): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveExpense', expense })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveExpense):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Save batch of Expense records to Google Sheets.
+   */
+  async saveExpensesBatch(url: string, expenses: ExpenseRecord[]): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveExpensesBatch', expenses })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveExpensesBatch):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Delete an Expense record from Google Sheets.
+   */
+  async deleteExpense(url: string, expenseId: string): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteExpense', expenseId })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (deleteExpense):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Fetch Expense Categories from Google Sheets.
+   */
+  async fetchExpenseCategories(url: string): Promise<ExpenseCategory[] | null> {
+    if (!url) return null;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      const response = await fetch(`${cleanedUrl}?action=getExpenseCategories`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) return null;
+      const rawData = await response.json();
+      if (Array.isArray(rawData)) {
+        return rawData.map(item => ({
+          id: String(getProp(item, ['CategoryID', 'categoryId', 'id', 'Category ID']) || `cat-${Date.now()}`),
+          name: String(getProp(item, ['Name', 'name', 'CategoryName', 'Category Name']) || ''),
+          isSystem: String(getProp(item, ['IsSystem', 'isSystem', 'Is System'])).toLowerCase() === 'true' || getProp(item, ['IsSystem', 'isSystem']) === true,
+          status: (getProp(item, ['Status', 'status']) || 'Active') as any
+        }));
+      }
+      return null;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (fetchExpenseCategories):', error);
+      return null;
+    }
+  },
+
+  /**
+   * Save Expense Categories to Google Sheets.
+   */
+  async saveExpenseCategories(url: string, categories: ExpenseCategory[]): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveExpenseCategories', categories })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveExpenseCategories):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Fetch Recurring Expense Rules from Google Sheets.
+   */
+  async fetchRecurringExpenses(url: string): Promise<RecurringExpenseRule[] | null> {
+    if (!url) return null;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      const response = await fetch(`${cleanedUrl}?action=getRecurringExpenses`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) return null;
+      const rawData = await response.json();
+      if (Array.isArray(rawData)) {
+        return rawData.map(item => {
+          const rawMonths = getProp(item, ['SpecificMonthsJSON', 'specificMonths', 'Specific Months', 'MonthsJSON']);
+          let specificMonths: number[] | undefined = undefined;
+          if (Array.isArray(rawMonths)) {
+            specificMonths = rawMonths.map(Number).filter(n => !isNaN(n));
+          } else if (typeof rawMonths === 'string') {
+            try {
+              const parsed = JSON.parse(rawMonths);
+              if (Array.isArray(parsed)) specificMonths = parsed.map(Number).filter(n => !isNaN(n));
+            } catch {
+              specificMonths = rawMonths.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+            }
+          }
+
+          return {
+            id: String(getProp(item, ['RecurringExpenseID', 'recurringExpenseId', 'id', 'Recurring Expense ID']) || `REC-EXP-${Date.now()}`),
+            name: String(getProp(item, ['ExpenseName', 'expenseName', 'Name', 'name', 'Expense Name', 'Description']) || ''),
+            category: String(getProp(item, ['Category', 'category']) || 'Miscellaneous'),
+            amount: Number(getProp(item, ['Amount', 'amount', 'Cost']) || 0),
+            frequency: (getProp(item, ['Frequency', 'frequency']) || 'Monthly') as any,
+            startDate: String(getProp(item, ['StartDate', 'startDate', 'Start Date']) || new Date().toISOString().split('T')[0]),
+            endDate: getProp(item, ['EndDate', 'endDate', 'End Date']) ? String(getProp(item, ['EndDate', 'endDate', 'End Date'])) : undefined,
+            paymentsPerYear: Number(getProp(item, ['PaymentsPerYear', 'paymentsPerYear', 'Payments Per Year']) || 12),
+            specificMonths,
+            status: (getProp(item, ['Status', 'status']) || 'Active') as any,
+            notes: String(getProp(item, ['Notes', 'notes', 'Remarks']) || ''),
+            createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
+            updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
+          };
+        });
+      }
+      return null;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (fetchRecurringExpenses):', error);
+      return null;
+    }
+  },
+
+  /**
+   * Save a single Recurring Expense Rule to Google Sheets.
+   */
+  async saveRecurringExpense(url: string, rule: RecurringExpenseRule): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveRecurringExpense', rule })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveRecurringExpense):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Save batch of Recurring Expense Rules to Google Sheets.
+   */
+  async saveRecurringExpensesBatch(url: string, rules: RecurringExpenseRule[]): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveRecurringExpensesBatch', rules })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveRecurringExpensesBatch):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Delete a Recurring Expense Rule from Google Sheets.
+   */
+  async deleteRecurringExpense(url: string, ruleId: string): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteRecurringExpense', ruleId })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (deleteRecurringExpense):', error);
       return false;
     }
   },
@@ -1947,6 +2480,125 @@ export const sheetsService = {
         }));
       }
 
+      // Extract Staff
+      let staff: StaffMember[] | null = null;
+      if (Array.isArray(raw.staff)) {
+        staff = raw.staff.map((item: any) => ({
+          id: String(getProp(item, ['StaffID', 'staffId', 'id', 'Staff ID']) || `STF-${Date.now()}`),
+          fullName: String(getProp(item, ['FullName', 'fullName', 'Name', 'name', 'Full Name']) || ''),
+          position: String(getProp(item, ['Position', 'position', 'Role', 'role']) || ''),
+          department: String(getProp(item, ['Department', 'department', 'Dept']) || 'General'),
+          employmentStatus: String(getProp(item, ['EmploymentStatus', 'employmentStatus', 'StatusType', 'Employment Status']) || 'Full-Time'),
+          dateStarted: String(getProp(item, ['DateStarted', 'dateStarted', 'StartDate', 'Date Started']) || new Date().toISOString().split('T')[0]),
+          salaryType: (getProp(item, ['SalaryType', 'salaryType', 'Salary Type', 'PayType']) || 'Monthly') as any,
+          basicSalary: Number(getProp(item, ['BasicSalary', 'basicSalary', 'Basic Salary', 'Rate', 'Salary']) || 0),
+          allowances: Number(getProp(item, ['Allowances', 'allowances', 'Allowance']) || 0),
+          otherCompensation: Number(getProp(item, ['OtherCompensation', 'otherCompensation', 'Other Compensation', 'Bonuses']) || 0),
+          notes: String(getProp(item, ['Notes', 'notes', 'Remarks']) || ''),
+          status: (getProp(item, ['Status', 'status']) || 'Active') as any,
+          createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
+          updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
+        }));
+      }
+
+      // Extract Payroll
+      let payroll: PayrollRecord[] | null = null;
+      if (Array.isArray(raw.payroll)) {
+        payroll = raw.payroll.map((item: any) => {
+          const itemizedDeductions = parseObjectProp(getProp(item, ['ItemizedDeductionsJSON', 'itemizedDeductions', 'Itemized Deductions JSON', 'Itemized Deductions']));
+          return {
+            id: String(getProp(item, ['PayrollID', 'payrollId', 'id', 'Payroll ID']) || `PR-${Date.now()}`),
+            staffId: String(getProp(item, ['StaffID', 'staffId', 'Staff ID']) || ''),
+            staffName: String(getProp(item, ['StaffName', 'staffName', 'Staff Name', 'EmployeeName']) || ''),
+            position: getProp(item, ['Position', 'position']) ? String(getProp(item, ['Position', 'position'])) : undefined,
+            department: getProp(item, ['Department', 'department']) ? String(getProp(item, ['Department', 'department'])) : undefined,
+            payPeriodStart: String(getProp(item, ['PayPeriodStart', 'payPeriodStart', 'Pay Period Start', 'PeriodStart']) || ''),
+            payPeriodEnd: String(getProp(item, ['PayPeriodEnd', 'payPeriodEnd', 'Pay Period End', 'PeriodEnd']) || ''),
+            payDate: String(getProp(item, ['PayDate', 'payDate', 'Pay Date', 'Date']) || ''),
+            basicPay: Number(getProp(item, ['BasicPay', 'basicPay', 'Basic Pay', 'BasicSalary']) || 0),
+            allowances: Number(getProp(item, ['Allowances', 'allowances', 'Allowance']) || 0),
+            otherEarnings: Number(getProp(item, ['OtherEarnings', 'otherEarnings', 'Other Earnings', 'Bonuses', 'Overtime']) || 0),
+            grossPay: Number(getProp(item, ['GrossPay', 'grossPay', 'Gross Pay']) || 0),
+            deductions: Number(getProp(item, ['Deductions', 'deductions', 'Total Deductions', 'totalDeductions']) || 0),
+            itemizedDeductions: Array.isArray(itemizedDeductions) ? itemizedDeductions : undefined,
+            totalDeductions: Number(getProp(item, ['TotalDeductions', 'totalDeductions', 'Total Deductions', 'deductions']) || 0),
+            netPay: Number(getProp(item, ['NetPay', 'netPay', 'Net Pay']) || 0),
+            status: (getProp(item, ['Status', 'status']) || 'Draft') as any,
+            notes: String(getProp(item, ['Notes', 'notes', 'Remarks']) || ''),
+            createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
+            updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
+          };
+        });
+      }
+
+      // Extract Expenses
+      let expenses: ExpenseRecord[] | null = null;
+      if (Array.isArray(raw.expenses)) {
+        expenses = raw.expenses.map((item: any) => ({
+          id: String(getProp(item, ['ExpenseID', 'expenseId', 'id', 'Expense ID']) || `EXP-${Date.now()}`),
+          name: String(getProp(item, ['ExpenseName', 'expenseName', 'Name', 'name', 'Expense Name', 'Description']) || ''),
+          category: String(getProp(item, ['Category', 'category']) || 'Miscellaneous'),
+          type: (getProp(item, ['ExpenseType', 'expenseType', 'Type', 'type', 'Expense Type']) || 'Variable') as any,
+          amount: Number(getProp(item, ['Amount', 'amount', 'Cost', 'Total']) || 0),
+          date: String(getProp(item, ['ExpenseDate', 'expenseDate', 'Date', 'date', 'Expense Date']) || new Date().toISOString().split('T')[0]),
+          status: (getProp(item, ['PaymentStatus', 'paymentStatus', 'Status', 'status', 'Payment Status']) || 'Pending') as any,
+          paymentDate: getProp(item, ['PaymentDate', 'paymentDate', 'Payment Date']) ? String(getProp(item, ['PaymentDate', 'paymentDate', 'Payment Date'])) : undefined,
+          vendor: getProp(item, ['Vendor', 'vendor', 'Payee', 'payee', 'Supplier']) ? String(getProp(item, ['Vendor', 'vendor', 'Payee', 'payee', 'Supplier'])) : undefined,
+          referenceNumber: getProp(item, ['ReferenceNumber', 'referenceNumber', 'Ref #', 'Reference Number', 'ReceiptNo', 'InvoiceNo']) ? String(getProp(item, ['ReferenceNumber', 'referenceNumber', 'Ref #', 'Reference Number', 'ReceiptNo', 'InvoiceNo'])) : undefined,
+          notes: String(getProp(item, ['Notes', 'notes', 'Remarks']) || ''),
+          recurringExpenseId: getProp(item, ['RecurringExpenseID', 'recurringExpenseId', 'Recurring Expense ID']) ? String(getProp(item, ['RecurringExpenseID', 'recurringExpenseId', 'Recurring Expense ID'])) : undefined,
+          payrollId: getProp(item, ['PayrollID', 'payrollId', 'Payroll ID']) ? String(getProp(item, ['PayrollID', 'payrollId', 'Payroll ID'])) : undefined,
+          createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
+          updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
+        }));
+      }
+
+      // Extract Expense Categories
+      let expenseCategories: ExpenseCategory[] | null = null;
+      if (Array.isArray(raw.expenseCategories)) {
+        expenseCategories = raw.expenseCategories.map((item: any) => ({
+          id: String(getProp(item, ['CategoryID', 'categoryId', 'id', 'Category ID']) || `cat-${Date.now()}`),
+          name: String(getProp(item, ['Name', 'name', 'CategoryName', 'Category Name']) || ''),
+          isSystem: String(getProp(item, ['IsSystem', 'isSystem', 'Is System'])).toLowerCase() === 'true' || getProp(item, ['IsSystem', 'isSystem']) === true,
+          status: (getProp(item, ['Status', 'status']) || 'Active') as any
+        }));
+      }
+
+      // Extract Recurring Expenses
+      let recurringExpenses: RecurringExpenseRule[] | null = null;
+      if (Array.isArray(raw.recurringExpenses)) {
+        recurringExpenses = raw.recurringExpenses.map((item: any) => {
+          const rawMonths = getProp(item, ['SpecificMonthsJSON', 'specificMonths', 'Specific Months', 'MonthsJSON']);
+          let specificMonths: number[] | undefined = undefined;
+          if (Array.isArray(rawMonths)) {
+            specificMonths = rawMonths.map(Number).filter(n => !isNaN(n));
+          } else if (typeof rawMonths === 'string') {
+            try {
+              const parsed = JSON.parse(rawMonths);
+              if (Array.isArray(parsed)) specificMonths = parsed.map(Number).filter(n => !isNaN(n));
+            } catch {
+              specificMonths = rawMonths.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+            }
+          }
+
+          return {
+            id: String(getProp(item, ['RecurringExpenseID', 'recurringExpenseId', 'id', 'Recurring Expense ID']) || `REC-EXP-${Date.now()}`),
+            name: String(getProp(item, ['ExpenseName', 'expenseName', 'Name', 'name', 'Expense Name', 'Description']) || ''),
+            category: String(getProp(item, ['Category', 'category']) || 'Miscellaneous'),
+            amount: Number(getProp(item, ['Amount', 'amount', 'Cost']) || 0),
+            frequency: (getProp(item, ['Frequency', 'frequency']) || 'Monthly') as any,
+            startDate: String(getProp(item, ['StartDate', 'startDate', 'Start Date']) || new Date().toISOString().split('T')[0]),
+            endDate: getProp(item, ['EndDate', 'endDate', 'End Date']) ? String(getProp(item, ['EndDate', 'endDate', 'End Date'])) : undefined,
+            paymentsPerYear: Number(getProp(item, ['PaymentsPerYear', 'paymentsPerYear', 'Payments Per Year']) || 12),
+            specificMonths,
+            status: (getProp(item, ['Status', 'status']) || 'Active') as any,
+            notes: String(getProp(item, ['Notes', 'notes', 'Remarks']) || ''),
+            createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
+            updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
+          };
+        });
+      }
+
       return {
         products,
         companies,
@@ -1960,7 +2612,12 @@ export const sheetsService = {
         jobColumns,
         jobItems,
         jobItemColumns,
-        jobActivities
+        jobActivities,
+        staff,
+        payroll,
+        expenses,
+        expenseCategories,
+        recurringExpenses
       };
     } catch (err) {
       console.warn('Google Sheets fetchAllData notice:', err);

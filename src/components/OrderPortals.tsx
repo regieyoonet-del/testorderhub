@@ -5,7 +5,8 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import * as XLSX from 'xlsx';
-import { OrderPortal, Product, CompanyProfile, SystemSettings, Order, getDisplayPurchaserName } from '../types';
+import { OrderPortal, Product, CompanyProfile, SystemSettings, Order, CartItem, getDisplayPurchaserName } from '../types';
+import { getProductUnitPrice, getAddOnUnitPrice, makeCompositeId } from '../utils/pricing';
 import {
   Store,
   Plus,
@@ -33,13 +34,16 @@ import {
   Printer,
   CheckSquare,
   Square,
-  FileText
+  FileText,
+  ShoppingBag,
+  AlertCircle
 } from 'lucide-react';
 
 interface OrderPortalsProps {
   portals: OrderPortal[];
   activeCompany: CompanyProfile;
   availableProducts: Product[];
+  allProducts?: Product[];
   systemSettings: SystemSettings;
   onCreatePortal: (portal: Omit<OrderPortal, 'id' | 'createdAt' | 'updatedAt' | 'shareToken'>) => void;
   onUpdatePortal: (portal: OrderPortal) => void;
@@ -49,12 +53,15 @@ interface OrderPortalsProps {
   orders?: Order[];
   onUpdateOrders?: (newOrders: Order[]) => Promise<void>;
   onUpdateOrderStatus?: (orderId: string, newStatus: Order['status']) => void;
+  onAddToCartBulk?: (items: Omit<CartItem, 'id'>[]) => void;
+  onOpenCart?: () => void;
 }
 
 export default function OrderPortals({
   portals,
   activeCompany,
   availableProducts,
+  allProducts,
   systemSettings,
   onCreatePortal,
   onUpdatePortal,
@@ -63,7 +70,9 @@ export default function OrderPortals({
   appsScriptUrl,
   orders = [],
   onUpdateOrders,
-  onUpdateOrderStatus
+  onUpdateOrderStatus,
+  onAddToCartBulk,
+  onOpenCart
 }: OrderPortalsProps) {
   // Filter portals belonging to active company
   const companyPortals = portals.filter(p => p.companyId === activeCompany.id);
@@ -91,6 +100,14 @@ export default function OrderPortals({
   // Storefront Orders Batch Selection & Export State
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [isPrintPdfModalOpen, setIsPrintPdfModalOpen] = useState<boolean>(false);
+
+  // Cart Feedback Banner State
+  const [cartFeedback, setCartFeedback] = useState<{
+    success: boolean;
+    title: string;
+    message: string;
+    skippedItems?: string[];
+  } | null>(null);
 
   // UI Toast Feedback
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -144,6 +161,7 @@ export default function OrderPortals({
     setOrderSort('newest');
     setSelectedOrderIds([]);
     setIsPrintPdfModalOpen(false);
+    setCartFeedback(null);
     setIsModalOpen(true);
   };
 
@@ -162,6 +180,7 @@ export default function OrderPortals({
     setOrderSort('newest');
     setSelectedOrderIds([]);
     setIsPrintPdfModalOpen(false);
+    setCartFeedback(null);
     setIsModalOpen(true);
   };
 
@@ -338,6 +357,143 @@ export default function OrderPortals({
     } else {
       setSelectedOrderIds(prev => Array.from(new Set([...prev, ...visibleIds])));
     }
+  };
+
+  // Handle adding items from selected historical orders into the shopping cart
+  const handleAddSelectedToCart = () => {
+    const selectedOrders = editingPortalOrders.filter(o => selectedOrderIds.includes(o.id));
+    if (selectedOrders.length === 0) {
+      alert('Please select at least one order to add to cart.');
+      return;
+    }
+
+    const addedItemsMap = new Map<string, Omit<CartItem, 'id'>>();
+    const skippedDiscontinued: string[] = [];
+    const skippedInvalidQty: string[] = [];
+    let totalItemsAddedCount = 0;
+    let totalQuantityAdded = 0;
+
+    const findCatalogProduct = (productId: string, productName?: string): Product | null => {
+      // 1. Check in availableProducts (which includes scoped company products)
+      let match = availableProducts.find(p => p.id === productId);
+      if (match) return match;
+
+      // 2. Check in allProducts if provided
+      if (allProducts) {
+        match = allProducts.find(p => p.id === productId);
+        if (match) return match;
+      }
+
+      // 3. Check in activeCompany.customProducts
+      if (activeCompany.customProducts) {
+        match = activeCompany.customProducts.find(p => p.id === productId);
+        if (match) return match;
+      }
+
+      // 4. Fallback check by product name if product ID was adjusted
+      if (productName) {
+        const pNameLower = productName.trim().toLowerCase();
+        match = availableProducts.find(p => p.name.trim().toLowerCase() === pNameLower);
+        if (match) return match;
+        if (allProducts) {
+          match = allProducts.find(p => p.name.trim().toLowerCase() === pNameLower);
+          if (match) return match;
+        }
+      }
+
+      return null;
+    };
+
+    selectedOrders.forEach(order => {
+      const orderRef = order.orderNumber || order.id;
+      (order.items || []).forEach(item => {
+        // 1. Validate Quantity (Do not silently convert invalid quantities to 1)
+        const rawQty = item.quantity;
+        const numQty = typeof rawQty === 'number' ? rawQty : Number(rawQty);
+        if (isNaN(numQty) || numQty <= 0 || !Number.isFinite(numQty)) {
+          const itemDesc = item.productName || item.productId || 'Unknown Product';
+          skippedInvalidQty.push(`${itemDesc} from Order ${orderRef} (Invalid quantity: ${rawQty ?? 'missing'})`);
+          return;
+        }
+
+        // 2. Match to current Catalog Product using productId
+        const catalogProduct = findCatalogProduct(item.productId, item.productName);
+        if (!catalogProduct) {
+          const itemDesc = item.productName ? `"${item.productName}"` : `Product ID: ${item.productId}`;
+          skippedDiscontinued.push(`${itemDesc} from Order ${orderRef} (Product no longer in catalog)`);
+          return;
+        }
+
+        // 3. Resolve authoritative CURRENT BASE PRICE (portal = null)
+        // Explicitly ignores historical order price and portal custom price
+        const baseProductPrice = getProductUnitPrice(
+          catalogProduct,
+          item.selectedSize,
+          item.selectedColor,
+          null
+        );
+
+        // Resolve add-on pricing with portal = null
+        const baseAddOnsTotal = (item.selectedAddOns || []).reduce((sum, ao) => {
+          return sum + getAddOnUnitPrice(catalogProduct, ao, null);
+        }, 0);
+
+        const authoritativeUnitPrice = baseProductPrice + baseAddOnsTotal;
+
+        // 4. Composite Key for Deduplication & Aggregation
+        const customs = item.customDetails || {};
+        const compositeKey = makeCompositeId(
+          catalogProduct.id,
+          item.selectedSize,
+          item.selectedColor,
+          customs
+        );
+
+        // 5. Aggregate quantities for identical product/variant/custom configurations
+        if (addedItemsMap.has(compositeKey)) {
+          const existing = addedItemsMap.get(compositeKey)!;
+          existing.quantity += numQty;
+        } else {
+          addedItemsMap.set(compositeKey, {
+            product: catalogProduct,
+            quantity: numQty,
+            selectedSize: item.selectedSize,
+            selectedColor: item.selectedColor,
+            selectedAddOns: item.selectedAddOns,
+            customDetails: customs,
+            unitPrice: authoritativeUnitPrice
+          });
+        }
+
+        totalQuantityAdded += numQty;
+        totalItemsAddedCount += 1;
+      });
+    });
+
+    const itemsToAdd = Array.from(addedItemsMap.values());
+
+    // Ingest into active cart
+    if (itemsToAdd.length > 0 && onAddToCartBulk) {
+      onAddToCartBulk(itemsToAdd);
+    }
+
+    // Open existing cart drawer
+    if (itemsToAdd.length > 0 && onOpenCart) {
+      onOpenCart();
+    }
+
+    // Set interactive feedback banner summarizing added & skipped items
+    const hasAdded = itemsToAdd.length > 0;
+    const allSkipped = [...skippedDiscontinued, ...skippedInvalidQty];
+
+    setCartFeedback({
+      success: hasAdded,
+      title: hasAdded ? 'Added to Cart' : 'Could Not Add to Cart',
+      message: hasAdded
+        ? `Successfully added ${itemsToAdd.length} item line${itemsToAdd.length > 1 ? 's' : ''} (${totalQuantityAdded} total units) to cart at current base prices.`
+        : 'None of the items from the selected orders could be added to your cart.',
+      skippedItems: allSkipped.length > 0 ? allSkipped : undefined
+    });
   };
 
   // Export selected storefront orders to Excel (.xlsx) file
@@ -936,6 +1092,50 @@ export default function OrderPortals({
               </div>
             </div>
 
+            {/* Feedback Banner for Add Selected to Cart / Operations */}
+            {cartFeedback && (
+              <div
+                className={`rounded-2xl p-4 border flex items-start justify-between gap-3 shadow-xs animate-fade-in ${
+                  cartFeedback.success
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-amber-50 border-amber-200 text-amber-900'
+                }`}
+                id="portal-cart-feedback-banner"
+              >
+                <div className="flex items-start gap-3">
+                  {cartFeedback.success ? (
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  )}
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-extrabold uppercase tracking-wider font-mono">
+                      {cartFeedback.title}
+                    </h4>
+                    <p className="text-xs leading-relaxed font-sans">{cartFeedback.message}</p>
+                    {cartFeedback.skippedItems && cartFeedback.skippedItems.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-amber-200/60 text-[11px] font-sans space-y-1 text-amber-800">
+                        <div className="font-bold font-mono uppercase text-[10px] tracking-wider text-amber-900">
+                          Items not added ({cartFeedback.skippedItems.length}):
+                        </div>
+                        <ul className="list-disc list-inside space-y-0.5 pl-1">
+                          {cartFeedback.skippedItems.map((item, idx) => (
+                            <li key={idx}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setCartFeedback(null)}
+                  className="text-gray-400 hover:text-black p-1 rounded-lg cursor-pointer transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
             {/* Batch Selection & Export Actions Bar */}
             {filteredAndSortedPortalOrders.length > 0 && (
               <div className="bg-neutral-900 text-white rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md">
@@ -972,6 +1172,22 @@ export default function OrderPortals({
                     </button>
                   )}
 
+                  {/* Add Selected to Cart */}
+                  <button
+                    onClick={handleAddSelectedToCart}
+                    disabled={selectedOrderIds.length === 0}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-sm ${
+                      selectedOrderIds.length > 0
+                        ? 'bg-amber-400 hover:bg-amber-300 text-black'
+                        : 'bg-neutral-800 text-neutral-500 cursor-not-allowed opacity-60'
+                    }`}
+                    title={selectedOrderIds.length === 0 ? 'Select at least 1 order to add to cart' : 'Add items from selected orders to shopping cart'}
+                    id="portal-add-selected-to-cart-btn"
+                  >
+                    <ShoppingBag className="w-4 h-4" />
+                    <span>Add Selected to Cart</span>
+                  </button>
+
                   <button
                     onClick={handleExportToExcel}
                     disabled={selectedOrderIds.length === 0}
@@ -991,7 +1207,7 @@ export default function OrderPortals({
                     disabled={selectedOrderIds.length === 0}
                     className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-2 transition-all cursor-pointer shadow-sm ${
                       selectedOrderIds.length > 0
-                        ? 'bg-amber-400 hover:bg-amber-300 text-black'
+                        ? 'bg-neutral-700 hover:bg-neutral-600 text-white'
                         : 'bg-neutral-800 text-neutral-500 cursor-not-allowed opacity-60'
                     }`}
                     title={selectedOrderIds.length === 0 ? 'Select at least 1 order to print / save as PDF' : 'Print or save compiled orders as PDF'}

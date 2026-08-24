@@ -77,3 +77,26 @@ export function getAddOnUnitPrice(
   return Number(addOn.price) || 0;
 }
 
+/**
+ * Generates a unique composite key for a cart line item based on product ID and configurations.
+ */
+export function makeCompositeId(
+  productId: string,
+  size?: string,
+  color?: string,
+  customs: Record<string, string> = {}
+): string {
+  const parts = [productId];
+  if (size) parts.push(`sz-${size}`);
+  if (color) parts.push(`col-${color}`);
+
+  const sortedCustoms = Object.keys(customs || {})
+    .filter(k => customs[k] !== undefined && customs[k] !== null && String(customs[k]).trim() !== '')
+    .sort()
+    .map(k => `${k}:${String(customs[k]).trim()}`)
+    .join('|');
+
+  if (sortedCustoms) parts.push(`cust-${sortedCustoms}`);
+  return parts.join('_');
+}
+

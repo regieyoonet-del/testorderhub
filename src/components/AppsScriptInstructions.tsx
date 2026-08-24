@@ -47,7 +47,12 @@ function doGet(e) {
       notifications: getTableData(sheet, "Notifications"),
       jobs: getTableData(sheet, "Jobs"),
       jobColumns: getTableData(sheet, "JobColumns"),
-      jobItemColumns: getTableData(sheet, "JobItemColumns")
+      jobItemColumns: getTableData(sheet, "JobItemColumns"),
+      staff: getTableData(sheet, "Staff"),
+      payroll: getTableData(sheet, "Payroll"),
+      expenses: getTableData(sheet, "Expenses"),
+      expenseCategories: getTableData(sheet, "ExpenseCategories"),
+      recurringExpenses: getTableData(sheet, "RecurringExpenses")
     });
   }
 
@@ -94,6 +99,26 @@ function doGet(e) {
 
   if (action === "getJobItemColumns") {
     return getJsonOutput(getTableData(sheet, "JobItemColumns"));
+  }
+
+  if (action === "getStaff") {
+    return getJsonOutput(getTableData(sheet, "Staff"));
+  }
+
+  if (action === "getPayroll") {
+    return getJsonOutput(getTableData(sheet, "Payroll"));
+  }
+
+  if (action === "getExpenses") {
+    return getJsonOutput(getTableData(sheet, "Expenses"));
+  }
+
+  if (action === "getExpenseCategories") {
+    return getJsonOutput(getTableData(sheet, "ExpenseCategories"));
+  }
+
+  if (action === "getRecurringExpenses") {
+    return getJsonOutput(getTableData(sheet, "RecurringExpenses"));
   }
   
   return getJsonOutput({ status: "success", message: "ARH Print Apps Script is active" });
@@ -209,6 +234,63 @@ function doPost(e) {
   if (payload.action === "saveJobItemColumns") {
     return getJsonOutput(saveJobItemColumns(sheet, payload.columns));
   }
+
+  if (payload.action === "cleanDuplicateColumns") {
+    cleanDuplicateColumns(sheet);
+    return getJsonOutput({ status: "success", message: "Duplicate columns cleaned" });
+  }
+
+  if (payload.action === "saveStaff") {
+    return getJsonOutput(saveStaff(sheet, payload.staff));
+  }
+
+  if (payload.action === "saveStaffBatch") {
+    return getJsonOutput(saveStaffBatch(sheet, payload.staffMembers));
+  }
+
+  if (payload.action === "deleteStaff") {
+    return getJsonOutput(deleteRowById(sheet, "Staff", "Staff ID", payload.staffId));
+  }
+
+  if (payload.action === "savePayroll") {
+    return getJsonOutput(savePayroll(sheet, payload.record));
+  }
+
+  if (payload.action === "savePayrollBatch") {
+    return getJsonOutput(savePayrollBatch(sheet, payload.records));
+  }
+
+  if (payload.action === "deletePayroll") {
+    return getJsonOutput(deleteRowById(sheet, "Payroll", "Payroll ID", payload.payrollId));
+  }
+
+  if (payload.action === "saveExpense") {
+    return getJsonOutput(saveExpense(sheet, payload.expense));
+  }
+
+  if (payload.action === "saveExpensesBatch") {
+    return getJsonOutput(saveExpensesBatch(sheet, payload.expenses));
+  }
+
+  if (payload.action === "deleteExpense") {
+    return getJsonOutput(deleteRowById(sheet, "Expenses", "Expense ID", payload.expenseId));
+  }
+
+  if (payload.action === "saveExpenseCategories") {
+    return getJsonOutput(saveExpenseCategories(sheet, payload.categories));
+  }
+
+  if (payload.action === "saveRecurringExpense") {
+    return getJsonOutput(saveRecurringExpense(sheet, payload.rule));
+  }
+
+  if (payload.action === "saveRecurringExpensesBatch") {
+    return getJsonOutput(saveRecurringExpensesBatch(sheet, payload.rules));
+  }
+
+  if (payload.action === "deleteRecurringExpense") {
+    return getJsonOutput(deleteRowById(sheet, "RecurringExpenses", "Recurring Expense ID", payload.ruleId));
+  }
   
   return getJsonOutput({ status: "error", message: "Unknown action" });
 }
@@ -295,7 +377,7 @@ function getMapValueByHeader(map, header) {
 }
 
 function initSheets(ss) {
-  var sheets = ["Orders", "OrderItems", "Products", "CatalogProducts", "Companies", "Portals", "Admin", "Quotes", "Notifications", "Jobs", "JobColumns", "JobItemColumns"];
+  var sheets = ["Orders", "OrderItems", "Products", "CatalogProducts", "Companies", "Portals", "Admin", "Quotes", "Notifications", "Jobs", "JobColumns", "JobItemColumns", "Staff", "Payroll", "Expenses", "ExpenseCategories", "RecurringExpenses"];
   
   // Headers definitions
   var headers = {
@@ -310,7 +392,12 @@ function initSheets(ss) {
     "Notifications": ["Notification ID", "Recipient Type", "Company Name", "Title", "Message", "Timestamp", "Read", "Order ID", "Order Number", "Type"],
     "Jobs": ["Job ID", "Company ID", "Company Name", "Order ID", "Order Number", "Source", "Status", "Position", "Values JSON", "Items JSON", "Activities JSON", "Created At", "Updated At", "Created By"],
     "JobColumns": ["Column ID", "Name", "Type", "Position", "Required", "Is System Field", "Is Hidden", "Options", "Created Date"],
-    "JobItemColumns": ["Column ID", "Name", "Type", "Position", "Required", "Is System Field", "Is Hidden", "Calculation", "Options"]
+    "JobItemColumns": ["Column ID", "Name", "Type", "Position", "Required", "Is System Field", "Is Hidden", "Calculation", "Options"],
+    "Staff": ["Staff ID", "Full Name", "Position", "Department", "Employment Status", "Date Started", "Salary Type", "Basic Salary", "Allowances", "Other Compensation", "Notes", "Status", "Created At", "Updated At"],
+    "Payroll": ["Payroll ID", "Staff ID", "Staff Name", "Position", "Department", "Pay Period Start", "Pay Period End", "Pay Date", "Basic Pay", "Allowances", "Other Earnings", "Gross Pay", "Deductions", "Itemized Deductions JSON", "Total Deductions", "Net Pay", "Status", "Notes", "Created At", "Updated At"],
+    "Expenses": ["Expense ID", "Expense Name", "Category", "Expense Type", "Amount", "Expense Date", "Payment Status", "Payment Date", "Vendor", "Reference Number", "Notes", "Recurring Expense ID", "Payroll ID", "Created At", "Updated At"],
+    "ExpenseCategories": ["Category ID", "Name", "Is System", "Status"],
+    "RecurringExpenses": ["Recurring Expense ID", "Expense Name", "Category", "Amount", "Frequency", "Start Date", "End Date", "Payments Per Year", "Specific Months JSON", "Status", "Notes", "Created At", "Updated At"]
   };
   
   for (var i = 0; i < sheets.length; i++) {
@@ -328,6 +415,105 @@ function initSheets(ss) {
   // Seed default column definitions if JobColumns / JobItemColumns have no data rows
   seedDefaultJobColumns(ss);
   seedDefaultJobItemColumns(ss);
+
+  // Seed default expense categories if ExpenseCategories has no data rows
+  seedDefaultExpenseCategories(ss);
+
+  // Clean any historical duplicate rows in JobColumns / JobItemColumns
+  cleanDuplicateColumns(ss);
+}
+
+function seedDefaultExpenseCategories(ss) {
+  var sheet = ss.getSheetByName("ExpenseCategories");
+  if (!sheet) return;
+  var data = sheet.getDataRange().getValues();
+  if (data.length > 1) return;
+
+  var defaultCats = [
+    { id: "cat-rent", name: "Rent & Facilities", isSystem: true, status: "Active" },
+    { id: "cat-utilities", name: "Utilities (Power / Water / Internet)", isSystem: true, status: "Active" },
+    { id: "cat-salaries", name: "Salaries & Payroll", isSystem: true, status: "Active" },
+    { id: "cat-materials", name: "Raw Materials & Inks", isSystem: true, status: "Active" },
+    { id: "cat-maintenance", name: "Equipment & Maintenance", isSystem: true, status: "Active" },
+    { id: "cat-software", name: "Software & Subscriptions", isSystem: true, status: "Active" },
+    { id: "cat-marketing", name: "Marketing & Advertising", isSystem: true, status: "Active" },
+    { id: "cat-logistics", name: "Logistics & Delivery", isSystem: true, status: "Active" },
+    { id: "cat-taxes", name: "Taxes & Licenses", isSystem: true, status: "Active" },
+    { id: "cat-misc", name: "Miscellaneous", isSystem: true, status: "Active" }
+  ];
+  saveExpenseCategories(ss, defaultCats);
+}
+
+function cleanDuplicateColumns(ss) {
+  var jobColsSheet = ss.getSheetByName("JobColumns");
+  if (jobColsSheet && jobColsSheet.getLastRow() > 1) {
+    var rawData = getTableData(ss, "JobColumns");
+    if (Array.isArray(rawData) && rawData.length > 0) {
+      var uniqueMap = {};
+      var uniqueList = [];
+      for (var i = 0; i < rawData.length; i++) {
+        var item = rawData[i];
+        var colId = item["Column ID"] || item["ColumnID"] || item["id"];
+        if (colId) {
+          var colObj = {
+            id: colId,
+            name: item["Name"] || "",
+            type: item["Type"] || "text",
+            position: Number(item["Position"] || 0),
+            required: String(item["Required"]).toLowerCase() === "true",
+            isSystemField: String(item["Is System Field"] || item["IsSystemField"]).toLowerCase() === "true",
+            isHidden: String(item["Is Hidden"] || item["IsHidden"]).toLowerCase() === "true",
+            options: item["Options"] ? String(item["Options"]).split(",").map(function(s){return s.trim();}).filter(Boolean) : [],
+            createdDate: item["Created Date"] || item["CreatedDate"] || new Date().toISOString()
+          };
+          if (uniqueMap[colId] === undefined) {
+            uniqueList.push(colObj);
+            uniqueMap[colId] = uniqueList.length - 1;
+          } else {
+            uniqueList[uniqueMap[colId]] = colObj;
+          }
+        }
+      }
+      if (uniqueList.length < rawData.length) {
+        saveJobColumns(ss, uniqueList);
+      }
+    }
+  }
+
+  var itemColsSheet = ss.getSheetByName("JobItemColumns");
+  if (itemColsSheet && itemColsSheet.getLastRow() > 1) {
+    var rawItemData = getTableData(ss, "JobItemColumns");
+    if (Array.isArray(rawItemData) && rawItemData.length > 0) {
+      var uniqueItemMap = {};
+      var uniqueItemList = [];
+      for (var j = 0; j < rawItemData.length; j++) {
+        var itm = rawItemData[j];
+        var itemColId = itm["Column ID"] || itm["ColumnID"] || itm["id"];
+        if (itemColId) {
+          var itemColObj = {
+            id: itemColId,
+            name: itm["Name"] || "",
+            type: itm["Type"] || "text",
+            position: Number(itm["Position"] || 0),
+            required: String(itm["Required"]).toLowerCase() === "true",
+            isSystemField: String(itm["Is System Field"] || item["IsSystemField"]).toLowerCase() === "true",
+            isHidden: String(itm["Is Hidden"] || itm["IsHidden"]).toLowerCase() === "true",
+            calculation: itm["Calculation"] || "none",
+            options: itm["Options"] ? String(itm["Options"]).split(",").map(function(s){return s.trim();}).filter(Boolean) : []
+          };
+          if (uniqueItemMap[itemColId] === undefined) {
+            uniqueItemList.push(itemColObj);
+            uniqueItemMap[itemColId] = uniqueItemList.length - 1;
+          } else {
+            uniqueItemList[uniqueItemMap[itemColId]] = itemColObj;
+          }
+        }
+      }
+      if (uniqueItemList.length < rawItemData.length) {
+        saveJobItemColumns(ss, uniqueItemList);
+      }
+    }
+  }
 }
 
 function seedDefaultJobColumns(ss) {
@@ -1295,14 +1481,28 @@ function saveJobColumns(ss, columns) {
   
   if (!Array.isArray(columns)) return { status: "error", message: "Invalid columns array" };
 
-  var maxRows = sheet.getMaxRows();
-  if (maxRows > 1) {
-    try {
-      sheet.deleteRows(2, maxRows - 1);
-    } catch(e) {}
+  // Reliably clear existing data rows (row 2 down) without breaking grid dimensions
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
   }
   
-  columns.forEach(function(col) {
+  // Deduplicate incoming array by Column ID (preserving order, keeping latest definition)
+  var uniqueColsMap = {};
+  var uniqueColsList = [];
+  for (var i = 0; i < columns.length; i++) {
+    var cObj = columns[i];
+    if (cObj && cObj.id) {
+      if (uniqueColsMap[cObj.id] === undefined) {
+        uniqueColsList.push(cObj);
+        uniqueColsMap[cObj.id] = uniqueColsList.length - 1;
+      } else {
+        uniqueColsList[uniqueColsMap[cObj.id]] = cObj;
+      }
+    }
+  }
+
+  uniqueColsList.forEach(function(col) {
     var optionsStr = "";
     if (Array.isArray(col.options)) {
       optionsStr = col.options.join(", ");
@@ -1329,7 +1529,7 @@ function saveJobColumns(ss, columns) {
     sheet.appendRow(row);
   });
   
-  return { status: "success", count: columns.length };
+  return { status: "success", count: uniqueColsList.length };
 }
 
 function saveJobItemColumns(ss, columns) {
@@ -1340,14 +1540,28 @@ function saveJobItemColumns(ss, columns) {
   
   if (!Array.isArray(columns)) return { status: "error", message: "Invalid columns array" };
 
-  var maxRows = sheet.getMaxRows();
-  if (maxRows > 1) {
-    try {
-      sheet.deleteRows(2, maxRows - 1);
-    } catch(e) {}
+  // Reliably clear existing data rows (row 2 down) without breaking grid dimensions
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
   }
   
-  columns.forEach(function(col) {
+  // Deduplicate incoming array by Column ID (preserving order, keeping latest definition)
+  var uniqueColsMap = {};
+  var uniqueColsList = [];
+  for (var i = 0; i < columns.length; i++) {
+    var cObj = columns[i];
+    if (cObj && cObj.id) {
+      if (uniqueColsMap[cObj.id] === undefined) {
+        uniqueColsList.push(cObj);
+        uniqueColsMap[cObj.id] = uniqueColsList.length - 1;
+      } else {
+        uniqueColsList[uniqueColsMap[cObj.id]] = cObj;
+      }
+    }
+  }
+
+  uniqueColsList.forEach(function(col) {
     var optionsStr = "";
     if (Array.isArray(col.options)) {
       optionsStr = col.options.join(", ");
@@ -1374,7 +1588,342 @@ function saveJobItemColumns(ss, columns) {
     sheet.appendRow(row);
   });
   
-  return { status: "success", count: columns.length };
+  return { status: "success", count: uniqueColsList.length };
+}
+
+function saveStaff(ss, staff) {
+  var sheet = ss.getSheetByName("Staff");
+  var expectedHeaders = ["Staff ID", "Full Name", "Position", "Department", "Employment Status", "Date Started", "Salary Type", "Basic Salary", "Allowances", "Other Compensation", "Notes", "Status", "Created At", "Updated At"];
+  var data = ensureHeaders(sheet, expectedHeaders);
+  var headers = data[0];
+
+  if (!staff) return { status: "error", message: "Missing staff data" };
+  var targetId = String(staff.id || staff["Staff ID"] || "").trim();
+  if (!targetId) return { status: "error", message: "Missing staff ID" };
+
+  var idIndex = 0;
+  for (var c = 0; c < headers.length; c++) {
+    var normH = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (normH === "staffid" || normH === "id") {
+      idIndex = c;
+      break;
+    }
+  }
+
+  var rowIndex = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idIndex]).trim() === targetId) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+
+  var staffMap = {
+    "Staff ID": targetId,
+    "Full Name": staff.fullName || staff.name || "",
+    "Position": staff.position || "",
+    "Department": staff.department || "",
+    "Employment Status": staff.employmentStatus || "Full-Time",
+    "Date Started": staff.dateStarted || "",
+    "Salary Type": staff.salaryType || "Monthly",
+    "Basic Salary": staff.basicSalary !== undefined ? Number(staff.basicSalary) : 0,
+    "Allowances": staff.allowances !== undefined ? Number(staff.allowances) : 0,
+    "Other Compensation": staff.otherCompensation !== undefined ? Number(staff.otherCompensation) : 0,
+    "Notes": staff.notes || "",
+    "Status": staff.status || "Active",
+    "Created At": staff.createdAt || new Date().toISOString(),
+    "Updated At": staff.updatedAt || new Date().toISOString()
+  };
+
+  var row = [];
+  for (var c = 0; c < headers.length; c++) {
+    row.push(getMapValueByHeader(staffMap, headers[c]));
+  }
+
+  if (rowIndex !== -1) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  } else {
+    sheet.appendRow(row);
+  }
+
+  return { status: "success", staffId: targetId };
+}
+
+function saveStaffBatch(ss, staffMembers) {
+  if (!Array.isArray(staffMembers)) return { status: "error", message: "Invalid array" };
+  staffMembers.forEach(function(s) {
+    saveStaff(ss, s);
+  });
+  return { status: "success", count: staffMembers.length };
+}
+
+function savePayroll(ss, record) {
+  var sheet = ss.getSheetByName("Payroll");
+  var expectedHeaders = ["Payroll ID", "Staff ID", "Staff Name", "Position", "Department", "Pay Period Start", "Pay Period End", "Pay Date", "Basic Pay", "Allowances", "Other Earnings", "Gross Pay", "Deductions", "Itemized Deductions JSON", "Total Deductions", "Net Pay", "Status", "Notes", "Created At", "Updated At"];
+  var data = ensureHeaders(sheet, expectedHeaders);
+  var headers = data[0];
+
+  if (!record) return { status: "error", message: "Missing payroll data" };
+  var targetId = String(record.id || record["Payroll ID"] || "").trim();
+  if (!targetId) return { status: "error", message: "Missing payroll ID" };
+
+  var idIndex = 0;
+  for (var c = 0; c < headers.length; c++) {
+    var normH = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (normH === "payrollid" || normH === "id") {
+      idIndex = c;
+      break;
+    }
+  }
+
+  var rowIndex = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idIndex]).trim() === targetId) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+
+  var itemizedJson = "";
+  if (record.itemizedDeductions) {
+    itemizedJson = typeof record.itemizedDeductions === 'string' ? record.itemizedDeductions : JSON.stringify(record.itemizedDeductions);
+  }
+
+  var payMap = {
+    "Payroll ID": targetId,
+    "Staff ID": record.staffId || "",
+    "Staff Name": record.staffName || "",
+    "Position": record.position || "",
+    "Department": record.department || "",
+    "Pay Period Start": record.payPeriodStart || "",
+    "Pay Period End": record.payPeriodEnd || "",
+    "Pay Date": record.payDate || "",
+    "Basic Pay": record.basicPay !== undefined ? Number(record.basicPay) : 0,
+    "Allowances": record.allowances !== undefined ? Number(record.allowances) : 0,
+    "Other Earnings": record.otherEarnings !== undefined ? Number(record.otherEarnings) : 0,
+    "Gross Pay": record.grossPay !== undefined ? Number(record.grossPay) : 0,
+    "Deductions": record.deductions !== undefined ? Number(record.deductions) : 0,
+    "Itemized Deductions JSON": itemizedJson,
+    "Total Deductions": record.totalDeductions !== undefined ? Number(record.totalDeductions) : (record.deductions !== undefined ? Number(record.deductions) : 0),
+    "Net Pay": record.netPay !== undefined ? Number(record.netPay) : 0,
+    "Status": record.status || "Draft",
+    "Notes": record.notes || "",
+    "Created At": record.createdAt || new Date().toISOString(),
+    "Updated At": record.updatedAt || new Date().toISOString()
+  };
+
+  var row = [];
+  for (var c = 0; c < headers.length; c++) {
+    row.push(getMapValueByHeader(payMap, headers[c]));
+  }
+
+  if (rowIndex !== -1) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  } else {
+    sheet.appendRow(row);
+  }
+
+  return { status: "success", payrollId: targetId };
+}
+
+function savePayrollBatch(ss, records) {
+  if (!Array.isArray(records)) return { status: "error", message: "Invalid array" };
+  records.forEach(function(r) {
+    savePayroll(ss, r);
+  });
+  return { status: "success", count: records.length };
+}
+
+function saveExpense(ss, expense) {
+  var sheet = ss.getSheetByName("Expenses");
+  var expectedHeaders = ["Expense ID", "Expense Name", "Category", "Expense Type", "Amount", "Expense Date", "Payment Status", "Payment Date", "Vendor", "Reference Number", "Notes", "Recurring Expense ID", "Payroll ID", "Created At", "Updated At"];
+  var data = ensureHeaders(sheet, expectedHeaders);
+  var headers = data[0];
+
+  if (!expense) return { status: "error", message: "Missing expense data" };
+  var targetId = String(expense.id || expense["Expense ID"] || "").trim();
+  if (!targetId) return { status: "error", message: "Missing expense ID" };
+
+  var idIndex = 0;
+  for (var c = 0; c < headers.length; c++) {
+    var normH = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (normH === "expenseid" || normH === "id") {
+      idIndex = c;
+      break;
+    }
+  }
+
+  var rowIndex = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idIndex]).trim() === targetId) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+
+  var expMap = {
+    "Expense ID": targetId,
+    "Expense Name": expense.name || expense.expenseName || "",
+    "Category": expense.category || "Miscellaneous",
+    "Expense Type": expense.expenseType || expense.type || "One-Time",
+    "Amount": expense.amount !== undefined ? Number(expense.amount) : 0,
+    "Expense Date": expense.expenseDate || expense.date || "",
+    "Payment Status": expense.paymentStatus || "Paid",
+    "Payment Date": expense.paymentDate || "",
+    "Vendor": expense.vendor || "",
+    "Reference Number": expense.referenceNumber || "",
+    "Notes": expense.notes || "",
+    "Recurring Expense ID": expense.recurringExpenseId || "",
+    "Payroll ID": expense.payrollId || "",
+    "Created At": expense.createdAt || new Date().toISOString(),
+    "Updated At": expense.updatedAt || new Date().toISOString()
+  };
+
+  var row = [];
+  for (var c = 0; c < headers.length; c++) {
+    row.push(getMapValueByHeader(expMap, headers[c]));
+  }
+
+  if (rowIndex !== -1) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  } else {
+    sheet.appendRow(row);
+  }
+
+  return { status: "success", expenseId: targetId };
+}
+
+function saveExpensesBatch(ss, expenses) {
+  if (!Array.isArray(expenses)) return { status: "error", message: "Invalid array" };
+  expenses.forEach(function(e) {
+    saveExpense(ss, e);
+  });
+  return { status: "success", count: expenses.length };
+}
+
+function saveExpenseCategories(ss, categories) {
+  var sheet = ss.getSheetByName("ExpenseCategories");
+  var expectedHeaders = ["Category ID", "Name", "Is System", "Status"];
+  var data = ensureHeaders(sheet, expectedHeaders);
+  var headers = data[0];
+
+  if (!Array.isArray(categories)) return { status: "error", message: "Invalid categories array" };
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).clearContent();
+  }
+
+  var uniqueMap = {};
+  var uniqueList = [];
+  for (var i = 0; i < categories.length; i++) {
+    var cat = categories[i];
+    if (cat && (cat.id || cat.name)) {
+      var catId = cat.id || "cat-" + String(cat.name).toLowerCase().replace(/[^a-z0-9]/g, "-");
+      if (uniqueMap[catId] === undefined) {
+        uniqueList.push({
+          id: catId,
+          name: cat.name || "",
+          isSystem: cat.isSystem ? "TRUE" : "FALSE",
+          status: cat.status || "Active"
+        });
+        uniqueMap[catId] = uniqueList.length - 1;
+      } else {
+        uniqueList[uniqueMap[catId]] = {
+          id: catId,
+          name: cat.name || "",
+          isSystem: cat.isSystem ? "TRUE" : "FALSE",
+          status: cat.status || "Active"
+        };
+      }
+    }
+  }
+
+  uniqueList.forEach(function(cObj) {
+    var row = [];
+    var map = {
+      "Category ID": cObj.id,
+      "Name": cObj.name,
+      "Is System": cObj.isSystem,
+      "Status": cObj.status
+    };
+    for (var c = 0; c < headers.length; c++) {
+      row.push(getMapValueByHeader(map, headers[c]));
+    }
+    sheet.appendRow(row);
+  });
+
+  return { status: "success", count: uniqueList.length };
+}
+
+function saveRecurringExpense(ss, rule) {
+  var sheet = ss.getSheetByName("RecurringExpenses");
+  var expectedHeaders = ["Recurring Expense ID", "Expense Name", "Category", "Amount", "Frequency", "Start Date", "End Date", "Payments Per Year", "Specific Months JSON", "Status", "Notes", "Created At", "Updated At"];
+  var data = ensureHeaders(sheet, expectedHeaders);
+  var headers = data[0];
+
+  if (!rule) return { status: "error", message: "Missing recurring expense data" };
+  var targetId = String(rule.id || rule["Recurring Expense ID"] || "").trim();
+  if (!targetId) return { status: "error", message: "Missing recurring expense ID" };
+
+  var idIndex = 0;
+  for (var c = 0; c < headers.length; c++) {
+    var normH = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (normH === "recurringexpenseid" || normH === "id") {
+      idIndex = c;
+      break;
+    }
+  }
+
+  var rowIndex = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idIndex]).trim() === targetId) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+
+  var specificMonthsJson = "";
+  if (rule.specificMonths) {
+    specificMonthsJson = typeof rule.specificMonths === 'string' ? rule.specificMonths : JSON.stringify(rule.specificMonths);
+  }
+
+  var ruleMap = {
+    "Recurring Expense ID": targetId,
+    "Expense Name": rule.name || rule.expenseName || "",
+    "Category": rule.category || "Miscellaneous",
+    "Amount": rule.amount !== undefined ? Number(rule.amount) : 0,
+    "Frequency": rule.frequency || "Monthly",
+    "Start Date": rule.startDate || "",
+    "End Date": rule.endDate || "",
+    "Payments Per Year": rule.paymentsPerYear !== undefined ? Number(rule.paymentsPerYear) : 12,
+    "Specific Months JSON": specificMonthsJson,
+    "Status": rule.status || "Active",
+    "Notes": rule.notes || "",
+    "Created At": rule.createdAt || new Date().toISOString(),
+    "Updated At": rule.updatedAt || new Date().toISOString()
+  };
+
+  var row = [];
+  for (var c = 0; c < headers.length; c++) {
+    row.push(getMapValueByHeader(ruleMap, headers[c]));
+  }
+
+  if (rowIndex !== -1) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  } else {
+    sheet.appendRow(row);
+  }
+
+  return { status: "success", ruleId: targetId };
+}
+
+function saveRecurringExpensesBatch(ss, rules) {
+  if (!Array.isArray(rules)) return { status: "error", message: "Invalid array" };
+  rules.forEach(function(r) {
+    saveRecurringExpense(ss, r);
+  });
+  return { status: "success", count: rules.length };
 }
 
 function getJsonOutput(obj) {
@@ -1660,6 +2209,106 @@ function getJsonOutput(obj) {
                 <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
                 <div className="flex flex-wrap gap-1">
                   {["Column ID", "Name", "Type", "Position", "Required", "Is System Field", "Is Hidden", "Calculation", "Options"].map(col => (
+                    <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
+                      {col}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sheet 11: Staff */}
+            <div className="border border-gray-200 bg-gray-50 p-3 space-y-2 rounded-xl">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                <span className="font-mono text-[11px] font-bold text-black bg-white px-2 py-0.5 border border-black rounded-md">
+                  👥 Tab 11: Staff
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono">Employee directory, compensation &amp; status</span>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
+                <div className="flex flex-wrap gap-1">
+                  {["Staff ID", "Full Name", "Position", "Department", "Employment Status", "Date Started", "Salary Type", "Basic Salary", "Allowances", "Other Compensation", "Notes", "Status", "Created At", "Updated At"].map(col => (
+                    <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
+                      {col}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sheet 12: Payroll */}
+            <div className="border border-gray-200 bg-gray-50 p-3 space-y-2 rounded-xl">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                <span className="font-mono text-[11px] font-bold text-black bg-white px-2 py-0.5 border border-black rounded-md">
+                  💵 Tab 12: Payroll
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono">Pay period calculations, earnings &amp; deductions</span>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
+                <div className="flex flex-wrap gap-1">
+                  {["Payroll ID", "Staff ID", "Staff Name", "Position", "Department", "Pay Period Start", "Pay Period End", "Pay Date", "Basic Pay", "Allowances", "Other Earnings", "Gross Pay", "Deductions", "Itemized Deductions JSON", "Total Deductions", "Net Pay", "Status", "Notes", "Created At", "Updated At"].map(col => (
+                    <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
+                      {col}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sheet 13: Expenses */}
+            <div className="border border-gray-200 bg-gray-50 p-3 space-y-2 rounded-xl">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                <span className="font-mono text-[11px] font-bold text-black bg-white px-2 py-0.5 border border-black rounded-md">
+                  💳 Tab 13: Expenses
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono">Fixed, recurring &amp; operational expenses</span>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
+                <div className="flex flex-wrap gap-1">
+                  {["Expense ID", "Expense Name", "Category", "Expense Type", "Amount", "Expense Date", "Payment Status", "Payment Date", "Vendor", "Reference Number", "Notes", "Recurring Expense ID", "Payroll ID", "Created At", "Updated At"].map(col => (
+                    <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
+                      {col}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sheet 14: ExpenseCategories */}
+            <div className="border border-gray-200 bg-gray-50 p-3 space-y-2 rounded-xl">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                <span className="font-mono text-[11px] font-bold text-black bg-white px-2 py-0.5 border border-black rounded-md">
+                  🏷️ Tab 14: ExpenseCategories
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono">Expense categories and classification</span>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
+                <div className="flex flex-wrap gap-1">
+                  {["Category ID", "Name", "Is System", "Status"].map(col => (
+                    <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
+                      {col}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sheet 15: RecurringExpenses */}
+            <div className="border border-gray-200 bg-gray-50 p-3 space-y-2 rounded-xl">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                <span className="font-mono text-[11px] font-bold text-black bg-white px-2 py-0.5 border border-black rounded-md">
+                  🔄 Tab 15: RecurringExpenses
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono">Recurring schedule rules &amp; frequencies</span>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
+                <div className="flex flex-wrap gap-1">
+                  {["Recurring Expense ID", "Expense Name", "Category", "Amount", "Frequency", "Start Date", "End Date", "Payments Per Year", "Specific Months JSON", "Status", "Notes", "Created At", "Updated At"].map(col => (
                     <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
                       {col}
                     </span>
