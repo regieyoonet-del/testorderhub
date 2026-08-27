@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Order, Product, CompanyProfile, CatalogProduct, QuoteEnquiry, ColorOption, OrderPortal, OrderItem, AppNotification, Job, JobColumn, JobItem, JobItemColumn, JobActivity, StaffMember, PayrollRecord, ExpenseRecord, ExpenseCategory, RecurringExpenseRule } from '../types';
+import { Order, Product, CompanyProfile, CatalogProduct, QuoteEnquiry, ColorOption, OrderPortal, OrderItem, AppNotification, Job, JobColumn, JobItem, JobItemColumn, JobActivity, StaffMember, StaffAccount, AttendanceRecord, PayrollRecord, ExpenseRecord, ExpenseCategory, RecurringExpenseRule } from '../types';
 import { INITIAL_CATALOG_PRODUCTS } from '../data/initialCatalog';
 import { parseColorList, resolveColorHex } from '../utils/colorUtils';
 import { DEFAULT_QUOTE_NOTES } from '../constants/quoteDefaults';
@@ -26,6 +26,8 @@ export interface AllSheetsData {
   jobItemColumns: JobItemColumn[] | null;
   jobActivities: JobActivity[] | null;
   staff: StaffMember[] | null;
+  staffAccounts: StaffAccount[] | null;
+  attendance: AttendanceRecord[] | null;
   payroll: PayrollRecord[] | null;
   expenses: ExpenseRecord[] | null;
   expenseCategories: ExpenseCategory[] | null;
@@ -1792,6 +1794,208 @@ export const sheetsService = {
   },
 
   // ----------------------------------------------------
+  // STAFF ACCOUNTS / AUTH SYNC METHODS
+  // ----------------------------------------------------
+
+  /**
+   * Fetch Staff Accounts from Google Sheets.
+   */
+  async fetchStaffAccounts(url: string): Promise<StaffAccount[] | null> {
+    if (!url) return null;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      const response = await fetch(`${cleanedUrl}?action=getStaffAccounts`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) return null;
+      const rawData = await response.json();
+      if (Array.isArray(rawData)) {
+        return rawData.map(item => ({
+          id: String(getProp(item, ['AccountID', 'accountId', 'id', 'Account ID', 'SA_ID']) || `SA-${Date.now()}`),
+          staffId: String(getProp(item, ['StaffID', 'staffId', 'Staff ID', 'STF_ID']) || ''),
+          name: String(getProp(item, ['Name', 'name', 'FullName', 'fullName', 'StaffName']) || ''),
+          username: String(getProp(item, ['Username', 'username', 'User', 'Email']) || '').trim().toLowerCase(),
+          passcode: String(getProp(item, ['Passcode', 'passcode', 'Password', 'password', 'Pin']) || ''),
+          role: (getProp(item, ['Role', 'role']) || 'Staff') as any,
+          status: (getProp(item, ['Status', 'status']) || 'Active') as any,
+          mustChangePassword: getProp(item, ['MustChangePassword', 'mustChangePassword', 'RequirePasswordChange', 'requirePasswordChange']) === true || String(getProp(item, ['MustChangePassword', 'mustChangePassword'])).toLowerCase() === 'true',
+          temporaryPassword: getProp(item, ['TemporaryPassword', 'temporaryPassword']) ? String(getProp(item, ['TemporaryPassword', 'temporaryPassword'])) : undefined,
+          email: getProp(item, ['Email', 'email']) ? String(getProp(item, ['Email', 'email'])) : undefined,
+          phone: getProp(item, ['Phone', 'phone', 'ContactNumber']) ? String(getProp(item, ['Phone', 'phone', 'ContactNumber'])) : undefined,
+          avatarUrl: getProp(item, ['AvatarURL', 'avatarUrl', 'ProfileImage']) ? String(getProp(item, ['AvatarURL', 'avatarUrl', 'ProfileImage'])) : undefined,
+          lastLogin: getProp(item, ['LastLogin', 'lastLogin']) ? String(getProp(item, ['LastLogin', 'lastLogin'])) : undefined,
+          createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
+          updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
+        }));
+      }
+      return null;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (fetchStaffAccounts):', error);
+      return null;
+    }
+  },
+
+  /**
+   * Save a single Staff Account to Google Sheets.
+   */
+  async saveStaffAccount(url: string, account: StaffAccount): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveStaffAccount', account })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveStaffAccount):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Batch save Staff Accounts to Google Sheets.
+   */
+  async saveStaffAccountsBatch(url: string, accounts: StaffAccount[]): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveStaffAccountsBatch', accounts })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveStaffAccountsBatch):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Delete a Staff Account from Google Sheets.
+   */
+  async deleteStaffAccount(url: string, accountId: string): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteStaffAccount', accountId })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (deleteStaffAccount):', error);
+      return false;
+    }
+  },
+
+  // ----------------------------------------------------
+  // ATTENDANCE & TIME TRACKING SYNC METHODS
+  // ----------------------------------------------------
+
+  /**
+   * Fetch Attendance records from Google Sheets.
+   */
+  async fetchAttendance(url: string): Promise<AttendanceRecord[] | null> {
+    if (!url) return null;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      const response = await fetch(`${cleanedUrl}?action=getAttendance`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) return null;
+      const rawData = await response.json();
+      if (Array.isArray(rawData)) {
+        return rawData.map(item => ({
+          id: String(getProp(item, ['AttendanceID', 'attendanceId', 'id', 'Attendance ID']) || `ATT-${Date.now()}`),
+          staffId: String(getProp(item, ['StaffID', 'staffId', 'Staff ID']) || ''),
+          staffName: String(getProp(item, ['StaffName', 'staffName', 'Staff Name', 'Name']) || ''),
+          date: String(getProp(item, ['Date', 'date', 'WorkDate', 'AttendanceDate']) || new Date().toISOString().split('T')[0]),
+          clockIn: String(getProp(item, ['ClockIn', 'clockIn', 'TimeIn', 'Clock In']) || ''),
+          clockOut: getProp(item, ['ClockOut', 'clockOut', 'TimeOut', 'Clock Out']) ? String(getProp(item, ['ClockOut', 'clockOut', 'TimeOut', 'Clock Out'])) : undefined,
+          totalHours: Number(getProp(item, ['TotalHours', 'totalHours', 'HoursWorked', 'Total Hours', 'Hours']) || 0),
+          status: (getProp(item, ['Status', 'status']) || 'Present') as any,
+          notes: getProp(item, ['Notes', 'notes', 'Remarks']) ? String(getProp(item, ['Notes', 'notes', 'Remarks'])) : undefined,
+          createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
+          updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
+        }));
+      }
+      return null;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (fetchAttendance):', error);
+      return null;
+    }
+  },
+
+  /**
+   * Save a single Attendance record to Google Sheets.
+   */
+  async saveAttendance(url: string, record: AttendanceRecord): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveAttendance', record })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveAttendance):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Batch save Attendance records to Google Sheets.
+   */
+  async saveAttendanceBatch(url: string, records: AttendanceRecord[]): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveAttendanceBatch', records })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveAttendanceBatch):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Delete an Attendance record from Google Sheets.
+   */
+  async deleteAttendance(url: string, attendanceId: string): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteAttendance', attendanceId })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (deleteAttendance):', error);
+      return false;
+    }
+  },
+
+  // ----------------------------------------------------
   // PAYROLL SYNC METHODS
   // ----------------------------------------------------
 
@@ -1820,6 +2024,10 @@ export const sheetsService = {
             payPeriodStart: String(getProp(item, ['PayPeriodStart', 'payPeriodStart', 'Pay Period Start', 'PeriodStart']) || ''),
             payPeriodEnd: String(getProp(item, ['PayPeriodEnd', 'payPeriodEnd', 'Pay Period End', 'PeriodEnd']) || ''),
             payDate: String(getProp(item, ['PayDate', 'payDate', 'Pay Date', 'Date']) || ''),
+            salaryType: getProp(item, ['SalaryType', 'salaryType', 'Salary Type', 'PayType']) ? (getProp(item, ['SalaryType', 'salaryType', 'Salary Type', 'PayType']) as any) : undefined,
+            rateSnapshot: getProp(item, ['RateSnapshot', 'rateSnapshot', 'Rate Snapshot', 'Rate']) !== undefined ? Number(getProp(item, ['RateSnapshot', 'rateSnapshot', 'Rate Snapshot', 'Rate'])) : undefined,
+            daysWorked: getProp(item, ['DaysWorked', 'daysWorked', 'Days Worked', 'Days']) !== undefined ? Number(getProp(item, ['DaysWorked', 'daysWorked', 'Days Worked', 'Days'])) : undefined,
+            hoursWorked: getProp(item, ['HoursWorked', 'hoursWorked', 'Hours Worked', 'Hours']) !== undefined ? Number(getProp(item, ['HoursWorked', 'hoursWorked', 'Hours Worked', 'Hours'])) : undefined,
             basicPay: Number(getProp(item, ['BasicPay', 'basicPay', 'Basic Pay', 'BasicSalary']) || 0),
             allowances: Number(getProp(item, ['Allowances', 'allowances', 'Allowance']) || 0),
             otherEarnings: Number(getProp(item, ['OtherEarnings', 'otherEarnings', 'Other Earnings', 'Bonuses', 'Overtime']) || 0),
@@ -2501,6 +2709,44 @@ export const sheetsService = {
         }));
       }
 
+      // Extract Staff Accounts
+      let staffAccounts: StaffAccount[] | null = null;
+      if (Array.isArray(raw.staffAccounts)) {
+        staffAccounts = raw.staffAccounts.map((item: any) => ({
+          id: String(getProp(item, ['AccountID', 'accountId', 'id', 'Account ID', 'SA_ID']) || `SA-${Date.now()}`),
+          staffId: String(getProp(item, ['StaffID', 'staffId', 'Staff ID', 'STF_ID']) || ''),
+          name: String(getProp(item, ['Name', 'name', 'FullName', 'fullName', 'StaffName']) || ''),
+          username: String(getProp(item, ['Username', 'username', 'User', 'Email']) || '').trim().toLowerCase(),
+          passcode: String(getProp(item, ['Passcode', 'passcode', 'Password', 'password', 'Pin']) || ''),
+          role: (getProp(item, ['Role', 'role']) || 'Staff') as any,
+          status: (getProp(item, ['Status', 'status']) || 'Active') as any,
+          email: getProp(item, ['Email', 'email']) ? String(getProp(item, ['Email', 'email'])) : undefined,
+          phone: getProp(item, ['Phone', 'phone', 'ContactNumber']) ? String(getProp(item, ['Phone', 'phone', 'ContactNumber'])) : undefined,
+          avatarUrl: getProp(item, ['AvatarURL', 'avatarUrl', 'ProfileImage']) ? String(getProp(item, ['AvatarURL', 'avatarUrl', 'ProfileImage'])) : undefined,
+          lastLogin: getProp(item, ['LastLogin', 'lastLogin']) ? String(getProp(item, ['LastLogin', 'lastLogin'])) : undefined,
+          createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
+          updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
+        }));
+      }
+
+      // Extract Attendance
+      let attendance: AttendanceRecord[] | null = null;
+      if (Array.isArray(raw.attendance)) {
+        attendance = raw.attendance.map((item: any) => ({
+          id: String(getProp(item, ['AttendanceID', 'attendanceId', 'id', 'Attendance ID']) || `ATT-${Date.now()}`),
+          staffId: String(getProp(item, ['StaffID', 'staffId', 'Staff ID']) || ''),
+          staffName: String(getProp(item, ['StaffName', 'staffName', 'Staff Name', 'Name']) || ''),
+          date: String(getProp(item, ['Date', 'date', 'WorkDate', 'AttendanceDate']) || new Date().toISOString().split('T')[0]),
+          clockIn: String(getProp(item, ['ClockIn', 'clockIn', 'TimeIn', 'Clock In']) || ''),
+          clockOut: getProp(item, ['ClockOut', 'clockOut', 'TimeOut', 'Clock Out']) ? String(getProp(item, ['ClockOut', 'clockOut', 'TimeOut', 'Clock Out'])) : undefined,
+          totalHours: Number(getProp(item, ['TotalHours', 'totalHours', 'HoursWorked', 'Total Hours', 'Hours']) || 0),
+          status: (getProp(item, ['Status', 'status']) || 'Present') as any,
+          notes: getProp(item, ['Notes', 'notes', 'Remarks']) ? String(getProp(item, ['Notes', 'notes', 'Remarks'])) : undefined,
+          createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
+          updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
+        }));
+      }
+
       // Extract Payroll
       let payroll: PayrollRecord[] | null = null;
       if (Array.isArray(raw.payroll)) {
@@ -2515,6 +2761,10 @@ export const sheetsService = {
             payPeriodStart: String(getProp(item, ['PayPeriodStart', 'payPeriodStart', 'Pay Period Start', 'PeriodStart']) || ''),
             payPeriodEnd: String(getProp(item, ['PayPeriodEnd', 'payPeriodEnd', 'Pay Period End', 'PeriodEnd']) || ''),
             payDate: String(getProp(item, ['PayDate', 'payDate', 'Pay Date', 'Date']) || ''),
+            salaryType: getProp(item, ['SalaryType', 'salaryType', 'Salary Type', 'PayType']) ? (getProp(item, ['SalaryType', 'salaryType', 'Salary Type', 'PayType']) as any) : undefined,
+            rateSnapshot: getProp(item, ['RateSnapshot', 'rateSnapshot', 'Rate Snapshot', 'Rate']) !== undefined ? Number(getProp(item, ['RateSnapshot', 'rateSnapshot', 'Rate Snapshot', 'Rate'])) : undefined,
+            daysWorked: getProp(item, ['DaysWorked', 'daysWorked', 'Days Worked', 'Days']) !== undefined ? Number(getProp(item, ['DaysWorked', 'daysWorked', 'Days Worked', 'Days'])) : undefined,
+            hoursWorked: getProp(item, ['HoursWorked', 'hoursWorked', 'Hours Worked', 'Hours']) !== undefined ? Number(getProp(item, ['HoursWorked', 'hoursWorked', 'Hours Worked', 'Hours'])) : undefined,
             basicPay: Number(getProp(item, ['BasicPay', 'basicPay', 'Basic Pay', 'BasicSalary']) || 0),
             allowances: Number(getProp(item, ['Allowances', 'allowances', 'Allowance']) || 0),
             otherEarnings: Number(getProp(item, ['OtherEarnings', 'otherEarnings', 'Other Earnings', 'Bonuses', 'Overtime']) || 0),
@@ -2614,6 +2864,8 @@ export const sheetsService = {
         jobItemColumns,
         jobActivities,
         staff,
+        staffAccounts,
+        attendance,
         payroll,
         expenses,
         expenseCategories,

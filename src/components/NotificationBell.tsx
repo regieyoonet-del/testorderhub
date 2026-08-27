@@ -8,7 +8,7 @@ import { Bell, Check, Trash2, ShoppingBag, RefreshCw, Package, X, Clock, FileTex
 import { AppNotification } from '../types';
 
 interface NotificationBellProps {
-  userRole: 'admin' | 'client';
+  userRole: 'admin' | 'client' | 'staff';
   companyName?: string;
   notifications: AppNotification[];
   onMarkAsRead: (id: string) => void;
@@ -48,6 +48,8 @@ export default function NotificationBell({
   const userNotifications = useMemo(() => {
     if (userRole === 'admin') {
       return notifications.filter(n => n.recipientType === 'admin');
+    } else if (userRole === 'staff') {
+      return notifications.filter(n => n.recipientType === 'staff');
     } else {
       const activeCoLower = companyName?.trim().toLowerCase();
       if (!activeCoLower) return [];

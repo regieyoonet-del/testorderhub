@@ -21,6 +21,9 @@ import {
   JobItemColumn,
   JobStatus,
   StaffMember,
+  StaffAccount,
+  AttendanceRecord,
+  AuthUser,
   PayrollRecord,
   ExpenseRecord,
   ExpenseCategory,
@@ -30,6 +33,7 @@ import {
 import { INITIAL_PRODUCTS, INITIAL_COMPANIES, INITIAL_ORDERS, INITIAL_PORTALS } from './data/mockData';
 import { INITIAL_CATALOG_PRODUCTS, INITIAL_QUOTE_ENQUIRIES, sanitizeCatalogProduct } from './data/initialCatalog';
 import { INITIAL_JOBS, DEFAULT_JOB_COLUMNS, DEFAULT_JOB_ITEM_COLUMNS, createJobFromOrder } from './data/initialJobs';
+import { INITIAL_STAFF_MEMBERS, INITIAL_STAFF_ACCOUNTS, INITIAL_ATTENDANCE_RECORDS, generateAttendanceId } from './data/initialFinance';
 import { DEFAULT_QUOTE_NOTES } from './constants/quoteDefaults';
 import { sheetsService } from './lib/sheetsService';
 import { EMBEDDED_APPS_SCRIPT_URL } from './config';
@@ -43,6 +47,7 @@ import SettingsPanel from './components/SettingsPanel';
 import Cart from './components/Cart';
 import LoginScreen from './components/LoginScreen';
 import AdminDashboard from './components/AdminDashboard';
+import StaffDashboard from './components/StaffDashboard';
 import NavigationDrawer from './components/NavigationDrawer';
 import OrderPortals from './components/OrderPortals';
 import PublicOrderPortal from './components/PublicOrderPortal';
@@ -466,6 +471,32 @@ export default function App() {
     return DEFAULT_EXPENSE_CATEGORIES;
   });
 
+  const [staffAccounts, setStaffAccounts] = useState<StaffAccount[]>(() => {
+    const cached = localStorage.getItem('rp_staff_accounts');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_STAFF_ACCOUNTS;
+      } catch {
+        return INITIAL_STAFF_ACCOUNTS;
+      }
+    }
+    return INITIAL_STAFF_ACCOUNTS;
+  });
+
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>(() => {
+    const cached = localStorage.getItem('rp_attendance');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_ATTENDANCE_RECORDS;
+      } catch {
+        return INITIAL_ATTENDANCE_RECORDS;
+      }
+    }
+    return INITIAL_ATTENDANCE_RECORDS;
+  });
+
   useEffect(() => {
     localStorage.setItem('rp_notifications', JSON.stringify(notifications));
   }, [notifications]);
@@ -485,6 +516,14 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('rp_staff', JSON.stringify(staff));
   }, [staff]);
+
+  useEffect(() => {
+    localStorage.setItem('rp_staff_accounts', JSON.stringify(staffAccounts));
+  }, [staffAccounts]);
+
+  useEffect(() => {
+    localStorage.setItem('rp_attendance', JSON.stringify(attendance));
+  }, [attendance]);
 
   useEffect(() => {
     localStorage.setItem('rp_payroll', JSON.stringify(payroll));
@@ -671,8 +710,8 @@ export default function App() {
     };
   });
 
-  // Client Authentication State (Session-isolated so new windows/browsers/shared links land on sign-in window)
-  const [loggedInUser, setLoggedInUser] = useState<{ role: 'admin' | 'client'; companyId?: string } | null>(() => {
+  // Client & Staff Authentication State (Session-isolated so new windows/browsers/shared links land on sign-in window)
+  const [loggedInUser, setLoggedInUser] = useState<AuthUser | null>(() => {
     try {
       localStorage.removeItem('rp_logged_in_user');
       const cached = sessionStorage.getItem('rp_logged_in_user');
@@ -702,12 +741,62 @@ export default function App() {
     ? (companies.find(c => c.id === loggedInUser.companyId) || companies[0])
     : (companies.find(c => c.id === selectedCompanyId) || companies[0])) || FALLBACK_COMPANY;
 
-  // Client-isolated cart state
-  const [cart, setCart] = useState<CartItem[]>([]);
+  // Client-isolated cart state with company-specific local storage
+  const activeCompanyId = (loggedInUser?.role === 'client' && loggedInUser.companyId)
+    ? loggedInUser.companyId
+    : (selectedCompanyId || activeCompany?.id || 'default');
+
+  const cartStorageKey = `rp_cart_${activeCompanyId}`;
+
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    try {
+      const activeId = (loggedInUser?.role === 'client' && loggedInUser.companyId)
+        ? loggedInUser.companyId
+        : (localStorage.getItem('rp_selected_company_id') || 'default');
+      const cached = localStorage.getItem(`rp_cart_${activeId}`);
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Reload isolated cart when active company / user changes
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem(cartStorageKey);
+      if (cached) {
+        setCart(JSON.parse(cached));
+      } else {
+        setCart([]);
+      }
+    } catch {
+      setCart([]);
+    }
+  }, [cartStorageKey]);
+
+  // Persist cart to company-specific local storage key
+  useEffect(() => {
+    try {
+      if (cartStorageKey) {
+        localStorage.setItem(cartStorageKey, JSON.stringify(cart));
+      }
+    } catch {}
+  }, [cart, cartStorageKey]);
 
   // UI Flow States
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('browse');
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    try {
+      const cached = sessionStorage.getItem('rp_logged_in_user');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.role === 'admin') return 'admin';
+        if (parsed?.role === 'staff') return 'dashboard';
+        if (parsed?.role === 'client') return 'catalog';
+      }
+    } catch {}
+    return 'browse';
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Custom Modals
@@ -1104,6 +1193,8 @@ export default function App() {
         let fetchedExpenses = allData?.expenses ?? null;
         let fetchedExpenseCategories = allData?.expenseCategories ?? null;
         let fetchedRecurringExpenses = allData?.recurringExpenses ?? null;
+        let fetchedStaffAccounts = allData?.staffAccounts ?? null;
+        let fetchedAttendance = allData?.attendance ?? null;
 
         // Fallback to parallel fetches if bulk endpoint was not available or empty
         if (!allData) {
@@ -1123,7 +1214,9 @@ export default function App() {
             fetchedPayroll,
             fetchedExpenses,
             fetchedExpenseCategories,
-            fetchedRecurringExpenses
+            fetchedRecurringExpenses,
+            fetchedStaffAccounts,
+            fetchedAttendance
           ] = await Promise.all([
             sheetsService.fetchProducts(url).catch(() => null),
             sheetsService.fetchCompanies(url).catch(() => null),
@@ -1140,7 +1233,9 @@ export default function App() {
             sheetsService.fetchPayroll(url).catch(() => null),
             sheetsService.fetchExpenses(url).catch(() => null),
             sheetsService.fetchExpenseCategories(url).catch(() => null),
-            sheetsService.fetchRecurringExpenses(url).catch(() => null)
+            sheetsService.fetchRecurringExpenses(url).catch(() => null),
+            sheetsService.fetchStaffAccounts(url).catch(() => null),
+            sheetsService.fetchAttendance(url).catch(() => null)
           ]);
         }
 
@@ -1579,6 +1674,73 @@ export default function App() {
           });
         }
 
+        // Process staff accounts
+        if (fetchedStaffAccounts !== null && Array.isArray(fetchedStaffAccounts)) {
+          setStaffAccounts(prevAccounts => {
+            const fetchedMap = new Map(fetchedStaffAccounts.map(a => [a.id, a]));
+            const fetchedIds = new Set(fetchedStaffAccounts.map(a => a.id));
+            const now = Date.now();
+            const mergedExisting = prevAccounts.map(localAcc => {
+              const serverAcc = fetchedMap.get(localAcc.id);
+              if (!serverAcc) return localAcc;
+              const localUpdated = new Date(localAcc.updatedAt || 0).getTime();
+              const serverUpdated = new Date(serverAcc.updatedAt || 0).getTime();
+              if (!isNaN(localUpdated) && (now - localUpdated < 20000) && localUpdated > serverUpdated) {
+                return localAcc;
+              }
+              return serverAcc;
+            });
+            const prevIds = new Set(prevAccounts.map(a => a.id));
+            const newServerAccounts = fetchedStaffAccounts.filter(a => !prevIds.has(a.id));
+            const activeExisting = mergedExisting.filter(a => {
+              if (fetchedIds.has(a.id)) return true;
+              const createdTimestamp = new Date(a.createdAt || 0).getTime();
+              return !isNaN(createdTimestamp) && (now - createdTimestamp < 60000);
+            });
+            const merged = [...activeExisting, ...newServerAccounts];
+            const seen = new Set<string>();
+            return merged.filter(a => {
+              if (seen.has(a.id)) return false;
+              seen.add(a.id);
+              return true;
+            });
+          });
+        }
+
+        // Process attendance
+        if (fetchedAttendance !== null && Array.isArray(fetchedAttendance)) {
+          setAttendance(prevAttendance => {
+            const fetchedMap = new Map(fetchedAttendance.map(a => [a.id, a]));
+            const fetchedIds = new Set(fetchedAttendance.map(a => a.id));
+            const now = Date.now();
+            const mergedExisting = prevAttendance.map(localAtt => {
+              const serverAtt = fetchedMap.get(localAtt.id) || fetchedAttendance.find(fa => fa.staffId === localAtt.staffId && fa.date === localAtt.date);
+              if (!serverAtt) return localAtt;
+              const localUpdated = new Date(localAtt.updatedAt || 0).getTime();
+              const serverUpdated = new Date(serverAtt.updatedAt || 0).getTime();
+              if (!isNaN(localUpdated) && (now - localUpdated < 20000) && localUpdated > serverUpdated) {
+                return localAtt;
+              }
+              return serverAtt;
+            });
+            const prevIds = new Set(prevAttendance.map(a => a.id));
+            const newServerAttendance = fetchedAttendance.filter(a => !prevIds.has(a.id));
+            const activeExisting = mergedExisting.filter(a => {
+              if (fetchedIds.has(a.id)) return true;
+              if (a.clockIn && !a.clockOut) return true;
+              const createdTimestamp = new Date(a.createdAt || 0).getTime();
+              return !isNaN(createdTimestamp) && (now - createdTimestamp < 300000);
+            });
+            const merged = [...activeExisting, ...newServerAttendance];
+            const seen = new Set<string>();
+            return merged.filter(a => {
+              if (seen.has(a.id)) return false;
+              seen.add(a.id);
+              return true;
+            });
+          });
+        }
+
         setLastSyncedTime(new Date().toLocaleTimeString());
       } catch (err) {
         console.warn('Google Sheets sync notice:', err);
@@ -1625,7 +1787,9 @@ export default function App() {
   useEffect(() => {
     if (loggedInUser?.role === 'admin') {
       setActiveTab('admin');
-    } else {
+    } else if (loggedInUser?.role === 'staff') {
+      setActiveTab('dashboard');
+    } else if (loggedInUser?.role === 'client') {
       setActiveTab('catalog');
     }
   }, [loggedInUser?.role]);
@@ -1973,7 +2137,7 @@ export default function App() {
     }
   };
 
-  // Payroll Management Handlers
+  // Payroll Management Handlers with Bi-Directional Expense Synchronization
   const handleSavePayroll = (record: PayrollRecord) => {
     const updated: PayrollRecord = {
       ...record,
@@ -1986,6 +2150,67 @@ export default function App() {
       }
       return [updated, ...prev];
     });
+
+    // Bi-Directional Synchronization with Expenses
+    const targetExpenseId = `EXP-PAY-${updated.id}`;
+    if (updated.status === 'Paid') {
+      const expenseAmount = Number(updated.netPay || updated.grossPay || 0);
+      const linkedExpense: ExpenseRecord = {
+        id: targetExpenseId,
+        name: `Payroll Disbursal: ${updated.staffName} (${updated.payPeriodStart} - ${updated.payPeriodEnd})`,
+        category: 'Salaries / Payroll',
+        type: 'Fixed',
+        amount: expenseAmount,
+        date: updated.payDate || new Date().toISOString().slice(0, 10),
+        status: 'Paid',
+        paymentStatus: 'Paid',
+        paymentDate: updated.payDate || new Date().toISOString().slice(0, 10),
+        vendor: updated.staffName,
+        referenceNumber: updated.id,
+        payrollId: updated.id,
+        notes: `Auto-generated from finalized Payroll ${updated.id} (${updated.position || 'Staff'}). Net Pay: ₱${expenseAmount.toLocaleString()}`,
+        createdAt: updated.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      setExpenses(prev => {
+        const existingIdx = prev.findIndex(e => e.id === targetExpenseId || e.payrollId === updated.id);
+        if (existingIdx > -1) {
+          const copy = [...prev];
+          copy[existingIdx] = { ...copy[existingIdx], ...linkedExpense };
+          return copy;
+        }
+        return [linkedExpense, ...prev];
+      });
+
+      if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+        sheetsService.saveExpense(appsScriptConfig.webAppUrl, linkedExpense).catch(err => console.warn('Sync linked payroll expense notice:', err));
+      }
+    } else {
+      // If payroll is no longer Paid (e.g. reverted to Draft/Reviewed or Voided), void or remove the linked expense
+      setExpenses(prev => {
+        const hasLinked = prev.some(e => e.payrollId === updated.id || e.id === targetExpenseId);
+        if (!hasLinked) return prev;
+        return prev.map(e => {
+          if (e.payrollId === updated.id || e.id === targetExpenseId) {
+            const nextStatus = updated.status === 'Voided' ? 'Voided' : 'Pending';
+            const updatedExp: ExpenseRecord = {
+              ...e,
+              status: nextStatus,
+              paymentStatus: nextStatus,
+              updatedAt: new Date().toISOString(),
+              notes: `${e.notes || ''} [Linked payroll status: ${updated.status}]`
+            };
+            if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+              sheetsService.saveExpense(appsScriptConfig.webAppUrl, updatedExp).catch(err => console.warn('Update voided payroll expense notice:', err));
+            }
+            return updatedExp;
+          }
+          return e;
+        });
+      });
+    }
+
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
       sheetsService.savePayroll(appsScriptConfig.webAppUrl, updated).catch(err => console.warn('Save payroll sync notice:', err));
     }
@@ -1993,6 +2218,44 @@ export default function App() {
 
   const handleSavePayrollBatch = (records: PayrollRecord[]) => {
     setPayroll(records);
+
+    // Sync any batch records marked Paid
+    records.forEach(r => {
+      if (r.status === 'Paid') {
+        const targetExpenseId = `EXP-PAY-${r.id}`;
+        const expenseAmount = Number(r.netPay || r.grossPay || 0);
+        const linkedExpense: ExpenseRecord = {
+          id: targetExpenseId,
+          name: `Payroll Disbursal: ${r.staffName} (${r.payPeriodStart} - ${r.payPeriodEnd})`,
+          category: 'Salaries / Payroll',
+          type: 'Fixed',
+          amount: expenseAmount,
+          date: r.payDate || new Date().toISOString().slice(0, 10),
+          status: 'Paid',
+          paymentStatus: 'Paid',
+          paymentDate: r.payDate || new Date().toISOString().slice(0, 10),
+          vendor: r.staffName,
+          referenceNumber: r.id,
+          payrollId: r.id,
+          notes: `Auto-generated from Payroll ${r.id}`,
+          createdAt: r.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        setExpenses(prev => {
+          const idx = prev.findIndex(e => e.id === targetExpenseId || e.payrollId === r.id);
+          if (idx > -1) {
+            const copy = [...prev];
+            copy[idx] = linkedExpense;
+            return copy;
+          }
+          return [linkedExpense, ...prev];
+        });
+        if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+          sheetsService.saveExpense(appsScriptConfig.webAppUrl, linkedExpense).catch(err => console.warn('Sync linked payroll expense notice:', err));
+        }
+      }
+    });
+
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
       sheetsService.savePayrollBatch(appsScriptConfig.webAppUrl, records).catch(err => console.warn('Save payroll batch sync notice:', err));
     }
@@ -2000,8 +2263,14 @@ export default function App() {
 
   const handleDeletePayroll = (payrollId: string) => {
     setPayroll(prev => prev.filter(p => p.id !== payrollId));
+    
+    // Also clean up or void the linked expense
+    const targetExpenseId = `EXP-PAY-${payrollId}`;
+    setExpenses(prev => prev.filter(e => e.id !== targetExpenseId && e.payrollId !== payrollId));
+
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
       sheetsService.deletePayroll(appsScriptConfig.webAppUrl, payrollId).catch(err => console.warn('Delete payroll sync notice:', err));
+      sheetsService.deleteExpense(appsScriptConfig.webAppUrl, targetExpenseId).catch(err => console.warn('Delete linked expense notice:', err));
     }
   };
 
@@ -2451,14 +2720,174 @@ export default function App() {
     }
   };
 
-  const handleLogin = (role: 'admin' | 'client', companyId?: string) => {
-    setLoggedInUser({ role, companyId });
+  const handleLogin = (
+    role: 'admin' | 'client' | 'staff',
+    companyId?: string,
+    staffInfo?: { staffId: string; accountId: string; name: string; username: string }
+  ) => {
+    if (role === 'staff' && staffInfo) {
+      setLoggedInUser({
+        role: 'staff',
+        staffId: staffInfo.staffId,
+        accountId: staffInfo.accountId,
+        name: staffInfo.name,
+        username: staffInfo.username
+      });
+      setActiveTab('dashboard');
+    } else {
+      setLoggedInUser({ role, companyId });
+      if (role === 'client') {
+        setActiveTab('catalog');
+      } else if (role === 'admin') {
+        setActiveTab('admin');
+      }
+    }
+  };
+
+  const handleClockIn = async (staffId: string, staffName: string, notes?: string) => {
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    const newAttendance: AttendanceRecord = {
+      id: generateAttendanceId(staffId, dateStr),
+      staffId,
+      staffName,
+      date: dateStr,
+      clockIn: timeStr,
+      totalHours: 0,
+      status: 'Present',
+      notes,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString()
+    };
+
+    setAttendance(prev => {
+      const existingIdx = prev.findIndex(a => a.id === newAttendance.id || (a.staffId === staffId && a.date === dateStr));
+      if (existingIdx > -1) {
+        const updated = [...prev];
+        updated[existingIdx] = { ...updated[existingIdx], ...newAttendance };
+        return updated;
+      }
+      return [newAttendance, ...prev];
+    });
+
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      await sheetsService.saveAttendance(appsScriptConfig.webAppUrl, newAttendance);
+    }
+  };
+
+  const handleClockOut = async (attendanceId: string, notes?: string) => {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    let updatedRecord: AttendanceRecord | null = null;
+
+    setAttendance(prev => {
+      return prev.map(rec => {
+        if (rec.id === attendanceId) {
+          let hoursWorked = 8;
+          try {
+            const rawIn = rec.clockIn;
+            // Parse base date from record's date string (e.g. '2026-03-28')
+            let [year, month, day] = [now.getFullYear(), now.getMonth(), now.getDate()];
+            if (rec.date && rec.date.includes('-')) {
+              const dateParts = rec.date.split('-').map(Number);
+              if (dateParts.length === 3) {
+                year = dateParts[0];
+                month = dateParts[1] - 1;
+                day = dateParts[2];
+              }
+            }
+
+            const clockInDate = new Date(year, month, day, 0, 0, 0, 0);
+
+            if (rawIn.includes('AM') || rawIn.includes('PM')) {
+              const match = rawIn.match(/(\d+):(\d+)(?::(\d+))?\s*(AM|PM)/i);
+              if (match) {
+                let hours = parseInt(match[1], 10);
+                const minutes = parseInt(match[2], 10);
+                const seconds = match[3] ? parseInt(match[3], 10) : 0;
+                const ampm = match[4].toUpperCase();
+                if (ampm === 'PM' && hours < 12) hours += 12;
+                if (ampm === 'AM' && hours === 12) hours = 0;
+                clockInDate.setHours(hours, minutes, seconds, 0);
+              }
+            } else if (rawIn.includes(':')) {
+              const parts = rawIn.split(':');
+              clockInDate.setHours(parseInt(parts[0], 10) || 0, parseInt(parts[1], 10) || 0, parseInt(parts[2] || '0', 10) || 0, 0);
+            }
+
+            let diffMs = now.getTime() - clockInDate.getTime();
+            // Handle cross-midnight shift where now is past midnight or next day
+            if (diffMs < 0) {
+              diffMs += 24 * 60 * 60 * 1000;
+            }
+            hoursWorked = Number(Math.max(0.01, diffMs / (1000 * 60 * 60)).toFixed(2));
+          } catch {
+            hoursWorked = 8;
+          }
+
+          updatedRecord = {
+            ...rec,
+            clockOut: timeStr,
+            totalHours: hoursWorked,
+            notes: notes ? (rec.notes ? `${rec.notes} | ${notes}` : notes) : rec.notes,
+            updatedAt: now.toISOString()
+          };
+          return updatedRecord;
+        }
+        return rec;
+      });
+    });
+
+    if (updatedRecord && appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      await sheetsService.saveAttendance(appsScriptConfig.webAppUrl, updatedRecord);
+    }
+  };
+
+  const handleSaveAttendance = (record: AttendanceRecord) => {
+    setAttendance(prev => {
+      const idx = prev.findIndex(a => a.id === record.id);
+      if (idx > -1) {
+        const copy = [...prev];
+        copy[idx] = record;
+        return copy;
+      }
+      return [record, ...prev];
+    });
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.saveAttendance(appsScriptConfig.webAppUrl, record);
+    }
+  };
+
+  const handleSaveStaffAccount = (account: StaffAccount) => {
+    setStaffAccounts(prev => {
+      const idx = prev.findIndex(a => a.id === account.id || a.staffId === account.staffId);
+      if (idx > -1) {
+        const copy = [...prev];
+        copy[idx] = account;
+        return copy;
+      }
+      return [account, ...prev];
+    });
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.saveStaffAccount(appsScriptConfig.webAppUrl, account);
+    }
+  };
+
+  const handleDeleteStaffAccount = (accountId: string) => {
+    setStaffAccounts(prev => prev.filter(a => a.id !== accountId));
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.deleteStaffAccount(appsScriptConfig.webAppUrl, accountId);
+    }
   };
 
   const handleLogout = () => {
     setLoggedInUser(null);
     sessionStorage.removeItem('rp_logged_in_user');
     localStorage.removeItem('rp_logged_in_user');
+    setCart([]);
   };
 
   /**
@@ -3123,6 +3552,8 @@ export default function App() {
         <style dangerouslySetInnerHTML={{ __html: getThemeStyles(systemSettings.colorTheme || 'classic_noir') }} />
         <LoginScreen
           companies={companies}
+          staffAccounts={staffAccounts}
+          staff={staff}
           onLogin={handleLogin}
           systemSettings={systemSettings}
           onSyncSheets={syncWithSheets}
@@ -3172,28 +3603,68 @@ export default function App() {
             setActiveTab(tab);
             setIsAdminNavOpen(false);
           }}
-          counts={{
-            catalog: scopedProducts.length,
-            browse: catalogProducts.length,
-            portals: orderPortals.filter(p => p.companyId === activeCompany.id).length,
-            history: orders.filter(o => o.companyName?.toLowerCase() === activeCompany.name?.toLowerCase()).length,
-            quotes: quoteEnquiries.filter(q => q.companyName?.toLowerCase() === activeCompany.name?.toLowerCase()).length
-          }}
+          counts={
+            loggedInUser.role === 'staff'
+              ? {
+                  jobs: jobs.length,
+                  orders: orders.filter(o => o.status === 'Pending' || o.status === 'Processing' || o.status === 'Production').length,
+                  payslips: payroll.filter(p => p.staffId === loggedInUser.staffId).length
+                }
+              : {
+                  catalog: scopedProducts.length,
+                  browse: catalogProducts.length,
+                  portals: orderPortals.filter(p => p.companyId === activeCompany.id).length,
+                  history: orders.filter(o => o.companyName?.toLowerCase() === activeCompany.name?.toLowerCase()).length,
+                  quotes: quoteEnquiries.filter(q => q.companyName?.toLowerCase() === activeCompany.name?.toLowerCase()).length
+                }
+          }
+          currentStaffName={loggedInUser.name || 'Staff Member'}
           onLogout={handleLogout}
         />
       )}
 
       {/* Main App Workspace Stage */}
-      <main className={`flex-1 w-full mx-auto px-4 py-8 sm:px-8 ${activeTab === 'admin' || activeTab === 'sync' ? 'max-w-[1600px]' : 'max-w-7xl'}`}>
+      <main className={`flex-1 w-full mx-auto px-4 py-8 sm:px-8 ${activeTab === 'admin' || activeTab === 'sync' || loggedInUser.role === 'staff' ? 'max-w-[1600px]' : 'max-w-7xl'}`}>
         <AnimatePresence mode="wait">
           <motion.div
-            key={activeTab}
+            key={loggedInUser.role === 'staff' ? `staff-portal-${activeTab}` : activeTab}
             initial={{ opacity: 0, y: 5 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -5 }}
             transition={{ duration: 0.2 }}
           >
-            {(activeTab === 'admin' || activeTab === 'sync') && loggedInUser?.role === 'admin' && (
+            {loggedInUser.role === 'staff' && (
+              <StaffDashboard
+                currentUser={loggedInUser}
+                staffMember={staff.find(s => s.id === loggedInUser.staffId || s.fullName.toLowerCase() === (loggedInUser.name || '').toLowerCase())}
+                staffAccount={staffAccounts.find(sa => sa.id === loggedInUser.accountId || sa.staffId === loggedInUser.staffId || sa.username === loggedInUser.username)}
+                attendanceRecords={attendance}
+                payrollRecords={payroll}
+                jobs={jobs}
+                jobColumns={jobColumns}
+                jobItemColumns={jobItemColumns}
+                companies={companies}
+                orders={orders}
+                onClockIn={handleClockIn}
+                onClockOut={handleClockOut}
+                onUpdateAttendance={handleSaveAttendance}
+                onSaveJob={handleSaveJob}
+                onUpdateJobStatus={handleUpdateJobStatus}
+                onDeleteJob={handleDeleteJob}
+                onUpdateStaffAccount={handleSaveStaffAccount}
+                onUpdateStaffMember={handleSaveStaff}
+                onUpdateOrderStatus={(orderId, status) => handleUpdateOrders(orders.map(o => o.id === orderId ? { ...o, status } : o))}
+                systemSettings={systemSettings}
+                currencySymbol={systemSettings.currencySymbol || 'Php'}
+                onLogout={handleLogout}
+                onSyncSheets={syncWithSheets}
+                isSyncingSheets={isSyncingSheets}
+                activeTab={activeTab}
+                onTabChange={(t) => setActiveTab(t)}
+              />
+            )}
+
+            {loggedInUser.role !== 'staff' && (activeTab === 'admin' || activeTab === 'sync') && loggedInUser?.role === 'admin' && (
               <AdminDashboard
                 products={products}
                 companies={companies}
@@ -3213,12 +3684,16 @@ export default function App() {
                 highlightJobId={highlightJobId}
                 staff={staff}
                 payroll={payroll}
+                attendance={attendance}
+                staffAccounts={staffAccounts}
                 expenses={expenses}
                 recurringExpenses={recurringExpenses}
                 expenseCategories={expenseCategories}
                 onSaveStaff={handleSaveStaff}
                 onSaveStaffBatch={handleSaveStaffBatch}
                 onDeleteStaff={handleDeleteStaff}
+                onSaveStaffAccount={handleSaveStaffAccount}
+                onDeleteStaffAccount={handleDeleteStaffAccount}
                 onSavePayroll={handleSavePayroll}
                 onSavePayrollBatch={handleSavePayrollBatch}
                 onDeletePayroll={handleDeletePayroll}
@@ -3263,7 +3738,7 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'browse' && (
+            {loggedInUser.role !== 'staff' && activeTab === 'browse' && (
               <BrowseProducts
                 products={catalogProducts}
                 onAddQuoteEnquiry={handleAddQuoteEnquiry}
@@ -3271,7 +3746,7 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'catalog' && (
+            {loggedInUser.role !== 'staff' && activeTab === 'catalog' && (
               <ProductCatalog
                 products={scopedProducts}
                 onAddToCart={handleAddToCart}
@@ -3281,7 +3756,7 @@ export default function App() {
               />
             )}
             
-            {activeTab === 'portals' && (
+            {loggedInUser.role !== 'staff' && activeTab === 'portals' && (
               <OrderPortals
                 portals={orderPortals}
                 activeCompany={activeCompany}
@@ -3301,7 +3776,7 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'history' && (
+            {loggedInUser.role !== 'staff' && activeTab === 'history' && (
               <OrderHistory
                 orders={orders}
                 selectedCompanyName={activeCompany.name}
@@ -3313,7 +3788,7 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'quote-history' && (
+            {loggedInUser.role !== 'staff' && activeTab === 'quote-history' && (
               <QuoteRequestHistory
                 quoteEnquiries={quoteEnquiries}
                 activeCompany={activeCompany}
@@ -3323,7 +3798,7 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'settings' && (
+            {loggedInUser.role !== 'staff' && activeTab === 'settings' && (
               <CustomerSettings
                 activeCompany={activeCompany}
                 onUpdateCompany={handleUpdateCompany}

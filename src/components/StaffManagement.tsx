@@ -7,7 +7,10 @@ import React, { useState, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
 import {
   StaffMember,
+  StaffAccount,
+  StaffAccountStatus,
   PayrollRecord,
+  AttendanceRecord,
   PayrollDeductionItem,
   SalaryType,
   EmploymentStatus,
@@ -17,7 +20,9 @@ import {
 } from '../types';
 import {
   generateStaffId,
-  generatePayrollId
+  generatePayrollId,
+  generateStaffAccountId,
+  generateTemporaryPassword
 } from '../data/initialFinance';
 import {
   Users,
@@ -43,15 +48,29 @@ import {
   UserCheck,
   UserX,
   Percent,
-  Check
+  Check,
+  Key,
+  ShieldCheck,
+  ShieldAlert,
+  Copy,
+  Lock,
+  Eye,
+  EyeOff,
+  CheckCheck,
+  KeyRound,
+  Shield
 } from 'lucide-react';
 
 interface StaffManagementProps {
   staff: StaffMember[];
   payroll: PayrollRecord[];
+  attendance?: AttendanceRecord[];
+  staffAccounts?: StaffAccount[];
   onSaveStaff: (staff: StaffMember) => void;
   onSaveStaffBatch?: (staffList: StaffMember[]) => void;
   onDeleteStaff?: (staffId: string) => void;
+  onSaveStaffAccount?: (account: StaffAccount) => void;
+  onDeleteStaffAccount?: (accountId: string) => void;
   onSavePayroll: (record: PayrollRecord) => void;
   onSavePayrollBatch?: (records: PayrollRecord[]) => void;
   onDeletePayroll?: (payrollId: string) => void;
@@ -62,9 +81,13 @@ interface StaffManagementProps {
 export default function StaffManagement({
   staff = [],
   payroll = [],
+  attendance = [],
+  staffAccounts = [],
   onSaveStaff,
   onSaveStaffBatch,
   onDeleteStaff,
+  onSaveStaffAccount,
+  onDeleteStaffAccount,
   onSavePayroll,
   onSavePayrollBatch,
   onDeletePayroll,
@@ -97,6 +120,24 @@ export default function StaffManagement({
     notes: '',
     status: 'Active'
   });
+
+  // ----------------------------------------------------
+  // STAFF ACCOUNT MANAGEMENT MODAL STATE
+  // ----------------------------------------------------
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [selectedStaffForAccount, setSelectedStaffForAccount] = useState<StaffMember | null>(null);
+  const [accountFormData, setAccountFormData] = useState({
+    username: '',
+    email: '',
+    role: 'Staff' as 'Staff' | 'Admin',
+    status: 'Active' as StaffAccountStatus,
+    temporaryPassword: '',
+    requirePasswordChange: true
+  });
+  const [showAccountPassword, setShowAccountPassword] = useState(false);
+  const [accountCopiedNotice, setAccountCopiedNotice] = useState(false);
+  const [accountSuccessMsg, setAccountSuccessMsg] = useState<string | null>(null);
+  const [accountErrorMsg, setAccountErrorMsg] = useState<string | null>(null);
 
   // ----------------------------------------------------
   // PAYROLL STATE & FILTERS
@@ -288,42 +329,337 @@ export default function StaffManagement({
   };
 
   // ----------------------------------------------------
+  // STAFF ACCOUNT / AUTHENTICATION HANDLERS
+  // ----------------------------------------------------
+  const findStaffAccount = (memberId: string): StaffAccount | undefined => {
+    return staffAccounts.find(a => a.staffId === memberId || a.id === `SA-${memberId.replace('STF-', '')}`);
+  };
+
+  const handleOpenAccountModal = (member: StaffMember) => {
+    setSelectedStaffForAccount(member);
+    setAccountSuccessMsg(null);
+    setAccountErrorMsg(null);
+    setAccountCopiedNotice(false);
+    setShowAccountPassword(false);
+
+    const existing = findStaffAccount(member.id);
+    if (existing) {
+      setAccountFormData({
+        username: existing.username || '',
+        email: existing.email || '',
+        role: existing.role || 'Staff',
+        status: existing.status || 'Active',
+        temporaryPassword: existing.temporaryPassword || existing.passcode || '',
+        requirePasswordChange: existing.mustChangePassword ?? false
+      });
+    } else {
+      // Suggest clean unique username based on full name
+      const nameParts = member.fullName.trim().toLowerCase().split(/\s+/);
+      const firstName = nameParts[0] || 'staff';
+      const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+      let baseUsername = lastName ? `${firstName}.${lastName}`.replace(/[^a-z0-9.]/g, '') : firstName.replace(/[^a-z0-9]/g, '');
+      
+      // Ensure uniqueness
+      let candidate = baseUsername;
+      let counter = 1;
+      while (staffAccounts.some(a => a.username.toLowerCase() === candidate.toLowerCase())) {
+        candidate = `${baseUsername}${counter}`;
+        counter++;
+      }
+
+      const generatedTemp = generateTemporaryPassword('ARH');
+      setAccountFormData({
+        username: candidate,
+        email: `${candidate}@arhprint.com`,
+        role: 'Staff',
+        status: 'Active',
+        temporaryPassword: generatedTemp,
+        requirePasswordChange: true
+      });
+    }
+
+    setIsAccountModalOpen(true);
+  };
+
+  const handleGenerateNewTempPass = () => {
+    const freshPass = generateTemporaryPassword('ARH');
+    setAccountFormData(prev => ({
+      ...prev,
+      temporaryPassword: freshPass,
+      requirePasswordChange: true
+    }));
+    setShowAccountPassword(true);
+  };
+
+  const handleSaveAccountSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStaffForAccount) return;
+
+    setAccountSuccessMsg(null);
+    setAccountErrorMsg(null);
+
+    const cleanedUsername = accountFormData.username.trim().toLowerCase();
+    if (!cleanedUsername) {
+      setAccountErrorMsg('Please provide a unique login username or identifier.');
+      return;
+    }
+
+    const existingAccount = findStaffAccount(selectedStaffForAccount.id);
+
+    // Check username collisions
+    const collision = staffAccounts.find(
+      a => a.username.toLowerCase() === cleanedUsername && (!existingAccount || a.id !== existingAccount.id)
+    );
+    if (collision) {
+      setAccountErrorMsg(`The username "${cleanedUsername}" is already taken by ${collision.name} (${collision.staffId}). Please choose another.`);
+      return;
+    }
+
+    const passcode = accountFormData.temporaryPassword.trim();
+    if (!passcode) {
+      setAccountErrorMsg('Please specify or generate a temporary password for this account.');
+      return;
+    }
+
+    const accountToSave: StaffAccount = {
+      id: existingAccount ? existingAccount.id : generateStaffAccountId(staffAccounts),
+      staffId: selectedStaffForAccount.id,
+      name: selectedStaffForAccount.fullName,
+      username: cleanedUsername,
+      passcode: passcode,
+      role: accountFormData.role,
+      status: accountFormData.status,
+      mustChangePassword: accountFormData.requirePasswordChange,
+      temporaryPassword: accountFormData.requirePasswordChange ? passcode : undefined,
+      email: accountFormData.email.trim() || undefined,
+      createdAt: existingAccount?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      lastLogin: existingAccount?.lastLogin
+    };
+
+    if (onSaveStaffAccount) {
+      onSaveStaffAccount(accountToSave);
+      setAccountSuccessMsg(`Staff account for ${selectedStaffForAccount.fullName} saved successfully.`);
+    }
+  };
+
+  const handleToggleAccountStatus = () => {
+    if (!selectedStaffForAccount) return;
+    const existing = findStaffAccount(selectedStaffForAccount.id);
+    if (!existing || !onSaveStaffAccount) return;
+
+    const nextStatus: StaffAccountStatus = existing.status === 'Active' ? 'Suspended' : 'Active';
+    const updated: StaffAccount = {
+      ...existing,
+      status: nextStatus,
+      updatedAt: new Date().toISOString()
+    };
+
+    setAccountFormData(prev => ({ ...prev, status: nextStatus }));
+    onSaveStaffAccount(updated);
+    setAccountSuccessMsg(
+      nextStatus === 'Suspended'
+        ? `Account for ${selectedStaffForAccount.fullName} is now SUSPENDED. Login is disabled. Historical records remain intact.`
+        : `Account for ${selectedStaffForAccount.fullName} is now ACTIVE.`
+    );
+  };
+
+  const handleResetAccountPassword = () => {
+    if (!selectedStaffForAccount) return;
+    const existing = findStaffAccount(selectedStaffForAccount.id);
+    if (!existing || !onSaveStaffAccount) return;
+
+    const freshTemp = generateTemporaryPassword('ARH');
+    const updated: StaffAccount = {
+      ...existing,
+      passcode: freshTemp,
+      temporaryPassword: freshTemp,
+      mustChangePassword: true,
+      updatedAt: new Date().toISOString()
+    };
+
+    setAccountFormData(prev => ({
+      ...prev,
+      temporaryPassword: freshTemp,
+      requirePasswordChange: true
+    }));
+    setShowAccountPassword(true);
+    onSaveStaffAccount(updated);
+    setAccountSuccessMsg(`New temporary password issued for ${selectedStaffForAccount.fullName}. Please copy and provide it to the staff member.`);
+  };
+
+  const handleRevokeAccount = () => {
+    if (!selectedStaffForAccount) return;
+    const existing = findStaffAccount(selectedStaffForAccount.id);
+    if (!existing || !onDeleteStaffAccount) return;
+
+    if (
+      window.confirm(
+        `Are you sure you want to revoke the login account for ${selectedStaffForAccount.fullName} (${selectedStaffForAccount.id})?\n\nNOTE: The employee profile, attendance logs, payroll records, and job history will NOT be deleted.`
+      )
+    ) {
+      onDeleteStaffAccount(existing.id);
+      setIsAccountModalOpen(false);
+      setSelectedStaffForAccount(null);
+    }
+  };
+
+  const handleCopyAccountCredentials = () => {
+    if (!selectedStaffForAccount) return;
+    const creds = [
+      `=========================================`,
+      `ARH APPAREL - STAFF PORTAL LOGIN ACCESS`,
+      `=========================================`,
+      `Employee Name: ${selectedStaffForAccount.fullName}`,
+      `Staff ID:      ${selectedStaffForAccount.id}`,
+      `Position:      ${selectedStaffForAccount.position} (${selectedStaffForAccount.department})`,
+      `Portal Role:   ${accountFormData.role}`,
+      `-----------------------------------------`,
+      `Username:      ${accountFormData.username.trim().toLowerCase()}`,
+      `Temp Password: ${accountFormData.temporaryPassword.trim()}`,
+      `Security Note: You will be asked to set your new permanent password on your first login.`,
+      `=========================================`
+    ].join('\n');
+
+    navigator.clipboard.writeText(creds).then(() => {
+      setAccountCopiedNotice(true);
+      setTimeout(() => setAccountCopiedNotice(false), 3500);
+    });
+  };
+
+  // ----------------------------------------------------
+  // QUALIFYING ATTENDANCE HELPER FOR PAYROLL
+  // ----------------------------------------------------
+  const computeQualifyingAttendance = (
+    staffId: string,
+    periodStart: string,
+    periodEnd: string,
+    records: AttendanceRecord[]
+  ) => {
+    if (!staffId) {
+      return { qualifyingDays: 0, qualifyingHours: 0, qualifyingDates: [] as string[], incompletePunches: 0 };
+    }
+
+    const staffAtt = records.filter(a =>
+      a.staffId === staffId &&
+      (!periodStart || a.date >= periodStart) &&
+      (!periodEnd || a.date <= periodEnd)
+    );
+
+    // Map to deduplicate by calendar shift date (date field on attendance record)
+    const dateHoursMap = new Map<string, number>();
+    const processedRecordIds = new Set<string>();
+    let incompleteCount = 0;
+
+    for (const rec of staffAtt) {
+      if (rec.id && processedRecordIds.has(rec.id)) continue;
+      if (rec.id) processedRecordIds.add(rec.id);
+
+      // Absent and Leave records do not count toward worked days/hours
+      if (rec.status === 'Absent' || rec.status === 'Leave') {
+        continue;
+      }
+
+      const hasClockOut = Boolean(rec.clockOut && rec.clockOut.trim() !== '');
+      const hours = Number(rec.totalHours) || 0;
+
+      // Active clock-in without clock-out or missing clock-out does NOT automatically count
+      if (!hasClockOut || rec.status === 'Missing Clock Out') {
+        incompleteCount++;
+        continue;
+      }
+
+      // Valid completed workday shift
+      if (hours > 0 && (rec.status === 'Present' || rec.status === 'Late' || hasClockOut)) {
+        const existing = dateHoursMap.get(rec.date) || 0;
+        dateHoursMap.set(rec.date, existing + hours);
+      }
+    }
+
+    const qualifyingDays = dateHoursMap.size;
+    let totalHours = 0;
+    dateHoursMap.forEach(h => {
+      totalHours += h;
+    });
+
+    return {
+      qualifyingDays,
+      qualifyingHours: Number(totalHours.toFixed(2)),
+      qualifyingDates: Array.from(dateHoursMap.keys()).sort(),
+      incompletePunches: incompleteCount
+    };
+  };
+
+  // ----------------------------------------------------
   // PAYROLL CRUD HANDLERS
   // ----------------------------------------------------
   const handleOpenNewPayroll = (preSelectedStaff?: StaffMember) => {
     setEditingPayroll(null);
     const targetStaff = preSelectedStaff || staff.find(s => s.status === 'Active') || staff[0];
 
-    const basicPay = targetStaff ? (targetStaff.salaryType === 'Monthly' ? (targetStaff.basicSalary / 2) : targetStaff.basicSalary) : 0;
-    const allowances = targetStaff ? (targetStaff.allowances / 2) : 0;
-    const otherEarnings = targetStaff ? (targetStaff.otherCompensation / 2) : 0;
+    const periodStart = new Date().toISOString().slice(0, 8) + '01';
+    const periodEnd = new Date().toISOString().slice(0, 8) + '15';
+    const payDate = new Date().toISOString().slice(0, 8) + '15';
+
+    let basicPay = 0;
+    let daysWorked: number | undefined;
+    let hoursWorked: number | undefined;
+    let autoNotes = '';
+
+    if (targetStaff) {
+      const qual = computeQualifyingAttendance(targetStaff.id, periodStart, periodEnd, attendance);
+      if (targetStaff.salaryType === 'Daily') {
+        daysWorked = qual.qualifyingDays;
+        basicPay = Math.round((targetStaff.basicSalary || 0) * daysWorked);
+        autoNotes = daysWorked > 0
+          ? `Daily Rate: ₱${targetStaff.basicSalary?.toLocaleString()} × ${daysWorked} days (Attendance verified)`
+          : `Daily Rate: ₱${targetStaff.basicSalary?.toLocaleString()} × 0 days (0 qualifying attendance days recorded in period)`;
+      } else if (targetStaff.salaryType === 'Hourly') {
+        hoursWorked = qual.qualifyingHours;
+        basicPay = Math.round((targetStaff.basicSalary || 0) * hoursWorked);
+        autoNotes = hoursWorked > 0
+          ? `Hourly Rate: ₱${targetStaff.basicSalary?.toLocaleString()} × ${hoursWorked} hrs (Attendance verified)`
+          : `Hourly Rate: ₱${targetStaff.basicSalary?.toLocaleString()} × 0 hrs (0 qualifying attendance hours recorded in period)`;
+      } else {
+        basicPay = Math.round((targetStaff.basicSalary || 0) / 2);
+        autoNotes = `Semi-Monthly cut-off salary (1st - 15th)`;
+      }
+    }
+
+    const allowances = targetStaff && targetStaff.salaryType === 'Monthly' ? Math.round((targetStaff.allowances || 0) / 2) : 0;
+    const otherEarnings = targetStaff && targetStaff.salaryType === 'Monthly' ? Math.round((targetStaff.otherCompensation || 0) / 2) : 0;
     const gross = basicPay + allowances + otherEarnings;
 
     const initialDeductions: PayrollDeductionItem[] = [
-      { id: 'ded-1', name: 'SSS Contribution', amount: 0 },
-      { id: 'ded-2', name: 'PhilHealth Contribution', amount: 0 },
-      { id: 'ded-3', name: 'Pag-IBIG Fund', amount: 0 },
+      { id: 'ded-1', name: 'SSS Contribution', amount: basicPay > 0 ? Math.round(basicPay * 0.045) : 0 },
+      { id: 'ded-2', name: 'PhilHealth Contribution', amount: basicPay > 0 ? Math.round(basicPay * 0.02) : 0 },
+      { id: 'ded-3', name: 'Pag-IBIG Fund', amount: basicPay > 0 ? 100 : 0 },
       { id: 'ded-4', name: 'Withholding Tax', amount: 0 }
     ];
+    const totDed = initialDeductions.reduce((sum, d) => sum + d.amount, 0);
 
     setPayrollFormData({
       staffId: targetStaff ? targetStaff.id : '',
       staffName: targetStaff ? targetStaff.fullName : '',
       position: targetStaff ? targetStaff.position : '',
       department: targetStaff ? targetStaff.department : '',
-      payPeriodStart: new Date().toISOString().slice(0, 8) + '01',
-      payPeriodEnd: new Date().toISOString().slice(0, 8) + '15',
-      payDate: new Date().toISOString().slice(0, 8) + '15',
+      payPeriodStart: periodStart,
+      payPeriodEnd: periodEnd,
+      payDate: payDate,
+      salaryType: targetStaff?.salaryType,
+      rateSnapshot: targetStaff?.basicSalary,
+      daysWorked,
+      hoursWorked,
       basicPay,
       allowances,
       otherEarnings,
       grossPay: gross,
-      deductions: 0,
+      deductions: totDed,
       itemizedDeductions: initialDeductions,
-      totalDeductions: 0,
-      netPay: gross,
+      totalDeductions: totDed,
+      netPay: Math.max(0, gross - totDed),
       status: 'Draft',
-      notes: ''
+      notes: autoNotes
     });
     setIsPayrollModalOpen(true);
   };
@@ -338,6 +674,10 @@ export default function StaffManagement({
       payPeriodStart: record.payPeriodStart,
       payPeriodEnd: record.payPeriodEnd,
       payDate: record.payDate,
+      salaryType: record.salaryType,
+      rateSnapshot: record.rateSnapshot,
+      daysWorked: record.daysWorked,
+      hoursWorked: record.hoursWorked,
       basicPay: record.basicPay,
       allowances: record.allowances,
       otherEarnings: record.otherEarnings,
@@ -358,9 +698,37 @@ export default function StaffManagement({
     const targetStaff = staff.find(s => s.id === staffId);
     if (!targetStaff) return;
 
-    const basicPay = targetStaff.salaryType === 'Monthly' ? (targetStaff.basicSalary / 2) : targetStaff.basicSalary;
-    const allowances = targetStaff.allowances / 2;
-    const otherEarnings = targetStaff.otherCompensation / 2;
+    let basicPay = 0;
+    let daysWorked: number | undefined;
+    let hoursWorked: number | undefined;
+    let autoNotes = '';
+
+    const qual = computeQualifyingAttendance(
+      staffId,
+      payrollFormData.payPeriodStart,
+      payrollFormData.payPeriodEnd,
+      attendance
+    );
+
+    if (targetStaff.salaryType === 'Daily') {
+      daysWorked = qual.qualifyingDays;
+      basicPay = Math.round((targetStaff.basicSalary || 0) * daysWorked);
+      autoNotes = daysWorked > 0
+        ? `Daily Rate: ₱${targetStaff.basicSalary?.toLocaleString()} × ${daysWorked} days (Attendance verified)`
+        : `Daily Rate: ₱${targetStaff.basicSalary?.toLocaleString()} × 0 days (0 qualifying attendance days recorded in period)`;
+    } else if (targetStaff.salaryType === 'Hourly') {
+      hoursWorked = qual.qualifyingHours;
+      basicPay = Math.round((targetStaff.basicSalary || 0) * hoursWorked);
+      autoNotes = hoursWorked > 0
+        ? `Hourly Rate: ₱${targetStaff.basicSalary?.toLocaleString()} × ${hoursWorked} hrs (Attendance verified)`
+        : `Hourly Rate: ₱${targetStaff.basicSalary?.toLocaleString()} × 0 hrs (0 qualifying attendance hours recorded in period)`;
+    } else {
+      basicPay = Math.round((targetStaff.basicSalary || 0) / 2);
+      autoNotes = `Semi-Monthly cut-off salary`;
+    }
+
+    const allowances = targetStaff.salaryType === 'Monthly' ? Math.round((targetStaff.allowances || 0) / 2) : 0;
+    const otherEarnings = targetStaff.salaryType === 'Monthly' ? Math.round((targetStaff.otherCompensation || 0) / 2) : 0;
     const gross = basicPay + allowances + otherEarnings;
     const currentTotDed = (payrollFormData.itemizedDeductions || []).reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
 
@@ -370,12 +738,101 @@ export default function StaffManagement({
       staffName: targetStaff.fullName,
       position: targetStaff.position,
       department: targetStaff.department,
+      salaryType: targetStaff.salaryType,
+      rateSnapshot: targetStaff.basicSalary,
+      daysWorked,
+      hoursWorked,
       basicPay,
       allowances,
       otherEarnings,
       grossPay: gross,
       totalDeductions: currentTotDed,
-      netPay: gross - currentTotDed
+      netPay: Math.max(0, gross - currentTotDed),
+      notes: autoNotes || prev.notes
+    }));
+  };
+
+  const handleSyncAttendanceToPayrollForm = () => {
+    if (!payrollFormData.staffId) return;
+    const targetStaff = staff.find(s => s.id === payrollFormData.staffId);
+    if (!targetStaff) return;
+
+    const qual = computeQualifyingAttendance(
+      payrollFormData.staffId,
+      payrollFormData.payPeriodStart,
+      payrollFormData.payPeriodEnd,
+      attendance
+    );
+
+    let basic = 0;
+    let daysWorked: number | undefined;
+    let hoursWorked: number | undefined;
+    let notes = '';
+
+    if (targetStaff.salaryType === 'Daily') {
+      daysWorked = qual.qualifyingDays;
+      basic = Math.round((targetStaff.basicSalary || 0) * daysWorked);
+      notes = daysWorked > 0
+        ? `Daily Rate: ₱${targetStaff.basicSalary?.toLocaleString()} × ${daysWorked} days (Attendance synced)`
+        : `Daily Rate: ₱${targetStaff.basicSalary?.toLocaleString()} × 0 days (0 qualifying attendance days recorded)`;
+    } else if (targetStaff.salaryType === 'Hourly') {
+      hoursWorked = qual.qualifyingHours;
+      basic = Math.round((targetStaff.basicSalary || 0) * hoursWorked);
+      notes = hoursWorked > 0
+        ? `Hourly Rate: ₱${targetStaff.basicSalary?.toLocaleString()} × ${hoursWorked} hrs (Attendance synced)`
+        : `Hourly Rate: ₱${targetStaff.basicSalary?.toLocaleString()} × 0 hrs (0 qualifying attendance hours recorded)`;
+    } else {
+      basic = Math.round((targetStaff.basicSalary || 0) / 2);
+      notes = `Semi-Monthly cut-off salary`;
+    }
+
+    const gross = basic + (Number(payrollFormData.allowances) || 0) + (Number(payrollFormData.otherEarnings) || 0);
+    const totalDed = (payrollFormData.itemizedDeductions || []).reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+
+    setPayrollFormData(prev => ({
+      ...prev,
+      daysWorked,
+      hoursWorked,
+      basicPay: basic,
+      grossPay: gross,
+      netPay: Math.max(0, gross - totalDed),
+      notes: notes
+    }));
+  };
+
+  const handleDaysWorkedChange = (days: number) => {
+    const rate = Number(payrollFormData.rateSnapshot) || 0;
+    const basic = Math.max(0, Math.round(rate * days));
+    const gross = basic + (Number(payrollFormData.allowances) || 0) + (Number(payrollFormData.otherEarnings) || 0);
+    const totalDed = (payrollFormData.itemizedDeductions || []).reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+    setPayrollFormData(prev => ({
+      ...prev,
+      daysWorked: days,
+      basicPay: basic,
+      grossPay: gross,
+      netPay: Math.max(0, gross - totalDed),
+      notes: `Daily Rate: ₱${rate.toLocaleString()} × ${days} days (Manual override)`
+    }));
+  };
+
+  const handleHoursWorkedChange = (hours: number) => {
+    const rate = Number(payrollFormData.rateSnapshot) || 0;
+    const basic = Math.max(0, Math.round(rate * hours));
+    const gross = basic + (Number(payrollFormData.allowances) || 0) + (Number(payrollFormData.otherEarnings) || 0);
+    const totalDed = (payrollFormData.itemizedDeductions || []).reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
+    setPayrollFormData(prev => ({
+      ...prev,
+      hoursWorked: hours,
+      basicPay: basic,
+      grossPay: gross,
+      netPay: Math.max(0, gross - totalDed),
+      notes: `Hourly Rate: ₱${rate.toLocaleString()} × ${hours} hrs (Manual override)`
+    }));
+  };
+      grossPay: gross,
+      totalDeductions: currentTotDed,
+      netPay: gross - currentTotDed,
+      notes: autoNotes || prev.notes
     }));
   };
 
@@ -460,6 +917,10 @@ export default function StaffManagement({
       payPeriodStart: payrollFormData.payPeriodStart,
       payPeriodEnd: payrollFormData.payPeriodEnd,
       payDate: payrollFormData.payDate,
+      salaryType: payrollFormData.salaryType,
+      rateSnapshot: payrollFormData.rateSnapshot,
+      daysWorked: payrollFormData.daysWorked,
+      hoursWorked: payrollFormData.hoursWorked,
       basicPay: Number(payrollFormData.basicPay) || 0,
       allowances: Number(payrollFormData.allowances) || 0,
       otherEarnings: Number(payrollFormData.otherEarnings) || 0,
@@ -502,18 +963,63 @@ export default function StaffManagement({
     const newRecords: PayrollRecord[] = [];
 
     activeStaff.forEach((emp, index) => {
-      const basic = (emp.basicSalary || 0) / divider;
-      const allow = (emp.allowances || 0) / divider;
-      const other = (emp.otherCompensation || 0) / divider;
+      let basic = 0;
+      let daysWorked: number | undefined;
+      let hoursWorked: number | undefined;
+      const notesArr: string[] = [`${batchPeriodType.replace(/_/g, ' ').toUpperCase()} batch run`];
+
+      const qual = computeQualifyingAttendance(
+        emp.id,
+        batchPayPeriodStart,
+        batchPayPeriodEnd,
+        attendance
+      );
+
+      if (emp.salaryType === 'Daily') {
+        daysWorked = qual.qualifyingDays;
+        basic = Math.round((emp.basicSalary || 0) * daysWorked);
+        if (daysWorked > 0) {
+          notesArr.push(`Daily: ₱${emp.basicSalary?.toLocaleString()} × ${daysWorked} days (Attendance verified)`);
+        } else {
+          notesArr.push(`Daily: ₱${emp.basicSalary?.toLocaleString()} × 0 days (0 qualifying attendance days)`);
+        }
+        if (qual.incompletePunches > 0) {
+          notesArr.push(`${qual.incompletePunches} unclosed shift(s) excluded`);
+        }
+      } else if (emp.salaryType === 'Hourly') {
+        hoursWorked = qual.qualifyingHours;
+        basic = Math.round((emp.basicSalary || 0) * hoursWorked);
+        if (hoursWorked > 0) {
+          notesArr.push(`Hourly: ₱${emp.basicSalary?.toLocaleString()} × ${hoursWorked} hrs (Attendance verified)`);
+        } else {
+          notesArr.push(`Hourly: ₱${emp.basicSalary?.toLocaleString()} × 0 hrs (0 qualifying attendance hours)`);
+        }
+        if (qual.incompletePunches > 0) {
+          notesArr.push(`${qual.incompletePunches} unclosed shift(s) excluded`);
+        }
+      } else {
+        basic = Math.round((emp.basicSalary || 0) / divider);
+        notesArr.push(`Monthly cut-off salary`);
+      }
+
+      const allow = emp.salaryType === 'Monthly' ? Math.round((emp.allowances || 0) / divider) : 0;
+      const other = emp.salaryType === 'Monthly' ? Math.round((emp.otherCompensation || 0) / divider) : 0;
       const gross = basic + allow + other;
 
-      // Estimated standard deduction presets (customizable later per record)
+      // Deductions calculated only if basic > 0
       const dedList: PayrollDeductionItem[] = [
-        { id: `ded-sss-${emp.id}`, name: 'SSS Contribution', amount: Math.round(basic * 0.045) },
-        { id: `ded-ph-${emp.id}`, name: 'PhilHealth', amount: Math.round(basic * 0.02) },
-        { id: `ded-pagibig-${emp.id}`, name: 'Pag-IBIG', amount: 100 }
+        { id: `ded-sss-${emp.id}`, name: 'SSS Contribution', amount: basic > 0 ? Math.round(basic * 0.045) : 0 },
+        { id: `ded-ph-${emp.id}`, name: 'PhilHealth', amount: basic > 0 ? Math.round(basic * 0.02) : 0 },
+        { id: `ded-pagibig-${emp.id}`, name: 'Pag-IBIG', amount: basic > 0 ? 100 : 0 }
       ];
       const totDed = dedList.reduce((sum, d) => sum + d.amount, 0);
+
+      const notesArr: string[] = [`Generated from ${batchPeriodType.replace(/_/g, ' ').toUpperCase()} batch run`];
+      if (emp.salaryType === 'Daily') {
+        notesArr.push(`Daily: ₱${emp.basicSalary?.toLocaleString()} × ${daysWorked} days`);
+      } else if (emp.salaryType === 'Hourly') {
+        notesArr.push(`Hourly: ₱${emp.basicSalary?.toLocaleString()} × ${hoursWorked} hrs`);
+      }
 
       newRecords.push({
         id: `PR-${batchPayDate.replace(/-/g, '')}-${String(payroll.length + index + 1).padStart(3, '0')}`,
@@ -524,6 +1030,10 @@ export default function StaffManagement({
         payPeriodStart: batchPayPeriodStart,
         payPeriodEnd: batchPayPeriodEnd,
         payDate: batchPayDate,
+        salaryType: emp.salaryType,
+        rateSnapshot: emp.basicSalary,
+        daysWorked,
+        hoursWorked,
         basicPay: basic,
         allowances: allow,
         otherEarnings: other,
@@ -533,7 +1043,7 @@ export default function StaffManagement({
         totalDeductions: totDed,
         netPay: gross - totDed,
         status: 'Draft',
-        notes: `Generated from ${batchPeriodType.replace(/_/g, ' ').toUpperCase()} batch run`,
+        notes: notesArr.join(' | '),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
@@ -663,7 +1173,14 @@ export default function StaffManagement({
       doc.text(`${currencySymbol} ${amt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, x + colWidth - 4, y, { align: 'right' });
     };
 
-    printLine('Basic Salary Pay', record.basicPay, colLeftX, earnY);
+    let basicLabel = 'Basic Salary Pay';
+    if (record.salaryType === 'Daily' && record.daysWorked) {
+      basicLabel = `Basic Pay (${record.daysWorked} days)`;
+    } else if (record.salaryType === 'Hourly' && record.hoursWorked) {
+      basicLabel = `Basic Pay (${record.hoursWorked} hrs)`;
+    }
+
+    printLine(basicLabel, record.basicPay, colLeftX, earnY);
     earnY += 7;
     if (record.allowances > 0) {
       printLine('Allowances (Transpo/Meal)', record.allowances, colLeftX, earnY);
@@ -927,98 +1444,159 @@ export default function StaffManagement({
                     <th className="py-3 px-4">Position &amp; Dept</th>
                     <th className="py-3 px-4">Employment</th>
                     <th className="py-3 px-4 text-right">Compensation Rate</th>
-                    <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-center">Account Access</th>
+                    <th className="py-3 px-4 text-center">HR Status</th>
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredStaff.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-12 text-center text-gray-400 font-mono text-xs">
+                      <td colSpan={7} className="py-12 text-center text-gray-400 font-mono text-xs">
                         No employees found matching the filter criteria.
                       </td>
                     </tr>
                   ) : (
-                    filteredStaff.map(member => (
-                      <tr key={member.id} className="hover:bg-gray-50/70 transition-colors">
-                        <td className="py-3.5 px-4">
-                          <div className="font-bold text-black text-sm">{member.fullName}</div>
-                          <div className="font-mono text-[10px] text-gray-400">{member.id}</div>
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <div className="font-medium text-gray-900">{member.position}</div>
-                          <div className="text-[10px] text-gray-500 font-mono">{member.department}</div>
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span className="inline-block px-2 py-0.5 rounded-md font-mono text-[10px] font-bold bg-gray-100 text-gray-700 border border-gray-200">
-                            {member.employmentStatus}
-                          </span>
-                          <div className="text-[10px] text-gray-400 font-mono mt-0.5">
-                            Since {member.dateStarted || 'N/A'}
-                          </div>
-                        </td>
-                        <td className="py-3.5 px-4 text-right font-mono">
-                          <div className="font-bold text-black">
-                            {currencySymbol} {member.basicSalary.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            <span className="text-[10px] text-gray-400 font-normal"> / {member.salaryType.toLowerCase()}</span>
-                          </div>
-                          {(member.allowances > 0 || member.otherCompensation > 0) && (
-                            <div className="text-[10px] text-emerald-600">
-                              +{currencySymbol} {(member.allowances + member.otherCompensation).toLocaleString(undefined, { minimumFractionDigits: 2 })} allow.
+                    filteredStaff.map(member => {
+                      const account = findStaffAccount(member.id);
+                      return (
+                        <tr key={member.id} className="hover:bg-gray-50/70 transition-colors">
+                          <td className="py-3.5 px-4">
+                            <div className="font-bold text-black text-sm">{member.fullName}</div>
+                            <div className="font-mono text-[10px] text-gray-400">{member.id}</div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="font-medium text-gray-900">{member.position}</div>
+                            <div className="text-[10px] text-gray-500 font-mono">{member.department}</div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span className="inline-block px-2 py-0.5 rounded-md font-mono text-[10px] font-bold bg-gray-100 text-gray-700 border border-gray-200">
+                              {member.employmentStatus}
+                            </span>
+                            <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+                              Since {member.dateStarted || 'N/A'}
                             </div>
-                          )}
-                        </td>
-                        <td className="py-3.5 px-4 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleStaffStatus(member)}
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold font-mono uppercase cursor-pointer border transition-colors ${
-                              member.status === 'Active'
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                                : 'bg-gray-100 text-gray-500 border-gray-300 hover:bg-gray-200'
-                            }`}
-                            title="Click to toggle status"
-                          >
-                            {member.status === 'Active' ? <UserCheck className="w-3 h-3" /> : <UserX className="w-3 h-3" />}
-                            {member.status}
-                          </button>
-                        </td>
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenNewPayroll(member)}
-                              className="px-2.5 py-1 bg-gray-100 hover:bg-black hover:text-white text-gray-700 rounded-lg font-mono text-[10px] font-bold uppercase transition-colors cursor-pointer"
-                              title="Create payroll record for this staff"
-                            >
-                              + Pay
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEditStaff(member)}
-                              className="p-1.5 text-gray-500 hover:text-black hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
-                              title="Edit Employee"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            {onDeleteStaff && (
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-mono">
+                            <div className="font-bold text-black">
+                              {currencySymbol} {member.basicSalary.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              <span className="text-[10px] text-gray-400 font-normal"> / {member.salaryType.toLowerCase()}</span>
+                            </div>
+                            {(member.allowances > 0 || member.otherCompensation > 0) && (
+                              <div className="text-[10px] text-emerald-600">
+                                +{currencySymbol} {(member.allowances + member.otherCompensation).toLocaleString(undefined, { minimumFractionDigits: 2 })} allow.
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            {account ? (
+                              <div className="inline-flex flex-col items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenAccountModal(member)}
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono transition-all cursor-pointer border ${
+                                    account.status === 'Active'
+                                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300'
+                                      : account.status === 'Suspended'
+                                      ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                                      : 'bg-gray-100 text-gray-600 border-gray-300 hover:bg-gray-200'
+                                  }`}
+                                  title="Click to manage staff account & security"
+                                >
+                                  {account.status === 'Active' ? (
+                                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                  ) : (
+                                    <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                                  )}
+                                  <span>@{account.username}</span>
+                                  <span className={`text-[9px] px-1 py-0.2 rounded font-sans uppercase ${
+                                    account.status === 'Active' ? 'bg-emerald-200/60 text-emerald-900' : 'bg-amber-200/80 text-amber-900'
+                                  }`}>
+                                    {account.status}
+                                  </span>
+                                </button>
+                                {account.mustChangePassword && (
+                                  <span className="text-[9px] font-mono font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                    Temp Pass Pending
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  if (window.confirm(`Are you sure you want to remove ${member.fullName} (${member.id})?`)) {
-                                    onDeleteStaff(member.id);
-                                  }
-                                }}
-                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                                title="Delete Employee"
+                                onClick={() => handleOpenAccountModal(member)}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold font-mono bg-gray-50 hover:bg-black hover:text-white text-gray-600 border border-gray-200 transition-all cursor-pointer shadow-2xs"
+                                title="Set up login account for this staff member"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Key className="w-3 h-3 text-amber-500" />
+                                <span>+ Set Up Account</span>
                               </button>
                             )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleStaffStatus(member)}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold font-mono uppercase cursor-pointer border transition-colors ${
+                                member.status === 'Active'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                  : 'bg-gray-100 text-gray-500 border-gray-300 hover:bg-gray-200'
+                              }`}
+                              title="Click to toggle HR employee status"
+                            >
+                              {member.status === 'Active' ? <UserCheck className="w-3 h-3" /> : <UserX className="w-3 h-3" />}
+                              {member.status}
+                            </button>
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenAccountModal(member)}
+                                className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                  account
+                                    ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                                    : 'text-gray-500 hover:text-black hover:bg-gray-100'
+                                }`}
+                                title={account ? "Manage Login Account" : "Set Up Login Account"}
+                              >
+                                <Key className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenNewPayroll(member)}
+                                className="px-2.5 py-1 bg-gray-100 hover:bg-black hover:text-white text-gray-700 rounded-lg font-mono text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                                title="Create payroll record for this staff"
+                              >
+                                + Pay
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditStaff(member)}
+                                className="p-1.5 text-gray-500 hover:text-black hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                                title="Edit Employee Profile"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              {onDeleteStaff && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (window.confirm(`Are you sure you want to remove ${member.fullName} (${member.id})?\n\nNote: If this employee has a login account, you may want to revoke or suspend the account as well.`)) {
+                                      onDeleteStaff(member.id);
+                                    }
+                                  }}
+                                  className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                  title="Delete Employee"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -1689,6 +2267,298 @@ export default function StaffManagement({
                 Generate {payrollStats.activeStaffCount} Vouchers
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* MODAL: STAFF ACCOUNT & LOGIN ACCESS MANAGEMENT       */}
+      {/* ---------------------------------------------------- */}
+      {isAccountModalOpen && selectedStaffForAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl border-2 border-black shadow-2xl max-w-xl w-full p-6 space-y-5 max-h-[92vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-gray-100 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-black text-white rounded-xl">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold uppercase text-base text-black font-mono">
+                      Staff Portal Account Access
+                    </h3>
+                    <p className="text-[11px] text-gray-500 font-sans">
+                      Admin-controlled authentication credentials &amp; status
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAccountModalOpen(false);
+                  setSelectedStaffForAccount(null);
+                }}
+                className="p-1.5 rounded-xl text-gray-400 hover:text-black hover:bg-gray-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Linked Staff Member Profile Summary */}
+            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase font-mono font-bold text-gray-400">Linked Staff Profile</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white border border-gray-200 font-bold text-gray-700">
+                  {selectedStaffForAccount.id}
+                </span>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <div className="font-bold text-black text-sm">{selectedStaffForAccount.fullName}</div>
+                  <div className="text-[11px] text-gray-500 font-medium">
+                    {selectedStaffForAccount.position} • {selectedStaffForAccount.department}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono px-2 py-1 rounded-lg bg-gray-200/70 text-gray-800 font-bold">
+                    HR: {selectedStaffForAccount.status}
+                  </span>
+                  {findStaffAccount(selectedStaffForAccount.id) ? (
+                    <span className={`text-[10px] font-mono font-bold px-2 py-1 rounded-lg border ${
+                      findStaffAccount(selectedStaffForAccount.id)?.status === 'Active'
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                        : 'bg-amber-50 text-amber-800 border-amber-300'
+                    }`}>
+                      Account: {findStaffAccount(selectedStaffForAccount.id)?.status}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono font-bold px-2 py-1 rounded-lg bg-gray-100 text-gray-500 border border-gray-200">
+                      Account: Not Set Up
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Notifications / Alerts */}
+            {accountSuccessMsg && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="font-medium">{accountSuccessMsg}</span>
+              </div>
+            )}
+            {accountErrorMsg && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span className="font-medium">{accountErrorMsg}</span>
+              </div>
+            )}
+            {accountCopiedNotice && (
+              <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl text-xs flex items-center gap-2">
+                <CheckCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                <span className="font-medium">Credentials and instructions copied to clipboard! You can now send this securely to the employee.</span>
+              </div>
+            )}
+
+            {/* Form */}
+            <form onSubmit={handleSaveAccountSubmit} className="space-y-4 text-xs font-sans">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Username */}
+                <div className="space-y-1">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">
+                    Login Username / ID *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-gray-400 font-mono text-xs font-bold">@</span>
+                    <input
+                      type="text"
+                      required
+                      value={accountFormData.username}
+                      onChange={e => setAccountFormData({ ...accountFormData, username: e.target.value.toLowerCase().replace(/\s+/g, '') })}
+                      placeholder="e.g. maria.santos"
+                      className="w-full pl-7 pr-3 py-2 border border-gray-200 focus:border-black rounded-xl font-mono font-bold text-black focus:outline-none"
+                    />
+                  </div>
+                  <p className="text-[9px] text-gray-400 font-mono">Used for staff portal and kiosk login.</p>
+                </div>
+
+                {/* Login Email */}
+                <div className="space-y-1">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">
+                    Staff Email (Optional)
+                  </label>
+                  <input
+                    type="email"
+                    value={accountFormData.email}
+                    onChange={e => setAccountFormData({ ...accountFormData, email: e.target.value })}
+                    placeholder="e.g. maria@arhprint.com"
+                    className="w-full p-2 border border-gray-200 focus:border-black rounded-xl font-mono text-xs focus:outline-none"
+                  />
+                  <p className="text-[9px] text-gray-400 font-mono">For login &amp; automated notifications.</p>
+                </div>
+
+                {/* Role */}
+                <div className="space-y-1">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">
+                    Portal Role Permission
+                  </label>
+                  <select
+                    value={accountFormData.role}
+                    onChange={e => setAccountFormData({ ...accountFormData, role: e.target.value as any })}
+                    className="w-full p-2 border border-gray-200 focus:border-black rounded-xl font-mono font-bold text-xs focus:outline-none bg-white"
+                  >
+                    <option value="Staff">Staff (Jobs, Attendance, Payslips)</option>
+                    <option value="Admin">Admin (Full System Privileges)</option>
+                  </select>
+                </div>
+
+                {/* Account Status */}
+                <div className="space-y-1">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">
+                    Account Status
+                  </label>
+                  <select
+                    value={accountFormData.status}
+                    onChange={e => setAccountFormData({ ...accountFormData, status: e.target.value as StaffAccountStatus })}
+                    className="w-full p-2 border border-gray-200 focus:border-black rounded-xl font-mono font-bold text-xs focus:outline-none bg-white"
+                  >
+                    <option value="Active">Active (Permits Portal Login)</option>
+                    <option value="Suspended">Suspended (Blocks Portal Login)</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Temporary Password & Security Card */}
+              <div className="bg-neutral-50 border border-neutral-200 rounded-2xl p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-black flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-gray-600" />
+                    <span>Temporary Password / Passcode *</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleGenerateNewTempPass}
+                    className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-blue-700 hover:text-blue-900 cursor-pointer"
+                  >
+                    <Key className="w-3 h-3" />
+                    <span>Generate Strong Password</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type={showAccountPassword ? 'text' : 'password'}
+                      required
+                      value={accountFormData.temporaryPassword}
+                      onChange={e => setAccountFormData({ ...accountFormData, temporaryPassword: e.target.value })}
+                      placeholder="Enter temporary password..."
+                      className="w-full pl-3 pr-10 py-2.5 bg-white border border-gray-300 focus:border-black rounded-xl font-mono font-bold text-xs text-black focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAccountPassword(!showAccountPassword)}
+                      className="absolute right-3 top-2.5 text-gray-400 hover:text-black cursor-pointer"
+                    >
+                      {showAccountPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleCopyAccountCredentials}
+                    className="px-3 py-2.5 bg-gray-100 hover:bg-black hover:text-white text-gray-800 rounded-xl font-mono text-[10px] font-bold uppercase transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 border border-gray-300"
+                    title="Copy full login credentials for this employee"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Copy Info</span>
+                  </button>
+                </div>
+
+                {/* First login reset checkbox */}
+                <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer select-none pt-1">
+                  <input
+                    type="checkbox"
+                    checked={accountFormData.requirePasswordChange}
+                    onChange={e => setAccountFormData({ ...accountFormData, requirePasswordChange: e.target.checked })}
+                    className="w-4 h-4 text-black rounded border-gray-300 focus:ring-black"
+                  />
+                  <span className="font-medium text-[11px]">
+                    Require staff member to set a new permanent password on first login
+                  </span>
+                </label>
+              </div>
+
+              {/* Security Advisory Note */}
+              <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl text-[10px] text-amber-900 space-y-1">
+                <div className="font-bold flex items-center gap-1">
+                  <Shield className="w-3 h-3 text-amber-700" />
+                  <span>Separation of Profile &amp; Login Credentials</span>
+                </div>
+                <p className="text-amber-800">
+                  Staff profile details (employment, payroll, and work history) remain preserved even if an account is suspended or removed. Plain-text passwords are never shown in public sheets or employee profile cards.
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-gray-100">
+                <div className="flex items-center gap-2">
+                  {findStaffAccount(selectedStaffForAccount.id) && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleToggleAccountStatus}
+                        className={`px-3 py-2 rounded-xl text-[10px] font-mono font-bold uppercase cursor-pointer border transition-colors ${
+                          accountFormData.status === 'Active'
+                            ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200'
+                            : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                        }`}
+                      >
+                        {accountFormData.status === 'Active' ? 'Suspend Account' : 'Reactivate Account'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleResetAccountPassword}
+                        className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-[10px] font-mono font-bold uppercase cursor-pointer border border-gray-200"
+                        title="Issue fresh temporary password"
+                      >
+                        Reset Password
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRevokeAccount}
+                        className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-xl text-[10px] font-mono font-bold uppercase cursor-pointer"
+                        title="Revoke and delete login account credentials"
+                      >
+                        Revoke Access
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAccountModalOpen(false);
+                      setSelectedStaffForAccount(null);
+                    }}
+                    className="px-4 py-2.5 border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-100 font-bold uppercase text-xs cursor-pointer"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-black hover:bg-neutral-800 text-white rounded-xl font-bold uppercase text-xs shadow-xs cursor-pointer"
+                  >
+                    {findStaffAccount(selectedStaffForAccount.id) ? 'Save Account Changes' : 'Create Staff Account'}
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}

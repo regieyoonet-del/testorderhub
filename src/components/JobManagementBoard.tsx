@@ -1272,7 +1272,7 @@ export default function JobManagementBoard({
                   initial={{ opacity: 0, y: 8, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                  className="absolute right-0 mt-2 w-72 bg-white border-2 border-black rounded-3xl p-4 shadow-xl z-30 space-y-3"
+                  className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-1.5rem)] bg-white border-2 border-black rounded-3xl p-4 shadow-xl z-30 space-y-3"
                   id="job-filter-panel"
                 >
                   <div className="flex items-center justify-between pb-2 border-b border-gray-100">
@@ -1395,7 +1395,7 @@ export default function JobManagementBoard({
                   initial={{ opacity: 0, y: 8, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                  className="absolute right-0 mt-2 w-56 bg-white border-2 border-black rounded-3xl p-3 shadow-xl z-30 space-y-1 font-mono text-xs"
+                  className="absolute right-0 mt-2 w-56 max-w-[calc(100vw-1.5rem)] bg-white border-2 border-black rounded-3xl p-3 shadow-xl z-30 space-y-1 font-mono text-xs"
                 >
                   <div className="text-[10px] font-extrabold uppercase text-gray-400 px-2 py-1">Sort Options</div>
                   {[

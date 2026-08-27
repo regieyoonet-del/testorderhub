@@ -78,6 +78,7 @@ export interface Order {
     | 'Pending Approval'
     | 'Pending'
     | 'Approved'
+    | 'Processing'
     | 'In Production'
     | 'Shipped'
     | 'Completed'
@@ -307,7 +308,7 @@ export interface OrderPortal {
 
 export interface AppNotification {
   id: string;
-  recipientType: 'admin' | 'company';
+  recipientType: 'admin' | 'company' | 'staff';
   companyName?: string;
   title: string;
   message: string;
@@ -375,7 +376,7 @@ export function getDisplayPurchaserName(
 }
 
 // ----------------------------------------------------
-// STAFF & PAYROLL DATA MODELS
+// STAFF, ATTENDANCE & PAYROLL DATA MODELS
 // ----------------------------------------------------
 export type SalaryType = 'Monthly' | 'Daily' | 'Hourly';
 export type EmploymentStatus = 'Full-Time' | 'Part-Time' | 'Contract' | 'Probationary' | 'Intern' | 'Seasonal' | string;
@@ -394,8 +395,47 @@ export interface StaffMember {
   otherCompensation: number;
   notes?: string;
   status: StaffStatus;
+  email?: string;
+  phone?: string;
+  avatarUrl?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export type StaffAccountStatus = 'Active' | 'Inactive' | 'Suspended';
+
+export interface StaffAccount {
+  id: string; // e.g. 'SA-101'
+  staffId: string; // Linked StaffMember.id (e.g. 'STF-101')
+  name: string;
+  username: string; // Unique username or email (case-insensitive login)
+  passcode: string; // Password / PIN credential
+  role: 'Staff' | 'Admin';
+  status: StaffAccountStatus;
+  mustChangePassword?: boolean;
+  temporaryPassword?: string;
+  email?: string;
+  phone?: string;
+  avatarUrl?: string;
+  lastLogin?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type AttendanceStatus = 'Present' | 'Late' | 'Missing Clock Out' | 'Absent' | 'Leave';
+
+export interface AttendanceRecord {
+  id: string; // e.g. 'ATT-2026-001'
+  staffId: string; // Linked StaffMember.id
+  staffName: string;
+  date: string; // YYYY-MM-DD
+  clockIn: string; // e.g. '07:02 AM' or '07:02:00'
+  clockOut?: string; // e.g. '04:01 PM' or undefined if clocked in
+  totalHours: number; // calculated decimal hours (e.g. 8.98)
+  status: AttendanceStatus;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type PayrollStatus = 'Draft' | 'Reviewed' | 'Finalized' | 'Paid' | 'Voided';
@@ -415,6 +455,10 @@ export interface PayrollRecord {
   payPeriodStart: string; // YYYY-MM-DD
   payPeriodEnd: string;   // YYYY-MM-DD
   payDate: string;        // YYYY-MM-DD
+  salaryType?: SalaryType; // Snapshot: 'Monthly' | 'Daily' | 'Hourly'
+  rateSnapshot?: number;   // Snapshot of basic salary rate at the time of payroll (e.g. 700)
+  daysWorked?: number;     // Snapshot of days worked (for Daily pay)
+  hoursWorked?: number;    // Snapshot of hours worked (for Hourly pay)
   basicPay: number;
   allowances: number;
   otherEarnings: number;
@@ -487,4 +531,16 @@ export interface RecurringExpenseRule {
 }
 
 export type RecurringExpense = RecurringExpenseRule;
+
+export type UserRole = 'admin' | 'client' | 'staff';
+
+export interface AuthUser {
+  role: UserRole;
+  companyId?: string;
+  staffId?: string;
+  accountId?: string;
+  name?: string;
+  username?: string;
+  email?: string;
+}
 

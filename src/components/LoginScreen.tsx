@@ -4,12 +4,18 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { CompanyProfile, SystemSettings } from '../types';
-import { KeyRound, User, ShieldCheck, Building, HelpCircle, Eye, EyeOff, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { CompanyProfile, SystemSettings, StaffAccount, StaffMember } from '../types';
+import { KeyRound, User, ShieldCheck, Building, HelpCircle, Eye, EyeOff, RefreshCw, CheckCircle2, BadgeCheck } from 'lucide-react';
 
 interface LoginScreenProps {
   companies: CompanyProfile[];
-  onLogin: (role: 'admin' | 'client', companyId?: string) => void;
+  staffAccounts?: StaffAccount[];
+  staff?: StaffMember[];
+  onLogin: (
+    role: 'admin' | 'client' | 'staff',
+    companyId?: string,
+    staffInfo?: { staffId: string; accountId: string; name: string; username: string }
+  ) => void;
   systemSettings: SystemSettings;
   onSyncSheets?: () => Promise<void>;
   isSyncingSheets?: boolean;
@@ -18,6 +24,8 @@ interface LoginScreenProps {
 
 export default function LoginScreen({
   companies,
+  staffAccounts = [],
+  staff = [],
   onLogin,
   systemSettings,
   onSyncSheets,
@@ -50,7 +58,7 @@ export default function LoginScreen({
     }
 
     const verifyCredentials = () => {
-      // Check Admin Credentials
+      // 1. Check Admin Credentials
       const savedAdminUser = (systemSettings?.adminUsername || 'admin').toLowerCase();
       const savedAdminPass = systemSettings?.adminPasscode || 'admin123';
 
@@ -62,7 +70,61 @@ export default function LoginScreen({
         return true;
       }
 
-      // Check Client Credentials
+      // 2. Check Staff Account Credentials
+      const foundStaffAccount = staffAccounts.find(
+        (sa) =>
+          ((sa.username && sa.username.toLowerCase() === trimmedUser) ||
+           (sa.email && sa.email.toLowerCase() === trimmedUser) ||
+           (sa.staffId && sa.staffId.toLowerCase() === trimmedUser)) &&
+          (sa.passcode === trimmedPass || (sa.temporaryPassword && sa.temporaryPassword === trimmedPass))
+      );
+
+      if (foundStaffAccount) {
+        if (foundStaffAccount.status === 'Suspended') {
+          setError('This staff account has been SUSPENDED by the administrator. Login access is disabled.');
+          return true; // Stop checking, don't fallback to generic error
+        }
+        if (foundStaffAccount.status === 'Inactive') {
+          setError('This staff account is currently inactive. Please contact the administrator.');
+          return true;
+        }
+
+        // Check if underlying staff profile is active
+        const linkedStaffMember = staff.find(s => s.id === foundStaffAccount.staffId);
+        if (linkedStaffMember && linkedStaffMember.status === 'Inactive') {
+          setError(`Staff member profile for ${linkedStaffMember.fullName} is set to Inactive in HR. Please consult your administrator.`);
+          return true;
+        }
+
+        onLogin('staff', undefined, {
+          staffId: foundStaffAccount.staffId,
+          accountId: foundStaffAccount.id,
+          name: foundStaffAccount.name,
+          username: foundStaffAccount.username
+        });
+        return true;
+      }
+
+      // 3. Fallback check for Staff Member directly if username matches first name / full name
+      const foundStaffMember = staff.find((s) => {
+        const first = s.fullName.split(' ')[0].toLowerCase();
+        const full = s.fullName.toLowerCase().replace(/\s+/g, '');
+        const id = s.id.toLowerCase();
+        return (first === trimmedUser || full === trimmedUser || id === trimmedUser) &&
+               (trimmedPass === `${first}123` || trimmedPass === `${id}123` || trimmedPass === 'staff123');
+      });
+
+      if (foundStaffMember) {
+        onLogin('staff', undefined, {
+          staffId: foundStaffMember.id,
+          accountId: `SA-${foundStaffMember.id}`,
+          name: foundStaffMember.fullName,
+          username: foundStaffMember.fullName.split(' ')[0].toLowerCase()
+        });
+        return true;
+      }
+
+      // 4. Check Client Credentials
       const foundCo = companies.find(
         (co) =>
           co.username?.toLowerCase() === trimmedUser &&

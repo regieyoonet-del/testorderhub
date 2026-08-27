@@ -14,7 +14,11 @@ import {
   Settings,
   Sliders,
   X,
-  LogOut
+  LogOut,
+  Briefcase,
+  Package,
+  Clock,
+  User
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -23,7 +27,7 @@ interface NavigationDrawerProps {
   onClose: () => void;
   company?: CompanyProfile;
   systemSettings?: SystemSettings;
-  userRole: 'admin' | 'client';
+  userRole: 'admin' | 'client' | 'staff';
   activeTab: string;
   onSelectTab: (tab: string) => void;
   counts?: {
@@ -32,8 +36,12 @@ interface NavigationDrawerProps {
     portals?: number;
     history?: number;
     quotes?: number;
+    jobs?: number;
+    orders?: number;
+    payslips?: number;
   };
   onLogout?: () => void;
+  currentStaffName?: string;
 }
 
 export default function NavigationDrawer({
@@ -45,7 +53,8 @@ export default function NavigationDrawer({
   activeTab,
   onSelectTab,
   counts = {},
-  onLogout
+  onLogout,
+  currentStaffName
 }: NavigationDrawerProps) {
   // Close drawer on Escape key
   useEffect(() => {
@@ -68,43 +77,90 @@ export default function NavigationDrawer({
             count: null
           }
         ]
-      : []),
-    {
-      id: 'catalog',
-      label: 'My Catalog',
-      icon: LayoutGrid,
-      count: counts.catalog !== undefined ? counts.catalog : null
-    },
-    {
-      id: 'browse',
-      label: 'ARH Products',
-      icon: Layers,
-      count: counts.browse !== undefined ? counts.browse : null
-    },
-    {
-      id: 'portals',
-      label: 'Order Portals',
-      icon: Globe,
-      count: counts.portals !== undefined ? counts.portals : null
-    },
-    {
-      id: 'history',
-      label: 'Order History',
-      icon: History,
-      count: counts.history !== undefined ? counts.history : null
-    },
-    {
-      id: 'quote-history',
-      label: 'Quote Requests',
-      icon: FileText,
-      count: counts.quotes !== undefined ? counts.quotes : null
-    },
-    {
-      id: 'settings',
-      label: 'Settings',
-      icon: Settings,
-      count: null
-    }
+      : userRole === 'staff'
+      ? [
+          {
+            id: 'dashboard',
+            label: 'Dashboard',
+            icon: LayoutGrid,
+            count: null
+          },
+          {
+            id: 'jobs',
+            label: 'Job Management',
+            icon: Briefcase,
+            count: counts.jobs !== undefined ? counts.jobs : null
+          },
+          {
+            id: 'orders',
+            label: 'Orders',
+            icon: Package,
+            count: counts.orders !== undefined ? counts.orders : null
+          },
+          {
+            id: 'attendance',
+            label: 'Time & Attendance',
+            icon: Clock,
+            count: null
+          },
+          {
+            id: 'payslips',
+            label: 'Payslips',
+            icon: FileText,
+            count: counts.payslips !== undefined ? counts.payslips : null
+          },
+          {
+            id: 'work-history',
+            label: 'Work History',
+            icon: History,
+            count: null
+          },
+          {
+            id: 'profile',
+            label: 'Account Settings',
+            icon: User,
+            count: null
+          }
+        ]
+      : [
+          {
+            id: 'catalog',
+            label: 'My Catalog',
+            icon: LayoutGrid,
+            count: counts.catalog !== undefined ? counts.catalog : null
+          },
+          {
+            id: 'browse',
+            label: 'ARH Products',
+            icon: Layers,
+            count: counts.browse !== undefined ? counts.browse : null
+          },
+          {
+            id: 'portals',
+            label: 'Storefronts',
+            icon: Globe,
+            count: counts.portals !== undefined ? counts.portals : null
+          },
+          {
+            id: 'history',
+            label: 'Order History',
+            icon: History,
+            count: counts.history !== undefined ? counts.history : null
+          },
+          {
+            id: 'quote-history',
+            label: 'Quote Requests',
+            icon: FileText,
+            count: counts.quotes !== undefined ? counts.quotes : null
+          },
+          {
+            id: 'settings',
+            label: 'Settings',
+            icon: Settings,
+            count: null
+          }
+        ]
+    )
   ];
 
   return (
@@ -155,10 +211,10 @@ export default function NavigationDrawer({
                   )}
                   <div className="min-w-0">
                     <span className="text-xs font-extrabold uppercase text-black block leading-none truncate">
-                      {userRole === 'client' ? company?.name || 'Client Menu' : 'Hub Navigation'}
+                      {userRole === 'client' ? company?.name || 'Client Menu' : userRole === 'staff' ? 'Staff Portal' : 'Hub Navigation'}
                     </span>
-                    <span className="text-[10px] font-mono text-gray-400">
-                      {userRole === 'client' ? 'Client Portal' : 'Admin Hub'}
+                    <span className="text-[10px] font-mono text-gray-400 truncate block">
+                      {userRole === 'client' ? 'Client Portal' : userRole === 'staff' ? (currentStaffName || 'Internal Employee') : 'Admin Hub'}
                     </span>
                   </div>
                 </div>
@@ -232,7 +288,7 @@ export default function NavigationDrawer({
                 </button>
               )}
               <div className="text-center font-mono text-[10px] text-gray-400">
-                {company?.name ? `${company.name} • ` : ''}ARH Print Hub v2.0
+                {userRole === 'client' && company?.name ? `${company.name} • ` : ''}ARH Print Hub v2.0
               </div>
             </div>
           </motion.div>

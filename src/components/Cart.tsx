@@ -136,11 +136,11 @@ export default function Cart({
       {/* Dark Overlay */}
       <div className="absolute inset-0 bg-black/60 transition-opacity" onClick={onClose} />
 
-      <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
+      <div className="absolute inset-y-0 right-0 max-w-full flex pl-0 sm:pl-10">
         <div className="w-screen max-w-lg bg-white border-l-2 border-black flex flex-col h-full relative">
           
           {/* Cart Header */}
-          <div className="p-6 border-b border-black flex items-center justify-between bg-black text-white">
+          <div className="p-4 sm:p-6 border-b border-black flex items-center justify-between bg-black text-white">
             <div className="flex items-center space-x-2.5">
               <ShoppingBag className="w-5 h-5" />
               <h3 className="text-sm font-bold uppercase tracking-widest font-mono">My Cart</h3>
@@ -156,7 +156,7 @@ export default function Cart({
           </div>
 
           {/* Cart Content Area */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 no-scrollbar">
             {cartItems.length === 0 ? (
               <div className="text-center py-16 space-y-4">
                 <div className="text-4xl">🛒</div>
@@ -429,7 +429,7 @@ export default function Cart({
 
           {/* Checkout Totals Summary & Submit */}
           {cartItems.length > 0 && (
-            <div className="border-t border-black bg-gray-50 p-6 space-y-4">
+            <div className="border-t border-black bg-gray-50 p-4 sm:p-6 space-y-4">
               <div className="space-y-1.5 font-mono text-xs">
                 <div className="flex justify-between text-gray-500">
                   <span>Cart Subtotal</span>

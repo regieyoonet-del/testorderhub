@@ -20,7 +20,7 @@ interface HeaderProps {
   setActiveTab: (tab: string) => void;
   cartCount: number;
   onCartToggle: () => void;
-  userRole: 'admin' | 'client';
+  userRole: 'admin' | 'client' | 'staff';
   onLogout: () => void;
   systemSettings: SystemSettings;
   isSheetsConnected?: boolean;
@@ -32,6 +32,7 @@ interface HeaderProps {
   onClearNotifications?: () => void;
   onSelectNotification?: (notif: AppNotification) => void;
   onMobileNavToggle?: () => void;
+  currentStaffName?: string;
 }
 
 export default function Header({
@@ -53,7 +54,8 @@ export default function Header({
   onMarkAllNotificationsAsRead,
   onClearNotifications,
   onSelectNotification,
-  onMobileNavToggle
+  onMobileNavToggle,
+  currentStaffName
 }: HeaderProps) {
   return (
     <header className="bg-white border-b-2 border-black sticky top-0 z-40">
@@ -92,6 +94,29 @@ export default function Header({
                 </h1>
               </div>
             </>
+          ) : userRole === 'staff' ? (
+            <>
+              {systemSettings?.logoUrl ? (
+                <img
+                  src={systemSettings.logoUrl}
+                  alt={systemSettings.hubName}
+                  className="w-10 h-10 sm:w-12 sm:h-12 object-contain shrink-0"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="bg-black text-white p-2 w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center font-bold font-mono text-lg sm:text-xl tracking-tight leading-none rounded-xl shrink-0">
+                  {systemSettings?.shortHubName || 'ARH'}
+                </div>
+              )}
+              <div className="min-w-0 flex flex-col sm:flex-row sm:items-center sm:gap-2">
+                <h1 className="text-xl sm:text-2xl font-extrabold tracking-tighter uppercase text-black leading-none truncate">
+                  {systemSettings?.hubName || 'ARH Print Hub'}
+                </h1>
+                <span className="inline-flex items-center text-[10px] font-mono font-bold bg-neutral-900 text-white px-2 py-0.5 rounded-full w-fit mt-1 sm:mt-0 tracking-wider uppercase">
+                  Staff Portal{currentStaffName ? ` • ${currentStaffName}` : ''}
+                </span>
+              </div>
+            </>
           ) : (
             <>
               {systemSettings?.logoUrl ? (
@@ -117,7 +142,7 @@ export default function Header({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          {userRole === 'admin' && isSheetsConnected && onSyncSheets && (
+          {(userRole === 'admin' || userRole === 'staff') && isSheetsConnected && onSyncSheets && (
             <button
               onClick={onSyncSheets}
               disabled={isSyncingSheets}
@@ -133,7 +158,7 @@ export default function Header({
           {/* Persistent Notification Bell */}
           <NotificationBell
             userRole={userRole}
-            companyName={selectedCompany?.name}
+            companyName={userRole === 'client' ? selectedCompany?.name : undefined}
             notifications={notifications}
             onMarkAsRead={onMarkNotificationAsRead || (() => {})}
             onMarkAllAsRead={onMarkAllNotificationsAsRead || (() => {})}
@@ -141,7 +166,8 @@ export default function Header({
             onSelectNotification={onSelectNotification}
           />
 
-          {userRole === 'admin' ? null : (
+          {/* Client Only: Shopping Cart */}
+          {userRole === 'client' && (
             <button
               onClick={onCartToggle}
               className="relative border border-black bg-white p-2.5 text-black hover:bg-black hover:text-white transition-all cursor-pointer flex items-center justify-center shrink-0 rounded-xl"

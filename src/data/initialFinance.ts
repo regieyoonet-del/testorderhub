@@ -5,6 +5,8 @@
 
 import {
   StaffMember,
+  StaffAccount,
+  AttendanceRecord,
   PayrollRecord,
   ExpenseCategory,
   ExpenseRecord,
@@ -93,6 +95,236 @@ export const INITIAL_STAFF_MEMBERS: StaffMember[] = [
     status: 'Active',
     createdAt: '2025-04-01T08:00:00.000Z',
     updatedAt: '2026-08-01T08:00:00.000Z'
+  },
+  {
+    id: 'STF-105',
+    fullName: 'Juan Dela Cruz',
+    position: 'Print Production Specialist',
+    department: 'Production',
+    employmentStatus: 'Full-Time',
+    dateStarted: '2025-08-01',
+    salaryType: 'Daily',
+    basicSalary: 700,
+    allowances: 0,
+    otherCompensation: 0,
+    notes: 'Master screen printer, DTF transfer press, and textile finishing',
+    status: 'Active',
+    createdAt: '2025-08-01T08:00:00.000Z',
+    updatedAt: '2026-08-01T08:00:00.000Z'
+  }
+];
+
+export const INITIAL_STAFF_ACCOUNTS: StaffAccount[] = [
+  {
+    id: 'SA-105',
+    staffId: 'STF-105',
+    name: 'Juan Dela Cruz',
+    username: 'juan',
+    passcode: 'juan123',
+    role: 'Staff',
+    status: 'Active',
+    email: 'juan@arhprint.com',
+    phone: '+63 917 555 0105',
+    createdAt: '2025-08-01T08:00:00.000Z',
+    updatedAt: '2026-08-01T08:00:00.000Z'
+  },
+  {
+    id: 'SA-101',
+    staffId: 'STF-101',
+    name: 'Regie Santos',
+    username: 'regie',
+    passcode: 'regie123',
+    role: 'Staff',
+    status: 'Active',
+    email: 'regie.santos@arhprint.com',
+    phone: '+63 917 555 0101',
+    createdAt: '2024-03-15T08:00:00.000Z',
+    updatedAt: '2026-08-01T08:00:00.000Z'
+  },
+  {
+    id: 'SA-102',
+    staffId: 'STF-102',
+    name: 'Alex Mendoza',
+    username: 'alex',
+    passcode: 'alex123',
+    role: 'Staff',
+    status: 'Active',
+    email: 'alex.mendoza@arhprint.com',
+    phone: '+63 917 555 0102',
+    createdAt: '2024-06-01T08:00:00.000Z',
+    updatedAt: '2026-08-01T08:00:00.000Z'
+  },
+  {
+    id: 'SA-103',
+    staffId: 'STF-103',
+    name: 'Sarah K. Dela Cruz',
+    username: 'sarah',
+    passcode: 'sarah123',
+    role: 'Staff',
+    status: 'Active',
+    email: 'sarah.delacruz@arhprint.com',
+    phone: '+63 917 555 0103',
+    createdAt: '2025-01-10T08:00:00.000Z',
+    updatedAt: '2026-08-01T08:00:00.000Z'
+  },
+  {
+    id: 'SA-104',
+    staffId: 'STF-104',
+    name: 'Mark Villanueva',
+    username: 'mark',
+    passcode: 'mark123',
+    role: 'Staff',
+    status: 'Active',
+    email: 'mark.villanueva@arhprint.com',
+    phone: '+63 917 555 0104',
+    createdAt: '2025-04-01T08:00:00.000Z',
+    updatedAt: '2026-08-01T08:00:00.000Z'
+  }
+];
+
+export const INITIAL_ATTENDANCE_RECORDS: AttendanceRecord[] = [
+  {
+    id: 'ATT-2026-0801-01',
+    staffId: 'STF-105',
+    staffName: 'Juan Dela Cruz',
+    date: '2026-08-01',
+    clockIn: '07:55 AM',
+    clockOut: '05:05 PM',
+    totalHours: 9.17,
+    status: 'Present',
+    notes: 'Morning DTF printer prep and vector screening',
+    createdAt: '2026-08-01T07:55:00.000Z',
+    updatedAt: '2026-08-01T17:05:00.000Z'
+  },
+  {
+    id: 'ATT-2026-0802-01',
+    staffId: 'STF-105',
+    staffName: 'Juan Dela Cruz',
+    date: '2026-08-02',
+    clockIn: '08:00 AM',
+    clockOut: '05:00 PM',
+    totalHours: 9.00,
+    status: 'Present',
+    notes: 'Full shift production runs',
+    createdAt: '2026-08-02T08:00:00.000Z',
+    updatedAt: '2026-08-02T17:00:00.000Z'
+  },
+  {
+    id: 'ATT-2026-0803-01',
+    staffId: 'STF-105',
+    staffName: 'Juan Dela Cruz',
+    date: '2026-08-04',
+    clockIn: '07:58 AM',
+    clockOut: '05:02 PM',
+    totalHours: 9.07,
+    status: 'Present',
+    notes: 'Embroidery framing and heat pressing',
+    createdAt: '2026-08-04T07:58:00.000Z',
+    updatedAt: '2026-08-04T17:02:00.000Z'
+  },
+  {
+    id: 'ATT-2026-0804-01',
+    staffId: 'STF-105',
+    staffName: 'Juan Dela Cruz',
+    date: '2026-08-05',
+    clockIn: '08:02 AM',
+    clockOut: '05:01 PM',
+    totalHours: 8.98,
+    status: 'Present',
+    notes: 'Silkscreen ink mixing and squeegee washup',
+    createdAt: '2026-08-05T08:02:00.000Z',
+    updatedAt: '2026-08-05T17:01:00.000Z'
+  },
+  {
+    id: 'ATT-2026-0805-01',
+    staffId: 'STF-105',
+    staffName: 'Juan Dela Cruz',
+    date: '2026-08-06',
+    clockIn: '07:50 AM',
+    clockOut: '05:10 PM',
+    totalHours: 9.33,
+    status: 'Present',
+    notes: 'Quality inspection & packaging batch 1',
+    createdAt: '2026-08-06T07:50:00.000Z',
+    updatedAt: '2026-08-06T17:10:00.000Z'
+  },
+  {
+    id: 'ATT-2026-0806-01',
+    staffId: 'STF-105',
+    staffName: 'Juan Dela Cruz',
+    date: '2026-08-07',
+    clockIn: '08:00 AM',
+    clockOut: '05:00 PM',
+    totalHours: 9.00,
+    status: 'Present',
+    notes: 'Main studio printing line',
+    createdAt: '2026-08-07T08:00:00.000Z',
+    updatedAt: '2026-08-07T17:00:00.000Z'
+  },
+  {
+    id: 'ATT-2026-0807-01',
+    staffId: 'STF-105',
+    staffName: 'Juan Dela Cruz',
+    date: '2026-08-08',
+    clockIn: '07:57 AM',
+    clockOut: '05:03 PM',
+    totalHours: 9.10,
+    status: 'Present',
+    notes: 'Pre-curing flash dryers',
+    createdAt: '2026-08-08T07:57:00.000Z',
+    updatedAt: '2026-08-08T17:03:00.000Z'
+  },
+  {
+    id: 'ATT-2026-0808-01',
+    staffId: 'STF-105',
+    staffName: 'Juan Dela Cruz',
+    date: '2026-08-09',
+    clockIn: '08:05 AM',
+    clockOut: '05:00 PM',
+    totalHours: 8.92,
+    status: 'Present',
+    notes: 'Tunnel dryer conveyor operation',
+    createdAt: '2026-08-09T08:05:00.000Z',
+    updatedAt: '2026-08-09T17:00:00.000Z'
+  },
+  {
+    id: 'ATT-2026-0809-01',
+    staffId: 'STF-105',
+    staffName: 'Juan Dela Cruz',
+    date: '2026-08-11',
+    clockIn: '07:59 AM',
+    clockOut: '05:00 PM',
+    totalHours: 9.02,
+    status: 'Present',
+    notes: 'Mesh tensioning and darkroom exposure',
+    createdAt: '2026-08-11T07:59:00.000Z',
+    updatedAt: '2026-08-11T17:00:00.000Z'
+  },
+  {
+    id: 'ATT-2026-0810-01',
+    staffId: 'STF-105',
+    staffName: 'Juan Dela Cruz',
+    date: '2026-08-12',
+    clockIn: '07:55 AM',
+    clockOut: '05:04 PM',
+    totalHours: 9.15,
+    status: 'Present',
+    notes: 'Garment tagging and polybag sealing',
+    createdAt: '2026-08-12T07:55:00.000Z',
+    updatedAt: '2026-08-12T17:04:00.000Z'
+  },
+  {
+    id: 'ATT-2026-0811-01',
+    staffId: 'STF-105',
+    staffName: 'Juan Dela Cruz',
+    date: '2026-08-13',
+    clockIn: '08:00 AM',
+    clockOut: '05:00 PM',
+    totalHours: 9.00,
+    status: 'Present',
+    notes: 'Final pre-shipment counts',
+    createdAt: '2026-08-13T08:00:00.000Z',
+    updatedAt: '2026-08-13T17:00:00.000Z'
   }
 ];
 
@@ -106,6 +338,8 @@ export const INITIAL_PAYROLL_RECORDS: PayrollRecord[] = [
     payPeriodStart: '2026-08-01',
     payPeriodEnd: '2026-08-15',
     payDate: '2026-08-15',
+    salaryType: 'Monthly',
+    rateSnapshot: 28000,
     basicPay: 14000,
     allowances: 1750,
     otherEarnings: 500,
@@ -131,6 +365,8 @@ export const INITIAL_PAYROLL_RECORDS: PayrollRecord[] = [
     payPeriodStart: '2026-08-01',
     payPeriodEnd: '2026-08-15',
     payDate: '2026-08-15',
+    salaryType: 'Monthly',
+    rateSnapshot: 26000,
     basicPay: 13000,
     allowances: 1250,
     otherEarnings: 0,
@@ -144,6 +380,34 @@ export const INITIAL_PAYROLL_RECORDS: PayrollRecord[] = [
     netPay: 13150,
     status: 'Finalized',
     notes: '1st Half August 2026 Payroll - Processed and Paid',
+    createdAt: '2026-08-15T09:00:00.000Z',
+    updatedAt: '2026-08-15T09:00:00.000Z'
+  },
+  {
+    id: 'PR-2026-0803',
+    staffId: 'STF-105',
+    staffName: 'Juan Dela Cruz',
+    position: 'Print Production Specialist',
+    department: 'Production',
+    payPeriodStart: '2026-08-01',
+    payPeriodEnd: '2026-08-15',
+    payDate: '2026-08-15',
+    salaryType: 'Daily',
+    rateSnapshot: 700,
+    daysWorked: 11,
+    basicPay: 7700, // 700 * 11 days
+    allowances: 800,
+    otherEarnings: 0,
+    grossPay: 8500,
+    deductions: 750,
+    itemizedDeductions: [
+      { id: 'ded-1', name: 'SSS / Govt Contributions', amount: 500 },
+      { id: 'ded-2', name: 'PhilHealth & Pag-IBIG', amount: 250 }
+    ],
+    totalDeductions: 750,
+    netPay: 7750,
+    status: 'Finalized',
+    notes: '1st Half August 2026 Payroll (11 Days @ ₱700/day) - Processed & Paid',
     createdAt: '2026-08-15T09:00:00.000Z',
     updatedAt: '2026-08-15T09:00:00.000Z'
   }
@@ -347,4 +611,40 @@ export function generateRecurringExpenseId(existingRules: RecurringExpenseRule[]
     }
   }
   return `REC-EXP-${String(maxNum + 1).padStart(3, '0')}`;
+}
+
+export function generateStaffAccountId(existingAccounts: StaffAccount[] = []): string {
+  let maxNum = 100;
+  for (const a of existingAccounts) {
+    const match = (a.id || '').match(/SA-(\d+)/i);
+    if (match && match[1]) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > maxNum) {
+        maxNum = num;
+      }
+    }
+  }
+  return `SA-${maxNum + 1}`;
+}
+
+export function generateTemporaryPassword(prefix: string = 'ARH'): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let rand = '';
+  for (let i = 0; i < 4; i++) {
+    rand += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  const specialChars = ['!', '#', '@', '$'];
+  const special = specialChars[Math.floor(Math.random() * specialChars.length)];
+  return `${prefix}-${rand}${special}${Math.floor(100 + Math.random() * 900)}`;
+}
+
+export function generateAttendanceId(existingOrStaffId?: AttendanceRecord[] | string, dateStrParam?: string): string {
+  if (typeof existingOrStaffId === 'string') {
+    const d = dateStrParam || new Date().toISOString().slice(0, 10);
+    return `ATT-${existingOrStaffId}-${d}`;
+  }
+  const existingRecords = Array.isArray(existingOrStaffId) ? existingOrStaffId : [];
+  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  let count = existingRecords.filter(r => (r.id || '').includes(dateStr)).length + 1;
+  return `ATT-${dateStr}-${String(count).padStart(2, '0')}`;
 }

@@ -115,7 +115,7 @@ export default function ProductDetailsPage({ product, onClose, onEdit, editLabel
       </div>
 
       {/* Main Content Area (Scrollable) */}
-      <div className="flex-1 overflow-y-auto bg-[#fafafa] p-6 md:p-12 lg:p-16">
+      <div className="flex-1 overflow-y-auto bg-[#fafafa] p-4 sm:p-6 md:p-12 lg:p-16">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -247,13 +247,13 @@ export default function ProductDetailsPage({ product, onClose, onEdit, editLabel
             </div>
 
             {/* Price Table Component */}
-            <div className="p-5 bg-[#fafafa] border border-gray-200 rounded-2xl grid grid-cols-3 gap-4 font-mono items-center">
+            <div className="p-4 sm:p-5 bg-[#fafafa] border border-gray-200 rounded-2xl grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 font-mono items-center">
               <div>
                 <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold">B2B Deal Price</span>
                 <span className="text-xl font-black text-black block mt-0.5">Php {(Number(product.basePrice) || 0).toFixed(2)}</span>
                 <span className="text-[9px] text-gray-400 block">per {product.unit}</span>
               </div>
-              <div className="border-l border-gray-200 pl-4">
+              <div className="border-t sm:border-t-0 sm:border-l border-gray-200 pt-2 sm:pt-0 sm:pl-4">
                 <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold">MSRP Retail</span>
                 <span className="text-sm font-bold text-gray-400 line-through block mt-1">Php {(Number(retailPrice) || 0).toFixed(2)}</span>
                 <span className="text-[9px] text-red-500 font-bold block">Save {savingsPercent}%</span>

@@ -17,7 +17,9 @@ import {
   JobItemColumn,
   JobStatus,
   StaffMember,
+  StaffAccount,
   PayrollRecord,
+  AttendanceRecord,
   ExpenseRecord,
   RecurringExpense,
   ExpenseCategory,
@@ -125,12 +127,16 @@ interface AdminDashboardProps {
   onCreateJobFromOrder?: (order: Order) => void;
   staff?: StaffMember[];
   payroll?: PayrollRecord[];
+  attendance?: AttendanceRecord[];
+  staffAccounts?: StaffAccount[];
   expenses?: ExpenseRecord[];
   recurringExpenses?: RecurringExpense[];
   expenseCategories?: ExpenseCategory[];
   onSaveStaff?: (staff: StaffMember) => void;
   onSaveStaffBatch?: (staffList: StaffMember[]) => void;
   onDeleteStaff?: (staffId: string) => void;
+  onSaveStaffAccount?: (account: StaffAccount) => void;
+  onDeleteStaffAccount?: (accountId: string) => void;
   onSavePayroll?: (record: PayrollRecord) => void;
   onSavePayrollBatch?: (records: PayrollRecord[]) => void;
   onDeletePayroll?: (payrollId: string) => void;
@@ -190,12 +196,16 @@ export default function AdminDashboard({
   onCreateJobFromOrder,
   staff = [],
   payroll = [],
+  attendance = [],
+  staffAccounts = [],
   expenses = [],
   recurringExpenses = [],
   expenseCategories = [],
   onSaveStaff = () => {},
   onSaveStaffBatch,
   onDeleteStaff,
+  onSaveStaffAccount,
+  onDeleteStaffAccount,
   onSavePayroll = () => {},
   onSavePayrollBatch,
   onDeletePayroll,
@@ -653,15 +663,24 @@ export default function AdminDashboard({
     onUpdateOrders(updated);
   };
 
-  // Exclude custom company storefront portal orders from ARH Admin default order views & analytics, unless searching
+  // Helper to identify whether an order is from a Customer Storefront / Portal
+  const isStorefrontOrder = (order: Order): boolean => {
+    if (!order) return false;
+    if (order.portalId && order.portalId.trim() !== '') return true;
+    if (order.portalName && order.portalName.trim() !== '') return true;
+    if (order.id && order.id.startsWith('ord-portal-')) return true;
+    if (order.orderNumber && order.orderNumber.toLowerCase().includes('portal')) return true;
+    if ((order as any).storefrontId || (order as any).storefrontName) return true;
+    if ((order as any).source === 'Custom Storefront' || (order as any).source === 'Order Portal' || (order as any).source === 'Storefront' || (order as any).source === 'Portal') return true;
+    if ((order as any).sourceType === 'Storefront' || (order as any).sourceType === 'Order Portal' || (order as any).sourceType === 'Portal') return true;
+    if (order.status === 'Pending Approval') return true;
+    return false;
+  };
+
+  // Exclude custom company storefront portal orders from ARH Admin default order views & analytics
   const directCompanyOrders = React.useMemo(() => {
-    if (orderSearch.trim()) {
-      return orders;
-    }
-    return orders.filter(
-      o => !(o.id.startsWith('ord-portal-') || Boolean(o.portalId) || Boolean(o.portalName) || o.status === 'Pending Approval')
-    );
-  }, [orders, orderSearch]);
+    return orders.filter(o => !isStorefrontOrder(o));
+  }, [orders]);
 
   const filteredOrders = React.useMemo(() => {
     const list = directCompanyOrders.filter((ord) => {
@@ -1639,9 +1658,13 @@ export default function AdminDashboard({
         <StaffManagement
           staff={staff}
           payroll={payroll}
+          attendance={attendance}
+          staffAccounts={staffAccounts}
           onSaveStaff={onSaveStaff}
           onSaveStaffBatch={onSaveStaffBatch}
           onDeleteStaff={onDeleteStaff}
+          onSaveStaffAccount={onSaveStaffAccount}
+          onDeleteStaffAccount={onDeleteStaffAccount}
           onSavePayroll={onSavePayroll}
           onSavePayrollBatch={onSavePayrollBatch}
           onDeletePayroll={onDeletePayroll}
@@ -1678,6 +1701,8 @@ export default function AdminDashboard({
           orders={directCompanyOrders}
           companies={companies}
           products={products}
+          jobs={jobs}
+          jobItemColumns={jobItemColumns}
           staff={staff}
           payroll={payroll}
           expenses={expenses}
