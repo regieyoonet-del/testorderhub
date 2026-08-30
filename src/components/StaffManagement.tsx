@@ -58,7 +58,8 @@ import {
   EyeOff,
   CheckCheck,
   KeyRound,
-  Shield
+  Shield,
+  RefreshCw
 } from 'lucide-react';
 
 interface StaffManagementProps {
@@ -829,12 +830,6 @@ export default function StaffManagement({
       notes: `Hourly Rate: ₱${rate.toLocaleString()} × ${hours} hrs (Manual override)`
     }));
   };
-      grossPay: gross,
-      totalDeductions: currentTotDed,
-      netPay: gross - currentTotDed,
-      notes: autoNotes || prev.notes
-    }));
-  };
 
   const handleDeductionChange = (index: number, field: 'name' | 'amount', value: string | number) => {
     const list = [...(payrollFormData.itemizedDeductions || [])];
@@ -1013,13 +1008,6 @@ export default function StaffManagement({
         { id: `ded-pagibig-${emp.id}`, name: 'Pag-IBIG', amount: basic > 0 ? 100 : 0 }
       ];
       const totDed = dedList.reduce((sum, d) => sum + d.amount, 0);
-
-      const notesArr: string[] = [`Generated from ${batchPeriodType.replace(/_/g, ' ').toUpperCase()} batch run`];
-      if (emp.salaryType === 'Daily') {
-        notesArr.push(`Daily: ₱${emp.basicSalary?.toLocaleString()} × ${daysWorked} days`);
-      } else if (emp.salaryType === 'Hourly') {
-        notesArr.push(`Hourly: ₱${emp.basicSalary?.toLocaleString()} × ${hoursWorked} hrs`);
-      }
 
       newRecords.push({
         id: `PR-${batchPayDate.replace(/-/g, '')}-${String(payroll.length + index + 1).padStart(3, '0')}`,
@@ -2026,24 +2014,126 @@ export default function StaffManagement({
 
               {/* Earnings Breakdown */}
               <div className="bg-gray-50 p-3.5 rounded-2xl border border-gray-200 space-y-3">
-                <h4 className="text-[10px] uppercase font-mono font-bold text-gray-700 flex items-center justify-between">
-                  <span>Gross Earnings Breakdown</span>
-                  <span className="font-extrabold text-black font-mono text-xs">
-                    Gross: {currencySymbol} {payrollFormData.grossPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </span>
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <label className="block text-[9px] uppercase font-mono text-gray-500">Basic Pay</label>
-                    <input
-                      type="number"
-                      step="any"
-                      min="0"
-                      value={payrollFormData.basicPay}
-                      onChange={e => handleEarningsChange('basicPay', parseFloat(e.target.value) || 0)}
-                      className="w-full p-2 bg-white border border-gray-200 rounded-lg font-mono font-bold text-xs"
-                    />
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[10px] uppercase font-mono font-bold text-gray-700">
+                    Gross Earnings Breakdown {payrollFormData.salaryType ? `(${payrollFormData.salaryType} Rate)` : ''}
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    {(payrollFormData.salaryType === 'Daily' || payrollFormData.salaryType === 'Hourly') && (
+                      <button
+                        type="button"
+                        onClick={handleSyncAttendanceToPayrollForm}
+                        className="text-[10px] bg-white hover:bg-gray-100 border border-gray-300 text-gray-700 px-2 py-1 rounded-lg font-mono font-bold flex items-center gap-1 shadow-xs"
+                        title="Re-calculate days/hours worked based on actual qualifying attendance records"
+                      >
+                        <RefreshCw className="w-2.5 h-2.5" /> Sync from Attendance
+                      </button>
+                    )}
+                    <span className="font-extrabold text-black font-mono text-xs">
+                      Gross: {currencySymbol} {payrollFormData.grossPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
                   </div>
+                </div>
+
+                {/* Daily / Hourly specifics */}
+                {payrollFormData.salaryType === 'Daily' && (
+                  <div className="p-2.5 bg-blue-50/70 border border-blue-200 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-blue-900 font-medium">Daily Rate:</span>
+                      <span className="font-mono font-bold text-blue-950">
+                        {currencySymbol} {(payrollFormData.rateSnapshot || 0).toLocaleString()} / day
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      <div>
+                        <label className="block text-[9px] uppercase font-mono font-bold text-blue-900">
+                          Qualifying Days Worked
+                        </label>
+                        <input
+                          type="number"
+                          step="1"
+                          min="0"
+                          value={payrollFormData.daysWorked ?? 0}
+                          onChange={e => handleDaysWorkedChange(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                          className="w-full p-2 bg-white border border-blue-200 rounded-lg font-mono font-bold text-xs focus:outline-none focus:border-blue-500"
+                        />
+                        <p className="text-[9px] text-blue-700 font-mono mt-0.5">
+                          0 attendance records = ₱0 basic pay. No assumed days.
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] uppercase font-mono font-bold text-blue-900">
+                          Calculated Basic Pay (Rate × Days)
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={payrollFormData.basicPay}
+                          onChange={e => handleEarningsChange('basicPay', parseFloat(e.target.value) || 0)}
+                          className="w-full p-2 bg-white border border-blue-200 rounded-lg font-mono font-bold text-xs focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {payrollFormData.salaryType === 'Hourly' && (
+                  <div className="p-2.5 bg-purple-50/70 border border-purple-200 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-purple-900 font-medium">Hourly Rate:</span>
+                      <span className="font-mono font-bold text-purple-950">
+                        {currencySymbol} {(payrollFormData.rateSnapshot || 0).toLocaleString()} / hr
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      <div>
+                        <label className="block text-[9px] uppercase font-mono font-bold text-purple-900">
+                          Qualifying Hours Worked
+                        </label>
+                        <input
+                          type="number"
+                          step="0.25"
+                          min="0"
+                          value={payrollFormData.hoursWorked ?? 0}
+                          onChange={e => handleHoursWorkedChange(Math.max(0, parseFloat(e.target.value) || 0))}
+                          className="w-full p-2 bg-white border border-purple-200 rounded-lg font-mono font-bold text-xs focus:outline-none focus:border-purple-500"
+                        />
+                        <p className="text-[9px] text-purple-700 font-mono mt-0.5">
+                          0 attendance records = ₱0 basic pay. No assumed hours.
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-[9px] uppercase font-mono font-bold text-purple-900">
+                          Calculated Basic Pay (Rate × Hours)
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={payrollFormData.basicPay}
+                          onChange={e => handleEarningsChange('basicPay', parseFloat(e.target.value) || 0)}
+                          className="w-full p-2 bg-white border border-purple-200 rounded-lg font-mono font-bold text-xs focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {payrollFormData.salaryType === 'Monthly' && (
+                    <div className="space-y-1">
+                      <label className="block text-[9px] uppercase font-mono text-gray-500">Basic Pay (Semi-Monthly)</label>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={payrollFormData.basicPay}
+                        onChange={e => handleEarningsChange('basicPay', parseFloat(e.target.value) || 0)}
+                        className="w-full p-2 bg-white border border-gray-200 rounded-lg font-mono font-bold text-xs"
+                      />
+                    </div>
+                  )}
                   <div className="space-y-1">
                     <label className="block text-[9px] uppercase font-mono text-gray-500">Allowances</label>
                     <input
