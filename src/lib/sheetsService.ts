@@ -1918,7 +1918,9 @@ export const sheetsService = {
         return rawData.map(item => {
           const rawCreated = getProp(item, ['CreatedAt', 'createdAt', 'Created At']);
           const rawUpdated = getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']);
-          const normalizedDate = normalizeAttendanceDate(getProp(item, ['Date', 'date', 'WorkDate', 'AttendanceDate']));
+          const rawDate = getProp(item, ['Date', 'date', 'WorkDate', 'AttendanceDate']);
+          const fallbackFromCreated = rawCreated ? normalizeAttendanceDate(rawCreated, '') : '';
+          const normalizedDate = normalizeAttendanceDate(rawDate, fallbackFromCreated || undefined);
           const sId = String(getProp(item, ['StaffID', 'staffId', 'Staff ID']) || '').trim();
 
           return {
@@ -2743,7 +2745,9 @@ export const sheetsService = {
         attendance = raw.attendance.map((item: any) => {
           const rawCreated = getProp(item, ['CreatedAt', 'createdAt', 'Created At']);
           const rawUpdated = getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']);
-          const normalizedDate = normalizeAttendanceDate(getProp(item, ['Date', 'date', 'WorkDate', 'AttendanceDate']));
+          const rawDate = getProp(item, ['Date', 'date', 'WorkDate', 'AttendanceDate']);
+          const fallbackFromCreated = rawCreated ? normalizeAttendanceDate(rawCreated, '') : '';
+          const normalizedDate = normalizeAttendanceDate(rawDate, fallbackFromCreated || undefined);
           const sId = String(getProp(item, ['StaffID', 'staffId', 'Staff ID']) || '').trim();
 
           return {

@@ -27,7 +27,8 @@ import {
   calculateElapsedDuration,
   isRecordActiveClockIn,
   cleanClockOut,
-  cleanClockIn
+  cleanClockIn,
+  parseClockInDate
 } from '../utils/attendanceUtils';
 import JobManagementBoard from './JobManagementBoard';
 import {
@@ -173,22 +174,24 @@ export default function StaffDashboard({
       .sort((a, b) => {
         const dateA = normalizeAttendanceDate(a.date);
         const dateB = normalizeAttendanceDate(b.date);
-        return new Date(dateB + ' ' + (a.clockIn || '00:00')).getTime() - new Date(dateA + ' ' + (b.clockIn || '00:00')).getTime();
+        const timeB = parseClockInDate(b.clockIn || '00:00', dateB)?.getTime() || new Date(dateB).getTime() || 0;
+        const timeA = parseClockInDate(a.clockIn || '00:00', dateA)?.getTime() || new Date(dateA).getTime() || 0;
+        return timeB - timeA;
       });
   }, [attendanceRecords, currentUser.staffId, staffMember?.id]);
 
-  // Today's active attendance session - prioritizes actively ongoing clock-in session, then today's record
+  // Today's attendance session - prioritizes actively ongoing clock-in session for today, then today's completed/existing record
   const todayAttendance = useMemo(() => {
     const todayLocal = formatLocalDate();
     const todayIso = new Date().toISOString().slice(0, 10);
 
-    // 1. First priority: is there an active ongoing shift for this staff member?
-    const activeRecord = myAttendance.find(r => isRecordActiveClockIn(r));
+    // 1. First priority: is there an active ongoing shift for this staff member today?
+    const activeRecord = myAttendance.find(r => isRecordActiveClockIn(r, todayLocal));
     if (activeRecord) return activeRecord;
 
     // 2. Second priority: today's completed or existing shift
     return myAttendance.find(r => {
-      const norm = normalizeAttendanceDate(r.date);
+      const norm = normalizeAttendanceDate(r.date, '');
       return norm === todayLocal || norm === todayIso;
     });
   }, [myAttendance]);
@@ -1204,22 +1207,26 @@ export default function StaffDashboard({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {myAttendance.map((rec) => (
-                      <tr key={rec.id} className="hover:bg-gray-50/80 transition-colors">
-                        <td className="p-4 font-mono font-bold text-black whitespace-nowrap">
-                          {rec.date}
-                        </td>
-                        <td className="p-4 font-mono text-emerald-700 font-bold whitespace-nowrap">
-                          {rec.clockIn || '—'}
-                        </td>
-                        <td className="p-4 font-mono text-gray-700 font-bold whitespace-nowrap">
-                          {rec.clockOut || (
-                            <span className="inline-flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 text-[10px]">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                              In Progress
-                            </span>
-                          )}
-                        </td>
+                    {myAttendance.map((rec) => {
+                      const displayDate = normalizeAttendanceDate(rec.date);
+                      const displayIn = cleanClockIn(rec.clockIn);
+                      const displayOut = cleanClockOut(rec.clockOut);
+                      return (
+                        <tr key={rec.id} className="hover:bg-gray-50/80 transition-colors">
+                          <td className="p-4 font-mono font-bold text-black whitespace-nowrap">
+                            {displayDate}
+                          </td>
+                          <td className="p-4 font-mono text-emerald-700 font-bold whitespace-nowrap">
+                            {displayIn || '—'}
+                          </td>
+                          <td className="p-4 font-mono text-gray-700 font-bold whitespace-nowrap">
+                            {displayOut || (
+                              <span className="inline-flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 text-[10px]">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                In Progress
+                              </span>
+                            )}
+                          </td>
                         <td className="p-4 font-mono font-black text-black text-right whitespace-nowrap">
                           {Number(rec.totalHours) > 0 ? `${Number(rec.totalHours).toFixed(2)} hrs` : '—'}
                         </td>
@@ -1238,7 +1245,8 @@ export default function StaffDashboard({
                           {rec.notes || '—'}
                         </td>
                       </tr>
-                    ))}
+                    );
+                  })}
                   </tbody>
                 </table>
               </div>

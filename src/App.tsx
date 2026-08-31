@@ -497,7 +497,15 @@ export default function App() {
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
-        return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_ATTENDANCE_RECORDS;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((r: any) => ({
+            ...r,
+            date: normalizeAttendanceDate(r.date),
+            clockIn: cleanClockIn(r.clockIn),
+            clockOut: cleanClockOut(r.clockOut)
+          }));
+        }
+        return INITIAL_ATTENDANCE_RECORDS;
       } catch {
         return INITIAL_ATTENDANCE_RECORDS;
       }

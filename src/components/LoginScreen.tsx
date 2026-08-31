@@ -187,7 +187,7 @@ export default function LoginScreen({
 
         {/* Login Card */}
         <div className="bg-white border-2 border-black rounded-[28px] p-8 shadow-xl space-y-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-600 p-3 text-xs font-mono rounded-xl flex items-center gap-2">
                 <span className="font-bold">Error:</span> {error}
@@ -202,10 +202,15 @@ export default function LoginScreen({
                 <User className="absolute left-3.5 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
+                  name="user_login_identity"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="e.g. acme"
+                  placeholder="Enter username or ID"
                   disabled={isVerifying}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                   className="w-full bg-gray-50 border border-gray-200 focus:border-black focus:bg-white text-sm pl-11 pr-4 py-3 rounded-xl focus:outline-none transition-all text-black font-semibold disabled:opacity-70"
                   id="login-username-input"
                 />
@@ -220,10 +225,12 @@ export default function LoginScreen({
                 <KeyRound className="absolute left-3.5 w-4 h-4 text-gray-400" />
                 <input
                   type={showPasscode ? 'text' : 'password'}
+                  name="user_login_secret"
                   value={passcode}
                   onChange={(e) => setPasscode(e.target.value)}
                   placeholder="••••••••"
                   disabled={isVerifying}
+                  autoComplete="new-password"
                   className="w-full bg-gray-50 border border-gray-200 focus:border-black focus:bg-white text-sm pl-11 pr-11 py-3 rounded-xl focus:outline-none transition-all text-black font-semibold font-mono disabled:opacity-70"
                   id="login-passcode-input"
                 />
