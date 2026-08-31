@@ -21,6 +21,14 @@ import {
   AuthUser
 } from '../types';
 import { generateAttendanceId } from '../data/initialFinance';
+import {
+  formatLocalDate,
+  normalizeAttendanceDate,
+  calculateElapsedDuration,
+  isRecordActiveClockIn,
+  cleanClockOut,
+  cleanClockIn
+} from '../utils/attendanceUtils';
 import JobManagementBoard from './JobManagementBoard';
 import {
   Clock,
@@ -156,27 +164,38 @@ export default function StaffDashboard({
     return () => clearInterval(timer);
   }, []);
 
-  const todayStr = useMemo(() => {
-    return new Date().toISOString().slice(0, 10);
-  }, []);
-
   // Filter attendance records strictly for this staff member
   const myAttendance = useMemo(() => {
-    const sId = currentUser.staffId || staffMember?.id;
+    const sId = (currentUser.staffId || staffMember?.id || '').trim().toLowerCase();
     if (!sId) return [];
     return attendanceRecords
-      .filter(r => r.staffId === sId)
-      .sort((a, b) => new Date(b.date + ' ' + (b.clockIn || '00:00')).getTime() - new Date(a.date + ' ' + (a.clockIn || '00:00')).getTime());
+      .filter(r => (r.staffId || '').trim().toLowerCase() === sId)
+      .sort((a, b) => {
+        const dateA = normalizeAttendanceDate(a.date);
+        const dateB = normalizeAttendanceDate(b.date);
+        return new Date(dateB + ' ' + (a.clockIn || '00:00')).getTime() - new Date(dateA + ' ' + (b.clockIn || '00:00')).getTime();
+      });
   }, [attendanceRecords, currentUser.staffId, staffMember?.id]);
 
-  // Today's active attendance session
+  // Today's active attendance session - prioritizes actively ongoing clock-in session, then today's record
   const todayAttendance = useMemo(() => {
-    return myAttendance.find(r => r.date === todayStr);
-  }, [myAttendance, todayStr]);
+    const todayLocal = formatLocalDate();
+    const todayIso = new Date().toISOString().slice(0, 10);
 
-  const isClockedIn = Boolean(todayAttendance && todayAttendance.clockIn && !todayAttendance.clockOut);
+    // 1. First priority: is there an active ongoing shift for this staff member?
+    const activeRecord = myAttendance.find(r => isRecordActiveClockIn(r));
+    if (activeRecord) return activeRecord;
 
-  // Elapsed time for active shift
+    // 2. Second priority: today's completed or existing shift
+    return myAttendance.find(r => {
+      const norm = normalizeAttendanceDate(r.date);
+      return norm === todayLocal || norm === todayIso;
+    });
+  }, [myAttendance]);
+
+  const isClockedIn = Boolean(isRecordActiveClockIn(todayAttendance));
+
+  // Elapsed time for active shift (dynamically computed from stored Clock In timestamp)
   const [activeDuration, setActiveDuration] = useState<string>('00:00:00');
   useEffect(() => {
     if (!isClockedIn || !todayAttendance?.clockIn) {
@@ -185,44 +204,14 @@ export default function StaffDashboard({
     }
 
     const updateDuration = () => {
-      try {
-        const rawClockIn = todayAttendance.clockIn;
-        let clockInDate = new Date();
-        if (rawClockIn.includes('AM') || rawClockIn.includes('PM')) {
-          const match = rawClockIn.match(/(\d+):(\d+)(?::(\d+))?\s*(AM|PM)/i);
-          if (match) {
-            let hours = parseInt(match[1], 10);
-            const minutes = parseInt(match[2], 10);
-            const seconds = match[3] ? parseInt(match[3], 10) : 0;
-            const ampm = match[4].toUpperCase();
-            if (ampm === 'PM' && hours < 12) hours += 12;
-            if (ampm === 'AM' && hours === 12) hours = 0;
-            clockInDate.setHours(hours, minutes, seconds, 0);
-          }
-        } else if (rawClockIn.includes(':')) {
-          const parts = rawClockIn.split(':');
-          clockInDate.setHours(parseInt(parts[0], 10) || 0, parseInt(parts[1], 10) || 0, parseInt(parts[2] || '0', 10) || 0, 0);
-        }
-
-        const now = new Date();
-        const diffMs = Math.max(0, now.getTime() - clockInDate.getTime());
-        const diffSecs = Math.floor(diffMs / 1000);
-        const hrs = Math.floor(diffSecs / 3600);
-        const mins = Math.floor((diffSecs % 3600) / 60);
-        const secs = diffSecs % 60;
-
-        setActiveDuration(
-          `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-        );
-      } catch {
-        setActiveDuration('00:00:00');
-      }
+      const formatted = calculateElapsedDuration(todayAttendance.clockIn, todayAttendance.date);
+      setActiveDuration(formatted);
     };
 
     updateDuration();
     const timer = setInterval(updateDuration, 1000);
     return () => clearInterval(timer);
-  }, [isClockedIn, todayAttendance?.clockIn]);
+  }, [isClockedIn, todayAttendance?.clockIn, todayAttendance?.date]);
 
   // Shift notes input state
   const [shiftNote, setShiftNote] = useState('');

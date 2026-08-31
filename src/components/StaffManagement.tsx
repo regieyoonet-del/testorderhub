@@ -24,6 +24,7 @@ import {
   generateStaffAccountId,
   generateTemporaryPassword
 } from '../data/initialFinance';
+import { normalizeAttendanceDate, cleanClockOut } from '../utils/attendanceUtils';
 import {
   Users,
   DollarSign,
@@ -541,11 +542,13 @@ export default function StaffManagement({
       return { qualifyingDays: 0, qualifyingHours: 0, qualifyingDates: [] as string[], incompletePunches: 0 };
     }
 
-    const staffAtt = records.filter(a =>
-      a.staffId === staffId &&
-      (!periodStart || a.date >= periodStart) &&
-      (!periodEnd || a.date <= periodEnd)
-    );
+    const staffAtt = records.filter(a => {
+      const sIdMatch = (a.staffId || '').trim().toLowerCase() === staffId.trim().toLowerCase();
+      const normDate = normalizeAttendanceDate(a.date);
+      const isAfterStart = !periodStart || normDate >= periodStart;
+      const isBeforeEnd = !periodEnd || normDate <= periodEnd;
+      return sIdMatch && isAfterStart && isBeforeEnd;
+    });
 
     // Map to deduplicate by calendar shift date (date field on attendance record)
     const dateHoursMap = new Map<string, number>();
@@ -561,7 +564,8 @@ export default function StaffManagement({
         continue;
       }
 
-      const hasClockOut = Boolean(rec.clockOut && rec.clockOut.trim() !== '');
+      const clockOut = cleanClockOut(rec.clockOut);
+      const hasClockOut = Boolean(clockOut);
       const hours = Number(rec.totalHours) || 0;
 
       // Active clock-in without clock-out or missing clock-out does NOT automatically count
@@ -572,8 +576,9 @@ export default function StaffManagement({
 
       // Valid completed workday shift
       if (hours > 0 && (rec.status === 'Present' || rec.status === 'Late' || hasClockOut)) {
-        const existing = dateHoursMap.get(rec.date) || 0;
-        dateHoursMap.set(rec.date, existing + hours);
+        const normD = normalizeAttendanceDate(rec.date);
+        const existing = dateHoursMap.get(normD) || 0;
+        dateHoursMap.set(normD, existing + hours);
       }
     }
 

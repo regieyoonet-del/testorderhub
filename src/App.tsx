@@ -34,6 +34,14 @@ import { INITIAL_PRODUCTS, INITIAL_COMPANIES, INITIAL_ORDERS, INITIAL_PORTALS } 
 import { INITIAL_CATALOG_PRODUCTS, INITIAL_QUOTE_ENQUIRIES, sanitizeCatalogProduct } from './data/initialCatalog';
 import { INITIAL_JOBS, DEFAULT_JOB_COLUMNS, DEFAULT_JOB_ITEM_COLUMNS, createJobFromOrder } from './data/initialJobs';
 import { INITIAL_STAFF_MEMBERS, INITIAL_STAFF_ACCOUNTS, INITIAL_ATTENDANCE_RECORDS, generateAttendanceId } from './data/initialFinance';
+import {
+  formatLocalDate,
+  normalizeAttendanceDate,
+  calculateHoursWorked,
+  isRecordActiveClockIn,
+  cleanClockOut,
+  cleanClockIn
+} from './utils/attendanceUtils';
 import { DEFAULT_QUOTE_NOTES } from './constants/quoteDefaults';
 import { sheetsService } from './lib/sheetsService';
 import { EMBEDDED_APPS_SCRIPT_URL } from './config';
@@ -1714,31 +1722,58 @@ export default function App() {
         if (fetchedAttendance !== null && Array.isArray(fetchedAttendance)) {
           setAttendance(prevAttendance => {
             const fetchedMap = new Map(fetchedAttendance.map(a => [a.id, a]));
-            const fetchedIds = new Set(fetchedAttendance.map(a => a.id));
             const now = Date.now();
+
             const mergedExisting = prevAttendance.map(localAtt => {
-              const serverAtt = fetchedMap.get(localAtt.id) || fetchedAttendance.find(fa => fa.staffId === localAtt.staffId && fa.date === localAtt.date);
+              const serverAtt = fetchedMap.get(localAtt.id) || fetchedAttendance.find(fa => {
+                const normServerDate = normalizeAttendanceDate(fa.date);
+                const normLocalDate = normalizeAttendanceDate(localAtt.date);
+                return (fa.staffId || '').trim().toLowerCase() === (localAtt.staffId || '').trim().toLowerCase() && normServerDate === normLocalDate;
+              });
+
               if (!serverAtt) return localAtt;
-              const localUpdated = new Date(localAtt.updatedAt || 0).getTime();
-              const serverUpdated = new Date(serverAtt.updatedAt || 0).getTime();
-              if (!isNaN(localUpdated) && (now - localUpdated < 20000) && localUpdated > serverUpdated) {
+
+              // CRITICAL: Protect active ongoing Clock-In sessions from being overwritten by stale server states
+              const isLocalActive = isRecordActiveClockIn(localAtt);
+              if (isLocalActive) {
+                return {
+                  ...serverAtt,
+                  id: localAtt.id || serverAtt.id,
+                  staffId: localAtt.staffId,
+                  staffName: localAtt.staffName || serverAtt.staffName,
+                  date: normalizeAttendanceDate(localAtt.date),
+                  clockIn: cleanClockIn(localAtt.clockIn) || cleanClockIn(serverAtt.clockIn),
+                  clockOut: undefined,
+                  status: 'Present',
+                  notes: localAtt.notes || serverAtt.notes,
+                  createdAt: localAtt.createdAt || serverAtt.createdAt,
+                  updatedAt: localAtt.updatedAt || serverAtt.updatedAt
+                };
+              }
+
+              const localUpdated = new Date(localAtt.updatedAt || localAtt.createdAt || 0).getTime();
+              const serverUpdated = new Date(serverAtt.updatedAt || serverAtt.createdAt || 0).getTime();
+              if (!isNaN(localUpdated) && localUpdated > serverUpdated) {
                 return localAtt;
               }
               return serverAtt;
             });
-            const prevIds = new Set(prevAttendance.map(a => a.id));
-            const newServerAttendance = fetchedAttendance.filter(a => !prevIds.has(a.id));
-            const activeExisting = mergedExisting.filter(a => {
-              if (fetchedIds.has(a.id)) return true;
-              if (a.clockIn && !a.clockOut) return true;
-              const createdTimestamp = new Date(a.createdAt || 0).getTime();
-              return !isNaN(createdTimestamp) && (now - createdTimestamp < 300000);
+
+            const localIds = new Set(prevAttendance.map(a => a.id));
+            const localStaffDates = new Set(prevAttendance.map(a => `${(a.staffId || '').trim().toLowerCase()}_${normalizeAttendanceDate(a.date)}`));
+            const newServerAttendance = fetchedAttendance.filter(a => {
+              const key = `${(a.staffId || '').trim().toLowerCase()}_${normalizeAttendanceDate(a.date)}`;
+              return !localIds.has(a.id) && !localStaffDates.has(key);
             });
-            const merged = [...activeExisting, ...newServerAttendance];
+
+            const merged = [...mergedExisting, ...newServerAttendance];
             const seen = new Set<string>();
+            const seenStaffDates = new Set<string>();
             return merged.filter(a => {
-              if (seen.has(a.id)) return false;
+              const staffDateKey = `${(a.staffId || '').trim().toLowerCase()}_${normalizeAttendanceDate(a.date)}`;
+              if (seen.has(a.id) || seenStaffDates.has(staffDateKey)) return false;
               seen.add(a.id);
+              seenStaffDates.add(staffDateKey);
               return true;
             });
           });
@@ -2767,7 +2802,7 @@ export default function App() {
 
   const handleClockIn = async (staffId: string, staffName: string, notes?: string) => {
     const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10);
+    const dateStr = formatLocalDate(now);
     const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     const newAttendance: AttendanceRecord = {
@@ -2784,7 +2819,7 @@ export default function App() {
     };
 
     setAttendance(prev => {
-      const existingIdx = prev.findIndex(a => a.id === newAttendance.id || (a.staffId === staffId && a.date === dateStr));
+      const existingIdx = prev.findIndex(a => a.id === newAttendance.id || ((a.staffId || '').trim().toLowerCase() === (staffId || '').trim().toLowerCase() && normalizeAttendanceDate(a.date) === dateStr));
       if (existingIdx > -1) {
         const updated = [...prev];
         updated[existingIdx] = { ...updated[existingIdx], ...newAttendance };
@@ -2807,47 +2842,7 @@ export default function App() {
     setAttendance(prev => {
       return prev.map(rec => {
         if (rec.id === attendanceId) {
-          let hoursWorked = 8;
-          try {
-            const rawIn = rec.clockIn;
-            // Parse base date from record's date string (e.g. '2026-03-28')
-            let [year, month, day] = [now.getFullYear(), now.getMonth(), now.getDate()];
-            if (rec.date && rec.date.includes('-')) {
-              const dateParts = rec.date.split('-').map(Number);
-              if (dateParts.length === 3) {
-                year = dateParts[0];
-                month = dateParts[1] - 1;
-                day = dateParts[2];
-              }
-            }
-
-            const clockInDate = new Date(year, month, day, 0, 0, 0, 0);
-
-            if (rawIn.includes('AM') || rawIn.includes('PM')) {
-              const match = rawIn.match(/(\d+):(\d+)(?::(\d+))?\s*(AM|PM)/i);
-              if (match) {
-                let hours = parseInt(match[1], 10);
-                const minutes = parseInt(match[2], 10);
-                const seconds = match[3] ? parseInt(match[3], 10) : 0;
-                const ampm = match[4].toUpperCase();
-                if (ampm === 'PM' && hours < 12) hours += 12;
-                if (ampm === 'AM' && hours === 12) hours = 0;
-                clockInDate.setHours(hours, minutes, seconds, 0);
-              }
-            } else if (rawIn.includes(':')) {
-              const parts = rawIn.split(':');
-              clockInDate.setHours(parseInt(parts[0], 10) || 0, parseInt(parts[1], 10) || 0, parseInt(parts[2] || '0', 10) || 0, 0);
-            }
-
-            let diffMs = now.getTime() - clockInDate.getTime();
-            // Handle cross-midnight shift where now is past midnight or next day
-            if (diffMs < 0) {
-              diffMs += 24 * 60 * 60 * 1000;
-            }
-            hoursWorked = Number(Math.max(0.01, diffMs / (1000 * 60 * 60)).toFixed(2));
-          } catch {
-            hoursWorked = 8;
-          }
+          const hoursWorked = calculateHoursWorked(rec.clockIn, timeStr, rec.date);
 
           updatedRecord = {
             ...rec,

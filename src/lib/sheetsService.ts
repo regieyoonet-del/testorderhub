@@ -6,6 +6,7 @@
 import { Order, Product, CompanyProfile, CatalogProduct, QuoteEnquiry, ColorOption, OrderPortal, OrderItem, AppNotification, Job, JobColumn, JobItem, JobItemColumn, JobActivity, StaffMember, StaffAccount, AttendanceRecord, PayrollRecord, ExpenseRecord, ExpenseCategory, RecurringExpenseRule } from '../types';
 import { INITIAL_CATALOG_PRODUCTS } from '../data/initialCatalog';
 import { parseColorList, resolveColorHex } from '../utils/colorUtils';
+import { normalizeAttendanceDate, cleanClockOut, cleanClockIn } from '../utils/attendanceUtils';
 import { DEFAULT_QUOTE_NOTES } from '../constants/quoteDefaults';
 import { EMBEDDED_APPS_SCRIPT_URL } from '../config';
 
@@ -1914,19 +1915,26 @@ export const sheetsService = {
       if (!response.ok) return null;
       const rawData = await response.json();
       if (Array.isArray(rawData)) {
-        return rawData.map(item => ({
-          id: String(getProp(item, ['AttendanceID', 'attendanceId', 'id', 'Attendance ID']) || `ATT-${Date.now()}`),
-          staffId: String(getProp(item, ['StaffID', 'staffId', 'Staff ID']) || ''),
-          staffName: String(getProp(item, ['StaffName', 'staffName', 'Staff Name', 'Name']) || ''),
-          date: String(getProp(item, ['Date', 'date', 'WorkDate', 'AttendanceDate']) || new Date().toISOString().split('T')[0]),
-          clockIn: String(getProp(item, ['ClockIn', 'clockIn', 'TimeIn', 'Clock In']) || ''),
-          clockOut: getProp(item, ['ClockOut', 'clockOut', 'TimeOut', 'Clock Out']) ? String(getProp(item, ['ClockOut', 'clockOut', 'TimeOut', 'Clock Out'])) : undefined,
-          totalHours: Number(getProp(item, ['TotalHours', 'totalHours', 'HoursWorked', 'Total Hours', 'Hours']) || 0),
-          status: (getProp(item, ['Status', 'status']) || 'Present') as any,
-          notes: getProp(item, ['Notes', 'notes', 'Remarks']) ? String(getProp(item, ['Notes', 'notes', 'Remarks'])) : undefined,
-          createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
-          updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
-        }));
+        return rawData.map(item => {
+          const rawCreated = getProp(item, ['CreatedAt', 'createdAt', 'Created At']);
+          const rawUpdated = getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']);
+          const normalizedDate = normalizeAttendanceDate(getProp(item, ['Date', 'date', 'WorkDate', 'AttendanceDate']));
+          const sId = String(getProp(item, ['StaffID', 'staffId', 'Staff ID']) || '').trim();
+
+          return {
+            id: String(getProp(item, ['AttendanceID', 'attendanceId', 'id', 'Attendance ID']) || (sId ? `ATT-${sId}-${normalizedDate}` : `ATT-${Date.now()}`)),
+            staffId: sId,
+            staffName: String(getProp(item, ['StaffName', 'staffName', 'Staff Name', 'Name']) || ''),
+            date: normalizedDate,
+            clockIn: cleanClockIn(getProp(item, ['ClockIn', 'clockIn', 'TimeIn', 'Clock In'])),
+            clockOut: cleanClockOut(getProp(item, ['ClockOut', 'clockOut', 'TimeOut', 'Clock Out'])),
+            totalHours: Number(getProp(item, ['TotalHours', 'totalHours', 'HoursWorked', 'Total Hours', 'Hours']) || 0),
+            status: (getProp(item, ['Status', 'status']) || 'Present') as any,
+            notes: getProp(item, ['Notes', 'notes', 'Remarks']) ? String(getProp(item, ['Notes', 'notes', 'Remarks'])) : undefined,
+            createdAt: rawCreated ? String(rawCreated) : undefined,
+            updatedAt: rawUpdated ? String(rawUpdated) : (rawCreated ? String(rawCreated) : undefined)
+          };
+        });
       }
       return null;
     } catch (error) {
@@ -2732,19 +2740,26 @@ export const sheetsService = {
       // Extract Attendance
       let attendance: AttendanceRecord[] | null = null;
       if (Array.isArray(raw.attendance)) {
-        attendance = raw.attendance.map((item: any) => ({
-          id: String(getProp(item, ['AttendanceID', 'attendanceId', 'id', 'Attendance ID']) || `ATT-${Date.now()}`),
-          staffId: String(getProp(item, ['StaffID', 'staffId', 'Staff ID']) || ''),
-          staffName: String(getProp(item, ['StaffName', 'staffName', 'Staff Name', 'Name']) || ''),
-          date: String(getProp(item, ['Date', 'date', 'WorkDate', 'AttendanceDate']) || new Date().toISOString().split('T')[0]),
-          clockIn: String(getProp(item, ['ClockIn', 'clockIn', 'TimeIn', 'Clock In']) || ''),
-          clockOut: getProp(item, ['ClockOut', 'clockOut', 'TimeOut', 'Clock Out']) ? String(getProp(item, ['ClockOut', 'clockOut', 'TimeOut', 'Clock Out'])) : undefined,
-          totalHours: Number(getProp(item, ['TotalHours', 'totalHours', 'HoursWorked', 'Total Hours', 'Hours']) || 0),
-          status: (getProp(item, ['Status', 'status']) || 'Present') as any,
-          notes: getProp(item, ['Notes', 'notes', 'Remarks']) ? String(getProp(item, ['Notes', 'notes', 'Remarks'])) : undefined,
-          createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
-          updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
-        }));
+        attendance = raw.attendance.map((item: any) => {
+          const rawCreated = getProp(item, ['CreatedAt', 'createdAt', 'Created At']);
+          const rawUpdated = getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']);
+          const normalizedDate = normalizeAttendanceDate(getProp(item, ['Date', 'date', 'WorkDate', 'AttendanceDate']));
+          const sId = String(getProp(item, ['StaffID', 'staffId', 'Staff ID']) || '').trim();
+
+          return {
+            id: String(getProp(item, ['AttendanceID', 'attendanceId', 'id', 'Attendance ID']) || (sId ? `ATT-${sId}-${normalizedDate}` : `ATT-${Date.now()}`)),
+            staffId: sId,
+            staffName: String(getProp(item, ['StaffName', 'staffName', 'Staff Name', 'Name']) || ''),
+            date: normalizedDate,
+            clockIn: cleanClockIn(getProp(item, ['ClockIn', 'clockIn', 'TimeIn', 'Clock In'])),
+            clockOut: cleanClockOut(getProp(item, ['ClockOut', 'clockOut', 'TimeOut', 'Clock Out'])),
+            totalHours: Number(getProp(item, ['TotalHours', 'totalHours', 'HoursWorked', 'Total Hours', 'Hours']) || 0),
+            status: (getProp(item, ['Status', 'status']) || 'Present') as any,
+            notes: getProp(item, ['Notes', 'notes', 'Remarks']) ? String(getProp(item, ['Notes', 'notes', 'Remarks'])) : undefined,
+            createdAt: rawCreated ? String(rawCreated) : undefined,
+            updatedAt: rawUpdated ? String(rawUpdated) : (rawCreated ? String(rawCreated) : undefined)
+          };
+        });
       }
 
       // Extract Payroll
