@@ -312,10 +312,10 @@ export function createJobFromOrder(
   const dateAdded = (order.createdAt ? new Date(order.createdAt) : new Date()).toISOString().split('T')[0];
 
   // Initial Job Status logic:
-  // If order is Pending or Approved -> Job is Pending
-  // If order is In Production, Shipped, Completed, Canceled -> Job inherits that status
+  // Job directly inherits the order's status if valid, otherwise defaults to Pending
   let initialJobStatus: Job['status'] = 'Pending';
   if (
+    order.status === 'Approved' ||
     order.status === 'In Production' ||
     order.status === 'Shipped' ||
     order.status === 'Completed' ||

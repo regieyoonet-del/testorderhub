@@ -760,8 +760,11 @@ export default function App() {
     }
   });
 
+  const currentLoadedCartKeyRef = useRef<string>(cartStorageKey);
+
   // Reload isolated cart when active company / user changes
   useEffect(() => {
+    currentLoadedCartKeyRef.current = cartStorageKey;
     try {
       const cached = localStorage.getItem(cartStorageKey);
       if (cached) {
@@ -774,10 +777,10 @@ export default function App() {
     }
   }, [cartStorageKey]);
 
-  // Persist cart to company-specific local storage key
+  // Persist cart to company-specific local storage key ONLY when cart matches current loaded key
   useEffect(() => {
     try {
-      if (cartStorageKey) {
+      if (cartStorageKey && currentLoadedCartKeyRef.current === cartStorageKey) {
         localStorage.setItem(cartStorageKey, JSON.stringify(cart));
       }
     } catch {}
@@ -1948,10 +1951,19 @@ export default function App() {
     for (const newOrd of newOrders) {
       const oldOrd = orders.find(o => o.id === newOrd.id);
       if (oldOrd && oldOrd.status !== newOrd.status) {
-        const linkedJob = jobs.find(j => j.orderId === newOrd.id || (j.orderNumber && newOrd.orderNumber && j.orderNumber === newOrd.orderNumber));
+        const linkedJob = jobs.find(j => 
+          (j.orderId && j.orderId === newOrd.id) || 
+          (j.orderNumber && newOrd.orderNumber && j.orderNumber === newOrd.orderNumber) ||
+          (newOrd.jobId && j.id === newOrd.jobId)
+        );
         if (linkedJob && linkedJob.status !== newOrd.status) {
-          const updatedJobStatus = newOrd.status as JobStatus;
-          setJobs(prev => prev.map(j => j.id === linkedJob.id ? { ...j, status: updatedJobStatus, updatedAt: new Date().toISOString() } : j));
+          const updatedJobStatus = (newOrd.status === 'Pending Approval' ? 'Pending' : newOrd.status) as JobStatus;
+          setJobs(prev => prev.map(j => j.id === linkedJob.id ? { 
+            ...j, 
+            status: updatedJobStatus, 
+            values: { ...j.values, 'col-status': updatedJobStatus }, 
+            updatedAt: new Date().toISOString() 
+          } : j));
           if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
             sheetsService.updateJobStatus(appsScriptConfig.webAppUrl, linkedJob.id, updatedJobStatus).catch(err => console.warn('Job status sync notice:', err));
           }
@@ -2021,10 +2033,14 @@ export default function App() {
     }
 
     // Synchronize linked Order if exists
-    if (updatedJob.orderId) {
-      const linkedOrder = orders.find(o => o.id === updatedJob.orderId || (o.orderNumber && updatedJob.orderNumber && o.orderNumber === updatedJob.orderNumber));
+    if (updatedJob.orderId || updatedJob.orderNumber) {
+      const linkedOrder = orders.find(o => 
+        (updatedJob.orderId && o.id === updatedJob.orderId) || 
+        (updatedJob.orderNumber && o.orderNumber && o.orderNumber === updatedJob.orderNumber) ||
+        (o.jobId && o.jobId === updatedJob.id)
+      );
       if (linkedOrder && linkedOrder.status !== updatedJob.status) {
-        const updatedOrders = orders.map(o => o.id === linkedOrder.id ? { ...o, status: updatedJob.status } : o);
+        const updatedOrders = orders.map(o => o.id === linkedOrder.id ? { ...o, status: updatedJob.status, updatedAt: new Date().toISOString() } : o);
         handleUpdateOrders(updatedOrders);
       }
     }
@@ -2034,7 +2050,7 @@ export default function App() {
     let targetJob: Job | undefined;
     setJobs(prev => prev.map(j => {
       if (j.id === jobId) {
-        targetJob = { ...j, status, updatedAt: new Date().toISOString() };
+        targetJob = { ...j, status, values: { ...j.values, 'col-status': status }, updatedAt: new Date().toISOString() };
         return targetJob;
       }
       return j;
@@ -2045,10 +2061,15 @@ export default function App() {
     }
 
     // Synchronize linked Order if exists
-    if (targetJob && (targetJob.orderId || targetJob.orderNumber)) {
-      const linkedOrder = orders.find(o => o.id === targetJob!.orderId || (o.orderNumber && targetJob!.orderNumber && o.orderNumber === targetJob!.orderNumber));
+    const target = targetJob || jobs.find(j => j.id === jobId);
+    if (target && (target.orderId || target.orderNumber)) {
+      const linkedOrder = orders.find(o => 
+        (target.orderId && o.id === target.orderId) || 
+        (target.orderNumber && o.orderNumber && o.orderNumber === target.orderNumber) ||
+        (o.jobId && o.jobId === target.id)
+      );
       if (linkedOrder && linkedOrder.status !== status) {
-        const updatedOrders = orders.map(o => o.id === linkedOrder.id ? { ...o, status } : o);
+        const updatedOrders = orders.map(o => o.id === linkedOrder.id ? { ...o, status, updatedAt: new Date().toISOString() } : o);
         handleUpdateOrders(updatedOrders);
       }
     }
@@ -2887,7 +2908,6 @@ export default function App() {
     setLoggedInUser(null);
     sessionStorage.removeItem('rp_logged_in_user');
     localStorage.removeItem('rp_logged_in_user');
-    setCart([]);
   };
 
   /**

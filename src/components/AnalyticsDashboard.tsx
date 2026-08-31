@@ -229,14 +229,20 @@ export default function AnalyticsDashboard({
 
   // ----------------------------------------------------
   // UNIFIED SALES HISTORY & REVENUE LEDGER
+  // Only Confirmed Sales (Approved, In Production, Shipped, Completed, Delivered, Claimed)
+  // Pending, Draft, and Canceled orders/jobs are strictly excluded from recognized sales.
   // ----------------------------------------------------
   const unifiedSalesLedger = useMemo<SaleRecord[]>(() => {
     const records: SaleRecord[] = [];
 
-    // 1. Map Direct Company Orders
+    // 1. Map Direct Company Orders (Confirmed Sales only)
     scopedOrders.forEach(o => {
-      const isDraftOrPendingReview = o.status === 'Draft' as any || o.status === 'Pending Approval';
-      if (isDraftOrPendingReview) return;
+      const isUnconfirmedOrCanceled = 
+        o.status === 'Draft' as any || 
+        o.status === 'Pending Approval' || 
+        o.status === 'Pending' || 
+        o.status === 'Canceled';
+      if (isUnconfirmedOrCanceled) return;
 
       const isRealized = o.status === 'Completed' || o.status === 'Delivered' || o.status === 'Customer Claimed' || o.status === 'Picked Up';
       const itemsList = (o.items || []).map(it => `${it.quantity}x ${it.productName || it.productId}`).join(', ') || 'Custom Merchandise';
@@ -259,8 +265,14 @@ export default function AnalyticsDashboard({
       });
     });
 
-    // 2. Map Standalone Manual Jobs
+    // 2. Map Standalone Manual Jobs (Confirmed Sales only)
     scopedManualJobs.forEach(j => {
+      const isUnconfirmedOrCanceled = 
+        j.status === 'Pending' || 
+        j.status === 'Draft' as any || 
+        j.status === 'Canceled';
+      if (isUnconfirmedOrCanceled) return;
+
       const isRealized = j.status === 'Completed' || j.status === 'Shipped';
       const jobAmt = getJobRevenue(j);
       
@@ -340,32 +352,50 @@ export default function AnalyticsDashboard({
 
   // ----------------------------------------------------
   // FINANCIAL TOTALS & METRICS
+  // Strictly excludes unconfirmed Pending, Draft, and Canceled items from recognized Sales & Revenue
   // ----------------------------------------------------
   const metrics = useMemo(() => {
-    // 1. Order-based Revenue
-    const validOrders = scopedOrders.filter(o => o.status !== 'Pending Approval' && o.status !== 'Draft' as any && o.status !== 'Canceled');
+    // 1. Order-based Recognized Sales/Revenue (Confirmed Sales only: Approved, In Production, Shipped, Completed, Delivered, Picked Up)
+    const validOrders = scopedOrders.filter(o => 
+      o.status !== 'Pending' && 
+      o.status !== 'Pending Approval' && 
+      o.status !== 'Draft' as any && 
+      o.status !== 'Canceled'
+    );
     const orderGrossRevenue = validOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
     const orderRealizedRevenue = validOrders
       .filter(o => o.status === 'Completed' || o.status === 'Delivered' || o.status === 'Customer Claimed' || o.status === 'Picked Up')
       .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
     const orderPipelineRevenue = orderGrossRevenue - orderRealizedRevenue;
 
-    // 2. Manual Job-based Revenue (Non-canceled)
-    const validManualJobs = scopedManualJobs.filter(j => j.status !== 'Canceled');
+    // 2. Manual Job-based Recognized Sales/Revenue (Confirmed Jobs only: Approved, In Production, Shipped, Completed)
+    const validManualJobs = scopedManualJobs.filter(j => 
+      j.status !== 'Pending' && 
+      j.status !== 'Draft' as any && 
+      j.status !== 'Canceled'
+    );
     const manualJobGrossRevenue = validManualJobs.reduce((sum, j) => sum + getJobRevenue(j), 0);
     const manualJobRealizedRevenue = validManualJobs
       .filter(j => j.status === 'Completed' || j.status === 'Shipped')
       .reduce((sum, j) => sum + getJobRevenue(j), 0);
     const manualJobPipelineRevenue = manualJobGrossRevenue - manualJobRealizedRevenue;
 
-    // 3. Combined Revenue & Sales Count
+    // 3. Quoted / Pending Value (Unconfirmed Requests - Separated from recognized Sales)
+    const pendingOrders = scopedOrders.filter(o => o.status === 'Pending' || o.status === 'Pending Approval' || o.status === 'Draft' as any);
+    const pendingManualJobs = scopedManualJobs.filter(j => j.status === 'Pending' || j.status === 'Draft' as any);
+    const pendingOrdersValue = pendingOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const pendingJobsValue = pendingManualJobs.reduce((sum, j) => sum + getJobRevenue(j), 0);
+    const totalPendingQuotedValue = pendingOrdersValue + pendingJobsValue;
+    const totalPendingCount = pendingOrders.length + pendingManualJobs.length;
+
+    // 4. Combined Revenue & Sales Count
     const totalGrossRevenue = orderGrossRevenue + manualJobGrossRevenue;
     const realizedRevenue = orderRealizedRevenue + manualJobRealizedRevenue;
     const pipelineRevenue = totalGrossRevenue - realizedRevenue;
     const totalSalesCount = validOrders.length + validManualJobs.length;
     const aov = totalSalesCount > 0 ? totalGrossRevenue / totalSalesCount : 0;
 
-    // 4. Expenses Calculations
+    // 5. Expenses Calculations
     const totalExpenses = scopedExpenses
       .filter(e => e.paymentStatus !== 'Voided')
       .reduce((sum, e) => sum + (e.amount || 0), 0);
@@ -378,7 +408,7 @@ export default function AnalyticsDashboard({
       .filter(e => e.paymentStatus === 'Pending')
       .reduce((sum, e) => sum + (e.amount || 0), 0);
 
-    // 5. Payroll Calculations
+    // 6. Payroll Calculations
     const totalPayrollGross = scopedPayroll
       .filter(p => p.status !== 'Voided')
       .reduce((sum, p) => sum + (p.grossPay || 0), 0);
@@ -391,17 +421,17 @@ export default function AnalyticsDashboard({
       .filter(p => p.status !== 'Voided')
       .reduce((sum, p) => sum + (p.totalDeductions || 0), 0);
 
-    // 6. Net Profit & Margins
+    // 7. Net Profit & Margins
     const totalCosts = totalExpenses + totalPayrollGross;
     const netProfit = totalGrossRevenue - totalCosts;
     const profitMargin = totalGrossRevenue > 0 ? (netProfit / totalGrossRevenue) * 100 : 0;
 
-    // 7. Cash Flow (Realized Inflows vs Realized Outflows)
+    // 8. Cash Flow (Realized Inflows vs Realized Outflows)
     const totalCashInflow = realizedRevenue;
     const totalCashOutflow = paidExpenses + totalPayrollNet;
     const netCashFlow = totalCashInflow - totalCashOutflow;
 
-    // 8. Monthly Fixed Commitment (from Active Staff & Active Recurring Rules)
+    // 9. Monthly Fixed Commitment (from Active Staff & Active Recurring Rules)
     const activeStaffMonthly = staff
       .filter(s => s.status === 'Active')
       .reduce((sum, s) => {
@@ -435,6 +465,10 @@ export default function AnalyticsDashboard({
       totalGrossRevenue,
       realizedRevenue,
       pipelineRevenue,
+      totalPendingQuotedValue,
+      totalPendingCount,
+      pendingOrdersValue,
+      pendingJobsValue,
       totalSalesCount,
       aov,
       totalExpenses,
@@ -470,18 +504,18 @@ export default function AnalyticsDashboard({
       monthMap[key] = { month: label, revenue: 0, expenses: 0, payroll: 0, profit: 0 };
     }
 
-    // Tally Orders (non-canceled)
+    // Tally Orders (confirmed sales only - exclude Pending, Draft, Pending Approval, Canceled)
     scopedOrders.forEach(o => {
-      if (o.status === 'Pending Approval' || o.status === 'Draft' as any || o.status === 'Canceled') return;
+      if (o.status === 'Pending' || o.status === 'Pending Approval' || o.status === 'Draft' as any || o.status === 'Canceled') return;
       const key = (o.createdAt || '').slice(0, 7);
       if (monthMap[key]) {
         monthMap[key].revenue += (o.totalAmount || 0);
       }
     });
 
-    // Tally Standalone Manual Jobs (non-canceled)
+    // Tally Standalone Manual Jobs (confirmed sales only - exclude Pending, Draft, Canceled)
     scopedManualJobs.forEach(j => {
-      if (j.status === 'Canceled') return;
+      if (j.status === 'Pending' || j.status === 'Draft' as any || j.status === 'Canceled') return;
       const key = getJobDateStr(j).slice(0, 7);
       if (monthMap[key]) {
         monthMap[key].revenue += getJobRevenue(j);
@@ -549,9 +583,9 @@ export default function AnalyticsDashboard({
       clientMap[c.name.toLowerCase()] = { name: c.name, revenue: 0, orders: 0, manualJobs: 0 };
     });
 
-    // Tally Direct Company Orders
+    // Tally Direct Company Orders (confirmed sales only)
     scopedOrders.forEach(o => {
-      if (o.status === 'Pending Approval' || o.status === 'Draft' as any || o.status === 'Canceled') return;
+      if (o.status === 'Pending' || o.status === 'Pending Approval' || o.status === 'Draft' as any || o.status === 'Canceled') return;
       const key = (o.companyName || 'Direct Client').toLowerCase();
       if (!clientMap[key]) {
         clientMap[key] = { name: o.companyName || 'Direct Client', revenue: 0, orders: 0, manualJobs: 0 };
@@ -560,9 +594,9 @@ export default function AnalyticsDashboard({
       clientMap[key].orders += 1;
     });
 
-    // Tally Standalone Manual Jobs
+    // Tally Standalone Manual Jobs (confirmed sales only)
     scopedManualJobs.forEach(j => {
-      if (j.status === 'Canceled') return;
+      if (j.status === 'Pending' || j.status === 'Draft' as any || j.status === 'Canceled') return;
       const coName = j.companyName || j.values?.['col-company'] || 'Direct Production Client';
       const key = coName.toLowerCase();
       if (!clientMap[key]) {
@@ -583,9 +617,9 @@ export default function AnalyticsDashboard({
   const productLeaderboard = useMemo(() => {
     const pMap: Record<string, { name: string; quantity: number; revenue: number }> = {};
 
-    // Direct Orders line items
+    // Direct Orders line items (confirmed sales only)
     scopedOrders.forEach(o => {
-      if (o.status === 'Pending Approval' || o.status === 'Draft' as any || o.status === 'Canceled') return;
+      if (o.status === 'Pending' || o.status === 'Pending Approval' || o.status === 'Draft' as any || o.status === 'Canceled') return;
       (o.items || []).forEach(it => {
         const name = it.productName || it.productId || 'Item';
         if (!pMap[name]) {
@@ -596,9 +630,9 @@ export default function AnalyticsDashboard({
       });
     });
 
-    // Standalone Manual Jobs sub-items
+    // Standalone Manual Jobs sub-items (confirmed sales only)
     scopedManualJobs.forEach(j => {
-      if (j.status === 'Canceled') return;
+      if (j.status === 'Pending' || j.status === 'Draft' as any || j.status === 'Canceled') return;
       if (j.items && j.items.length > 0) {
         j.items.forEach(it => {
           const name = it.values?.['col-sub-design'] || it.values?.['col-sub-garment'] || it.values?.['col-sub-brand'] || j.values?.['col-job-type'] || 'Custom Print Job';
@@ -829,6 +863,18 @@ export default function AnalyticsDashboard({
                 <div className="text-[10px] font-mono font-bold uppercase text-gray-500">In Production Pipeline</div>
                 <div className="text-xs font-mono font-extrabold text-amber-800">
                   {currencySymbol} {metrics.pipelineRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {metrics.totalPendingQuotedValue > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full bg-gray-400" />
+              <div>
+                <div className="text-[10px] font-mono font-bold uppercase text-gray-500">Quoted / Pending (Unconfirmed)</div>
+                <div className="text-xs font-mono font-extrabold text-gray-700">
+                  {currencySymbol} {metrics.totalPendingQuotedValue.toLocaleString(undefined, { minimumFractionDigits: 2 })} ({metrics.totalPendingCount} items)
                 </div>
               </div>
             </div>
