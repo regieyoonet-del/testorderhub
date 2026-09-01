@@ -92,12 +92,6 @@ export default function NavigationDrawer({
             count: counts.jobs !== undefined ? counts.jobs : null
           },
           {
-            id: 'orders',
-            label: 'Orders',
-            icon: Package,
-            count: counts.orders !== undefined ? counts.orders : null
-          },
-          {
             id: 'attendance',
             label: 'Time & Attendance',
             icon: Clock,

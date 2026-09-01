@@ -75,7 +75,6 @@ import {
 export type StaffPortalTab =
   | 'dashboard'
   | 'jobs'
-  | 'orders'
   | 'attendance'
   | 'payslips'
   | 'work-history'
@@ -138,12 +137,12 @@ export default function StaffDashboard({
   activeTab: controlledActiveTab,
   onTabChange
 }: StaffDashboardProps) {
-  // Navigation tabs for Staff Portal (Dashboard, Job Management, Orders, Time & Attendance, Payslips, Work History, Account Settings)
+  // Navigation tabs for Staff Portal (Dashboard, Job Management, Time & Attendance, Payslips, Work History, Account Settings)
   const [internalTab, setInternalTab] = useState<StaffPortalTab>('dashboard');
   
   const currentTab: StaffPortalTab = useMemo(() => {
     if (controlledActiveTab) {
-      const validTabs: StaffPortalTab[] = ['dashboard', 'jobs', 'orders', 'attendance', 'payslips', 'work-history', 'profile'];
+      const validTabs: StaffPortalTab[] = ['dashboard', 'jobs', 'attendance', 'payslips', 'work-history', 'profile'];
       if (validTabs.includes(controlledActiveTab as StaffPortalTab)) {
         return controlledActiveTab as StaffPortalTab;
       }
@@ -527,35 +526,6 @@ export default function StaffDashboard({
     return jobs.filter(j => j.status === 'Completed');
   }, [jobs]);
 
-  // ----------------------------------------------------
-  // ORDERS FULFILLMENT & MANAGEMENT FOR STAFF
-  // ----------------------------------------------------
-  const [orderSearchQuery, setOrderSearchQuery] = useState('');
-  const [orderStatusFilter, setOrderStatusFilter] = useState<string>('all');
-  const [selectedOrderForView, setSelectedOrderForView] = useState<Order | null>(null);
-
-  const filteredOrders = useMemo(() => {
-    let list = orders;
-    if (orderStatusFilter !== 'all') {
-      list = list.filter(o => o.status === orderStatusFilter);
-    }
-    if (orderSearchQuery.trim()) {
-      const q = orderSearchQuery.toLowerCase();
-      list = list.filter(o =>
-        (o.orderNumber && o.orderNumber.toLowerCase().includes(q)) ||
-        (o.id && o.id.toLowerCase().includes(q)) ||
-        (o.companyName && o.companyName.toLowerCase().includes(q)) ||
-        (o.contactPerson && o.contactPerson.toLowerCase().includes(q)) ||
-        (o.items && o.items.some(it => it.productName.toLowerCase().includes(q)))
-      );
-    }
-    return list;
-  }, [orders, orderStatusFilter, orderSearchQuery]);
-
-  const pendingOrdersCount = useMemo(() => {
-    return orders.filter(o => o.status === 'Pending' || o.status === 'Processing' || o.status === 'Pending Approval').length;
-  }, [orders]);
-
   return (
     <div className="space-y-6">
       {/* Top Header Profile Banner */}
@@ -679,15 +649,15 @@ export default function StaffDashboard({
             <div className="bg-white border-2 border-black rounded-3xl p-5 shadow-xs flex flex-col justify-between space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-gray-400">
-                  Pending Production Orders
+                  Completed Production Jobs
                 </span>
-                <Package className="w-4 h-4 text-black" />
+                <CheckCircle className="w-4 h-4 text-black" />
               </div>
               <div className="text-3xl font-black font-mono text-black">
-                {pendingOrdersCount}
+                {completedJobs.length}
               </div>
               <div className="text-[11px] font-medium text-gray-500">
-                {orders.length} Total Orders Recorded
+                Finished studio production jobs
               </div>
             </div>
 
@@ -905,141 +875,7 @@ export default function StaffDashboard({
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 3: PRODUCTION ORDERS FULFILLMENT */}
-      {/* ========================================================================= */}
-      {currentTab === 'orders' && (
-        <div className="space-y-6">
-          <div className="bg-white border-2 border-black rounded-[28px] p-6 sm:p-8 shadow-sm space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-black uppercase tracking-tight text-black">
-                  Production Orders
-                </h3>
-                <p className="text-xs text-gray-500 font-sans mt-0.5">
-                  Internal production queue, fulfillment verification, and delivery status updates
-                </p>
-              </div>
-
-              {/* Filters */}
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative flex items-center">
-                  <Search className="absolute left-3 w-3.5 h-3.5 text-gray-400" />
-                  <input
-                    type="text"
-                    value={orderSearchQuery}
-                    onChange={(e) => setOrderSearchQuery(e.target.value)}
-                    placeholder="Search order #, customer, item..."
-                    className="bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-xs font-semibold focus:bg-white focus:border-black focus:outline-none transition-all"
-                  />
-                </div>
-
-                <select
-                  value={orderStatusFilter}
-                  onChange={(e) => setOrderStatusFilter(e.target.value)}
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-black focus:outline-none cursor-pointer"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="Pending">Pending</option>
-                  <option value="Processing">Processing</option>
-                  <option value="Production">Production</option>
-                  <option value="Completed">Completed</option>
-                  <option value="Pending Approval">Pending Approval</option>
-                </select>
-              </div>
-            </div>
-
-            {filteredOrders.length === 0 ? (
-              <div className="bg-gray-50 border border-gray-200 rounded-2xl p-12 text-center space-y-3">
-                <Package className="w-8 h-8 text-gray-400 mx-auto" />
-                <h4 className="text-sm font-black text-black uppercase">No Orders Found</h4>
-                <p className="text-xs text-gray-500 max-w-sm mx-auto">
-                  There are no orders matching your current search or status filter.
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto border border-gray-200 rounded-2xl">
-                <table className="w-full text-left text-xs font-sans border-collapse">
-                  <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-mono text-[10px] uppercase font-bold tracking-wider">
-                    <tr>
-                      <th className="p-4">Order #</th>
-                      <th className="p-4">Date</th>
-                      <th className="p-4">Client / Contact</th>
-                      <th className="p-4">Items / Qty</th>
-                      <th className="p-4">Status</th>
-                      <th className="p-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {filteredOrders.map((ord) => (
-                      <tr key={ord.id} className="hover:bg-gray-50/80 transition-colors">
-                        <td className="p-4 font-mono font-bold text-black whitespace-nowrap">
-                          {ord.orderNumber || ord.id}
-                        </td>
-                        <td className="p-4 font-mono text-gray-600 whitespace-nowrap">
-                          {ord.createdAt ? new Date(ord.createdAt).toLocaleDateString() : '—'}
-                        </td>
-                        <td className="p-4">
-                          <div className="font-bold text-black">{ord.companyName || 'Standard Client'}</div>
-                          <div className="text-[11px] text-gray-500">{ord.contactPerson || ord.contactEmail || '—'}</div>
-                        </td>
-                        <td className="p-4">
-                          <div className="font-medium text-gray-800">
-                            {ord.items?.length || 0} item{(ord.items?.length || 0) === 1 ? '' : 's'}
-                          </div>
-                          <div className="text-[11px] text-gray-500 truncate max-w-xs">
-                            {ord.items?.map(it => `${it.productName} (${it.quantity})`).join(', ') || 'No line items'}
-                          </div>
-                        </td>
-                        <td className="p-4 whitespace-nowrap">
-                          {onUpdateOrderStatus ? (
-                            <select
-                              value={ord.status || 'Pending'}
-                              onChange={(e) => onUpdateOrderStatus(ord.id, e.target.value)}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold uppercase border cursor-pointer ${
-                                ord.status === 'Completed'
-                                  ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                                  : ord.status === 'Processing' || ord.status === 'Production'
-                                  ? 'bg-blue-100 text-blue-800 border-blue-200'
-                                  : 'bg-amber-100 text-amber-800 border-amber-200'
-                              }`}
-                            >
-                              <option value="Pending">Pending</option>
-                              <option value="Processing">Processing</option>
-                              <option value="Production">Production</option>
-                              <option value="Completed">Completed</option>
-                              <option value="Cancelled">Cancelled</option>
-                            </select>
-                          ) : (
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase ${
-                              ord.status === 'Completed'
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                : 'bg-amber-100 text-amber-800 border border-amber-200'
-                            }`}>
-                              {ord.status || 'Pending'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-4 text-right whitespace-nowrap">
-                          <button
-                            onClick={() => setSelectedOrderForView(ord)}
-                            className="bg-gray-100 hover:bg-black hover:text-white text-black font-bold text-[11px] uppercase tracking-wider py-2 px-3 rounded-xl border border-gray-300 hover:border-black transition-all inline-flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>Details</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 4: TIME & ATTENDANCE TRACKING */}
+      {/* TAB 3: TIME & ATTENDANCE TRACKING */}
       {/* ========================================================================= */}
       {currentTab === 'attendance' && (
         <div className="space-y-6">
@@ -1626,133 +1462,6 @@ export default function StaffDashboard({
           </div>
         </div>
       )}
-
-      {/* ========================================================================= */}
-      {/* ORDER DETAILS MODAL */}
-      {/* ========================================================================= */}
-      <AnimatePresence>
-        {selectedOrderForView && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.6 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black"
-              onClick={() => setSelectedOrderForView(null)}
-            />
-
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white border-2 border-black max-w-2xl w-full p-6 sm:p-8 rounded-[32px] relative z-10 space-y-6 shadow-2xl"
-            >
-              <div className="flex items-center justify-between border-b border-gray-100 pb-4">
-                <div>
-                  <h3 className="text-xl font-black uppercase tracking-tight text-black">
-                    Order {selectedOrderForView.orderNumber || selectedOrderForView.id}
-                  </h3>
-                  <p className="text-xs font-mono text-gray-500 mt-0.5">
-                    Client: {selectedOrderForView.companyName || 'Direct'} • Placed: {new Date(selectedOrderForView.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setSelectedOrderForView(null)}
-                  className="w-9 h-9 rounded-full bg-gray-100 hover:bg-black hover:text-white flex items-center justify-center text-gray-500 transition-colors cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {/* Order Info Banner */}
-              <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                <div>
-                  <span className="text-[10px] font-mono text-gray-400 uppercase font-bold block">Contact</span>
-                  <span className="font-bold text-black">{selectedOrderForView.contactPerson || '—'}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-mono text-gray-400 uppercase font-bold block">Email / Phone</span>
-                  <span className="font-semibold text-gray-700">{selectedOrderForView.contactEmail || selectedOrderForView.contactNumber || '—'}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-mono text-gray-400 uppercase font-bold block">Status</span>
-                  <span className="font-mono font-bold text-black">{selectedOrderForView.status}</span>
-                </div>
-                {selectedOrderForView.deliveryAddress && (
-                  <div className="col-span-2 sm:col-span-3">
-                    <span className="text-[10px] font-mono text-gray-400 uppercase font-bold block">Delivery Address</span>
-                    <span className="font-medium text-gray-700">{selectedOrderForView.deliveryAddress}</span>
-                  </div>
-                )}
-                {selectedOrderForView.notes && (
-                  <div className="col-span-2 sm:col-span-3">
-                    <span className="text-[10px] font-mono text-gray-400 uppercase font-bold block">Production Notes</span>
-                    <span className="font-medium text-amber-900 bg-amber-50 p-2 rounded-lg block border border-amber-200">{selectedOrderForView.notes}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Items Table */}
-              <div className="space-y-2">
-                <div className="text-[11px] font-mono font-bold uppercase text-gray-400">Line Items & Specs</div>
-                <div className="border border-gray-200 rounded-2xl overflow-hidden">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-gray-50 font-mono text-[10px] uppercase text-gray-500 font-bold border-b border-gray-200">
-                      <tr>
-                        <th className="p-3">Product</th>
-                        <th className="p-3">Variant / Custom</th>
-                        <th className="p-3 text-right">Quantity</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {selectedOrderForView.items?.map((it, idx) => (
-                        <tr key={idx}>
-                          <td className="p-3 font-bold text-black">{it.productName}</td>
-                          <td className="p-3 text-gray-600 text-[11px]">
-                            {[
-                              it.selectedSize ? `Size: ${it.selectedSize}` : null,
-                              it.selectedColor ? `Color: ${it.selectedColor}` : null,
-                              it.customDetails ? Object.entries(it.customDetails).map(([k, v]) => `${k}: ${v}`).join(', ') : null
-                            ].filter(Boolean).join(' • ') || 'Standard'}
-                          </td>
-                          <td className="p-3 text-right font-mono font-bold text-black">{it.quantity}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Status Update Quick Action */}
-              {onUpdateOrderStatus && (
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-3 border-t border-gray-100">
-                  <span className="text-xs font-mono font-bold uppercase text-gray-500">Update Production Status:</span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        onUpdateOrderStatus(selectedOrderForView.id, 'Processing');
-                        setSelectedOrderForView({ ...selectedOrderForView, status: 'Processing' });
-                      }}
-                      className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-900 border border-blue-300 rounded-xl text-xs font-mono font-bold uppercase cursor-pointer"
-                    >
-                      Set Processing
-                    </button>
-                    <button
-                      onClick={() => {
-                        onUpdateOrderStatus(selectedOrderForView.id, 'Completed');
-                        setSelectedOrderForView({ ...selectedOrderForView, status: 'Completed' });
-                      }}
-                      className="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300 rounded-xl text-xs font-mono font-bold uppercase cursor-pointer"
-                    >
-                      Set Completed
-                    </button>
-                  </div>
-                </div>
-              )}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* ========================================================================= */}
       {/* PAYSLIP DETAIL MODAL */}

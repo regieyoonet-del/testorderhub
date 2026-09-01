@@ -3630,7 +3630,6 @@ export default function App() {
             loggedInUser.role === 'staff'
               ? {
                   jobs: jobs.length,
-                  orders: orders.filter(o => o.status === 'Pending' || o.status === 'Processing' || o.status === 'Production').length,
                   payslips: payroll.filter(p => p.staffId === loggedInUser.staffId).length
                 }
               : {
