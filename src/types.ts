@@ -156,6 +156,16 @@ export interface JobActivity {
   timestamp: string;
 }
 
+export interface JobComment {
+  id: string;
+  jobId: string;
+  userId: string;
+  userName: string;
+  comment: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface Job {
   id: string; // e.g. 'JOB-10452'
   companyId?: string;
@@ -168,6 +178,7 @@ export interface Job {
   values: Record<string, any>;
   items?: JobItem[];
   activities?: JobActivity[];
+  comments?: JobComment[];
   createdAt: string;
   updatedAt: string;
   createdBy?: string;

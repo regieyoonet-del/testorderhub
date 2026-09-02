@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Order, Product, CompanyProfile, CatalogProduct, QuoteEnquiry, ColorOption, OrderPortal, OrderItem, AppNotification, Job, JobColumn, JobItem, JobItemColumn, JobActivity, StaffMember, StaffAccount, AttendanceRecord, PayrollRecord, ExpenseRecord, ExpenseCategory, RecurringExpenseRule } from '../types';
+import { Order, Product, CompanyProfile, CatalogProduct, QuoteEnquiry, ColorOption, OrderPortal, OrderItem, AppNotification, Job, JobColumn, JobItem, JobItemColumn, JobActivity, JobComment, StaffMember, StaffAccount, AttendanceRecord, PayrollRecord, ExpenseRecord, ExpenseCategory, RecurringExpenseRule } from '../types';
 import { INITIAL_CATALOG_PRODUCTS } from '../data/initialCatalog';
 import { parseColorList, resolveColorHex } from '../utils/colorUtils';
-import { normalizeAttendanceDate, cleanClockOut, cleanClockIn } from '../utils/attendanceUtils';
+import { normalizeAttendanceDate, cleanClockOut, cleanClockIn, calculateHoursWorked } from '../utils/attendanceUtils';
 import { DEFAULT_QUOTE_NOTES } from '../constants/quoteDefaults';
 import { EMBEDDED_APPS_SCRIPT_URL } from '../config';
 
@@ -26,6 +26,7 @@ export interface AllSheetsData {
   jobItems: JobItem[] | null;
   jobItemColumns: JobItemColumn[] | null;
   jobActivities: JobActivity[] | null;
+  jobComments: JobComment[] | null;
   staff: StaffMember[] | null;
   staffAccounts: StaffAccount[] | null;
   attendance: AttendanceRecord[] | null;
@@ -170,6 +171,32 @@ function parseJobActivities(val: any): JobActivity[] {
       const parsed = JSON.parse(val);
       if (Array.isArray(parsed)) {
         return parseJobActivities(parsed);
+      }
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function parseJobComments(val: any): JobComment[] {
+  if (!val) return [];
+  if (Array.isArray(val)) {
+    return val.map((it: any, idx: number) => ({
+      id: String(getProp(it, ['id', 'CommentID', 'commentId', 'Comment ID']) || `cmt-${Date.now()}-${idx}`),
+      jobId: String(getProp(it, ['jobId', 'JobID', 'job_id', 'Job ID']) || ''),
+      userId: String(getProp(it, ['userId', 'UserID', 'staffId', 'Staff ID', 'User ID']) || 'admin'),
+      userName: String(getProp(it, ['userName', 'UserName', 'Name', 'User Name', 'user']) || 'Admin'),
+      comment: String(getProp(it, ['comment', 'Comment', 'text', 'Text', 'message']) || ''),
+      createdAt: String(getProp(it, ['createdAt', 'CreatedAt', 'Timestamp', 'Created Date', 'Created At']) || new Date().toISOString()),
+      updatedAt: getProp(it, ['updatedAt', 'UpdatedAt', 'Updated At']) ? String(getProp(it, ['updatedAt', 'UpdatedAt', 'Updated At'])) : undefined
+    })).filter(c => Boolean(c.comment && c.comment.trim() !== ''));
+  }
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) {
+        return parseJobComments(parsed);
       }
     } catch {
       return [];
@@ -1301,6 +1328,7 @@ export const sheetsService = {
           values: parseObjectProp(getProp(item, ['ValuesJSON', 'values', 'Values', 'valuesJSON'])) || {},
           items: parseJobItems(getProp(item, ['ItemsJSON', 'items', 'Items'])),
           activities: parseJobActivities(getProp(item, ['ActivitiesJSON', 'activities', 'Activities'])),
+          comments: parseJobComments(getProp(item, ['CommentsJSON', 'comments', 'Comments', 'Comments JSON', 'commentsJSON'])),
           createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created Date', 'CreatedDate']) || new Date().toISOString()),
           updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated Date', 'UpdatedDate']) || new Date().toISOString()),
           createdBy: getProp(item, ['CreatedBy', 'createdBy', 'Created By']) ? String(getProp(item, ['CreatedBy', 'createdBy', 'Created By'])) : 'Admin'
@@ -1310,6 +1338,90 @@ export const sheetsService = {
     } catch (error) {
       console.warn('Google Sheets sync notice (fetchJobs):', error);
       return null;
+    }
+  },
+
+  /**
+   * Fetch Job Comments from Google Sheets.
+   */
+  async fetchJobComments(url: string, jobId?: string): Promise<JobComment[] | null> {
+    if (!url) return null;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      const q = jobId ? `&jobId=${encodeURIComponent(jobId)}` : '';
+      const response = await fetch(`${cleanedUrl}?action=getJobComments${q}`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) return null;
+      const rawData = await response.json();
+      if (Array.isArray(rawData)) {
+        return parseJobComments(rawData);
+      }
+      return null;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (fetchJobComments):', error);
+      return null;
+    }
+  },
+
+  /**
+   * Save a single Job Comment to Google Sheets.
+   */
+  async saveJobComment(url: string, comment: JobComment): Promise<boolean> {
+    if (!url || !comment) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveJobComment', comment })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveJobComment):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Batch save Job Comments to Google Sheets.
+   */
+  async saveJobCommentsBatch(url: string, comments: JobComment[]): Promise<boolean> {
+    if (!url || !Array.isArray(comments)) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'saveJobCommentsBatch', comments })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveJobCommentsBatch):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Delete a Job Comment from Google Sheets.
+   */
+  async deleteJobComment(url: string, commentId: string): Promise<boolean> {
+    if (!url || !commentId) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteJobComment', commentId })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (deleteJobComment):', error);
+      return false;
     }
   },
 
@@ -1922,15 +2034,21 @@ export const sheetsService = {
           const fallbackFromCreated = rawCreated ? normalizeAttendanceDate(rawCreated, '') : '';
           const normalizedDate = normalizeAttendanceDate(rawDate, fallbackFromCreated || undefined);
           const sId = String(getProp(item, ['StaffID', 'staffId', 'Staff ID']) || '').trim();
+          const clockIn = cleanClockIn(getProp(item, ['ClockIn', 'clockIn', 'TimeIn', 'Clock In']));
+          const clockOut = cleanClockOut(getProp(item, ['ClockOut', 'clockOut', 'TimeOut', 'Clock Out']));
+          let totalHours = Number(getProp(item, ['TotalHours', 'totalHours', 'HoursWorked', 'Total Hours', 'Hours']) || 0);
+          if ((!totalHours || totalHours <= 0) && clockIn && clockOut) {
+            totalHours = calculateHoursWorked(clockIn, clockOut, normalizedDate);
+          }
 
           return {
             id: String(getProp(item, ['AttendanceID', 'attendanceId', 'id', 'Attendance ID']) || (sId ? `ATT-${sId}-${normalizedDate}` : `ATT-${Date.now()}`)),
             staffId: sId,
             staffName: String(getProp(item, ['StaffName', 'staffName', 'Staff Name', 'Name']) || ''),
             date: normalizedDate,
-            clockIn: cleanClockIn(getProp(item, ['ClockIn', 'clockIn', 'TimeIn', 'Clock In'])),
-            clockOut: cleanClockOut(getProp(item, ['ClockOut', 'clockOut', 'TimeOut', 'Clock Out'])),
-            totalHours: Number(getProp(item, ['TotalHours', 'totalHours', 'HoursWorked', 'Total Hours', 'Hours']) || 0),
+            clockIn,
+            clockOut,
+            totalHours,
             status: (getProp(item, ['Status', 'status']) || 'Present') as any,
             notes: getProp(item, ['Notes', 'notes', 'Remarks']) ? String(getProp(item, ['Notes', 'notes', 'Remarks'])) : undefined,
             createdAt: rawCreated ? String(rawCreated) : undefined,
@@ -2633,6 +2751,7 @@ export const sheetsService = {
           values: parseObjectProp(getProp(item, ['ValuesJSON', 'values', 'Values', 'valuesJSON'])) || {},
           items: parseJobItems(getProp(item, ['ItemsJSON', 'items', 'Items'])),
           activities: parseJobActivities(getProp(item, ['ActivitiesJSON', 'activities', 'Activities'])),
+          comments: parseJobComments(getProp(item, ['CommentsJSON', 'comments', 'Comments', 'Comments JSON', 'commentsJSON'])),
           createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created Date', 'CreatedDate']) || new Date().toISOString()),
           updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated Date', 'UpdatedDate']) || new Date().toISOString()),
           createdBy: getProp(item, ['CreatedBy', 'createdBy', 'Created By']) ? String(getProp(item, ['CreatedBy', 'createdBy', 'Created By'])) : 'Admin'
@@ -2698,6 +2817,37 @@ export const sheetsService = {
         }));
       }
 
+      // Extract Job Comments
+      let jobComments: JobComment[] | null = null;
+      if (Array.isArray(raw.jobComments) || Array.isArray(raw.JobComments)) {
+        jobComments = parseJobComments(raw.jobComments || raw.JobComments);
+        if (jobs && jobComments.length > 0) {
+          const commentMapByJob = new Map<string, JobComment[]>();
+          for (const c of jobComments) {
+            if (!c.jobId) continue;
+            const existing = commentMapByJob.get(c.jobId) || [];
+            existing.push(c);
+            commentMapByJob.set(c.jobId, existing);
+          }
+          jobs = jobs.map(j => {
+            const fromJobSheet = j.comments || [];
+            const fromDedicatedSheet = commentMapByJob.get(j.id) || [];
+            const merged = [...fromJobSheet];
+            const seenIds = new Set(fromJobSheet.map(c => c.id));
+            for (const c of fromDedicatedSheet) {
+              if (!seenIds.has(c.id)) {
+                seenIds.add(c.id);
+                merged.push(c);
+              }
+            }
+            return {
+              ...j,
+              comments: merged.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+            };
+          });
+        }
+      }
+
       // Extract Staff
       let staff: StaffMember[] | null = null;
       if (Array.isArray(raw.staff)) {
@@ -2749,15 +2899,21 @@ export const sheetsService = {
           const fallbackFromCreated = rawCreated ? normalizeAttendanceDate(rawCreated, '') : '';
           const normalizedDate = normalizeAttendanceDate(rawDate, fallbackFromCreated || undefined);
           const sId = String(getProp(item, ['StaffID', 'staffId', 'Staff ID']) || '').trim();
+          const clockIn = cleanClockIn(getProp(item, ['ClockIn', 'clockIn', 'TimeIn', 'Clock In']));
+          const clockOut = cleanClockOut(getProp(item, ['ClockOut', 'clockOut', 'TimeOut', 'Clock Out']));
+          let totalHours = Number(getProp(item, ['TotalHours', 'totalHours', 'HoursWorked', 'Total Hours', 'Hours']) || 0);
+          if ((!totalHours || totalHours <= 0) && clockIn && clockOut) {
+            totalHours = calculateHoursWorked(clockIn, clockOut, normalizedDate);
+          }
 
           return {
             id: String(getProp(item, ['AttendanceID', 'attendanceId', 'id', 'Attendance ID']) || (sId ? `ATT-${sId}-${normalizedDate}` : `ATT-${Date.now()}`)),
             staffId: sId,
             staffName: String(getProp(item, ['StaffName', 'staffName', 'Staff Name', 'Name']) || ''),
             date: normalizedDate,
-            clockIn: cleanClockIn(getProp(item, ['ClockIn', 'clockIn', 'TimeIn', 'Clock In'])),
-            clockOut: cleanClockOut(getProp(item, ['ClockOut', 'clockOut', 'TimeOut', 'Clock Out'])),
-            totalHours: Number(getProp(item, ['TotalHours', 'totalHours', 'HoursWorked', 'Total Hours', 'Hours']) || 0),
+            clockIn,
+            clockOut,
+            totalHours,
             status: (getProp(item, ['Status', 'status']) || 'Present') as any,
             notes: getProp(item, ['Notes', 'notes', 'Remarks']) ? String(getProp(item, ['Notes', 'notes', 'Remarks'])) : undefined,
             createdAt: rawCreated ? String(rawCreated) : undefined,
@@ -2882,6 +3038,7 @@ export const sheetsService = {
         jobItems,
         jobItemColumns,
         jobActivities,
+        jobComments,
         staff,
         staffAccounts,
         attendance,

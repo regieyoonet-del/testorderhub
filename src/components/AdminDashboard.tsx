@@ -164,6 +164,7 @@ interface AdminDashboardProps {
   isMobileNavOpen?: boolean;
   onToggleMobileNav?: (open?: boolean) => void;
   onLogout?: () => void;
+  currentUser?: AuthUser;
 }
 
 export default function AdminDashboard({
@@ -232,7 +233,8 @@ export default function AdminDashboard({
   highlightJobId,
   isMobileNavOpen,
   onToggleMobileNav,
-  onLogout
+  onLogout,
+  currentUser
 }: AdminDashboardProps) {
   const [adminTab, setAdminTab] = useState<'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'analytics' | 'receipt' | 'quotes' | 'settings' | 'sync'>(initialTab || 'jobs');
 
@@ -926,6 +928,8 @@ export default function AdminDashboard({
           }}
           currencySymbol={currencySymbol}
           highlightJobId={highlightJobId}
+          currentUser={currentUser}
+          appsScriptUrl={appsScriptConfig?.isConnected ? appsScriptConfig?.webAppUrl : undefined}
         />
       )}
 

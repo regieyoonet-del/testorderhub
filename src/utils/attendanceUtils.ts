@@ -16,11 +16,23 @@ export function formatLocalDate(d: Date = new Date()): string {
 }
 
 /**
+ * Normalizes staff ID strings for resilient cross-system matching (e.g. 'STF-105', 'stf-105', 'STF105').
+ */
+export function normalizeStaffId(s?: string | null): string {
+  if (!s) return '';
+  return String(s).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
  * Checks if a date string is a valid attendance calendar date (YYYY-MM-DD)
  * within a realistic operational timeframe (2020 - 2100).
  */
 export function isValidAttendanceDate(raw: any): boolean {
   if (!raw) return false;
+  if (raw instanceof Date) {
+    const y = raw.getFullYear();
+    return !isNaN(raw.getTime()) && y >= 2020 && y <= 2100;
+  }
   const str = String(raw).trim();
   if (!str) return false;
 
@@ -40,26 +52,38 @@ export function isValidAttendanceDate(raw: any): boolean {
 
 /**
  * Robustly normalizes any date representation (ISO string, MM/DD/YYYY, Date object)
- * into a standard YYYY-MM-DD format with strict year validation (2020-2100).
+ * into a standard YYYY-MM-DD format with strict year validation (2020-2100) and
+ * proper local timezone resolution.
  */
 export function normalizeAttendanceDate(raw: any, fallbackDate: string = formatLocalDate()): string {
   if (!raw) return fallbackDate;
+  if (raw instanceof Date) {
+    if (!isNaN(raw.getTime())) {
+      const y = raw.getFullYear();
+      if (y >= 2020 && y <= 2100) {
+        return formatLocalDate(raw);
+      }
+    }
+    return fallbackDate;
+  }
+
   const str = String(raw).trim();
   if (!str) return fallbackDate;
 
-  // If in ISO format like 2026-08-31T...
+  // 1. If in ISO format with 'T' (e.g. 2026-08-30T16:00:00.000Z from Google Sheets/JSON serialization)
   if (str.includes('T')) {
-    const dPart = str.split('T')[0];
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dPart)) {
-      const year = parseInt(dPart.slice(0, 4), 10);
-      if (year >= 2020 && year <= 2100) {
-        return dPart;
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      const y = parsed.getFullYear();
+      if (y >= 2020 && y <= 2100) {
+        return formatLocalDate(parsed);
       }
+      // If 1899/epoch time artifact, return fallbackDate
       return fallbackDate;
     }
   }
 
-  // If already standard YYYY-MM-DD
+  // 2. If already standard calendar YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
     const year = parseInt(str.slice(0, 4), 10);
     if (year >= 2020 && year <= 2100) {
@@ -68,7 +92,7 @@ export function normalizeAttendanceDate(raw: any, fallbackDate: string = formatL
     return fallbackDate;
   }
 
-  // If slash-separated e.g. MM/DD/YYYY or YYYY/MM/DD
+  // 3. If slash-separated e.g. MM/DD/YYYY or YYYY/MM/DD
   if (str.includes('/')) {
     const parts = str.split('/').map(p => p.trim());
     if (parts.length === 3) {
@@ -92,7 +116,7 @@ export function normalizeAttendanceDate(raw: any, fallbackDate: string = formatL
     }
   }
 
-  // Fallback to JS Date parse if valid year
+  // 4. Fallback to JS Date parse if valid year
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) {
     const y = parsed.getFullYear();
@@ -105,8 +129,9 @@ export function normalizeAttendanceDate(raw: any, fallbackDate: string = formatL
 }
 
 /**
- * Formats any raw clock time (including 1899 Google Sheets ISO time artifacts)
- * into a clean, human-readable 12-hour AM/PM time string (e.g., "08:30:00 AM").
+ * Formats any raw clock time (including 1899 Google Sheets ISO time artifacts,
+ * 24-hour timestamps, and 12-hour AM/PM formats) into a clean, human-readable
+ * 12-hour AM/PM time string (e.g., "08:30:00 AM").
  */
 export function formatClockTime(raw: any): string {
   if (!raw) return '';
@@ -117,17 +142,41 @@ export function formatClockTime(raw: any): string {
     str.toLowerCase() === 'null' ||
     str.toLowerCase() === 'n/a' ||
     str.toLowerCase() === 'none' ||
-    str === '-'
+    str === '-' ||
+    str === '0'
   ) {
     return '';
   }
 
-  // If it's an ISO timestamp starting with 1899 or modern ISO string
+  // 1. If it's an ISO timestamp (e.g. 1899-12-30T00:30:00.000Z or modern ISO string)
   if (str.includes('T')) {
     const d = new Date(str);
     if (!isNaN(d.getTime())) {
       return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
     }
+  }
+
+  // 2. 12-hour format with AM/PM (e.g., "08:30:15 AM", "4:15 PM")
+  if (/am|pm/i.test(str)) {
+    const match = str.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)/i);
+    if (match) {
+      const h = parseInt(match[1], 10);
+      const m = match[2];
+      const s = match[3] || '00';
+      const ampm = match[4].toUpperCase();
+      return `${String(h).padStart(2, '0')}:${m}:${s} ${ampm}`;
+    }
+  }
+
+  // 3. 24-hour time format (e.g., "17:30:00", "08:30")
+  if (/^\d{1,2}:\d{2}(?::\d{2})?$/.test(str)) {
+    const parts = str.split(':');
+    const h = parseInt(parts[0], 10);
+    const m = parts[1];
+    const s = parts[2] || '00';
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    return `${String(h12).padStart(2, '0')}:${m}:${s} ${ampm}`;
   }
 
   return str;

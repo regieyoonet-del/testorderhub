@@ -48,6 +48,7 @@ function doGet(e) {
       jobs: getTableData(sheet, "Jobs"),
       jobColumns: getTableData(sheet, "JobColumns"),
       jobItemColumns: getTableData(sheet, "JobItemColumns"),
+      jobComments: getTableData(sheet, "JobComments"),
       staff: getTableData(sheet, "Staff"),
       staffAccounts: getTableData(sheet, "StaffAccounts"),
       attendance: getTableData(sheet, "Attendance"),
@@ -101,6 +102,10 @@ function doGet(e) {
 
   if (action === "getJobItemColumns") {
     return getJsonOutput(getTableData(sheet, "JobItemColumns"));
+  }
+
+  if (action === "getJobComments") {
+    return getJsonOutput(getTableData(sheet, "JobComments"));
   }
 
   if (action === "getStaff") {
@@ -243,6 +248,18 @@ function doPost(e) {
 
   if (payload.action === "saveJobItemColumns") {
     return getJsonOutput(saveJobItemColumns(sheet, payload.columns));
+  }
+
+  if (payload.action === "saveJobComment") {
+    return getJsonOutput(saveJobComment(sheet, payload.comment));
+  }
+
+  if (payload.action === "saveJobCommentsBatch") {
+    return getJsonOutput(saveJobCommentsBatch(sheet, payload.comments));
+  }
+
+  if (payload.action === "deleteJobComment") {
+    return getJsonOutput(deleteRowById(sheet, "JobComments", "Comment ID", payload.commentId));
   }
 
   if (payload.action === "cleanDuplicateColumns") {
@@ -411,7 +428,7 @@ function getMapValueByHeader(map, header) {
 }
 
 function initSheets(ss) {
-  var sheets = ["Orders", "OrderItems", "Products", "CatalogProducts", "Companies", "Portals", "Admin", "Quotes", "Notifications", "Jobs", "JobColumns", "JobItemColumns", "Staff", "StaffAccounts", "Attendance", "Payroll", "Expenses", "ExpenseCategories", "RecurringExpenses"];
+  var sheets = ["Orders", "OrderItems", "Products", "CatalogProducts", "Companies", "Portals", "Admin", "Quotes", "Notifications", "Jobs", "JobColumns", "JobItemColumns", "JobComments", "Staff", "StaffAccounts", "Attendance", "Payroll", "Expenses", "ExpenseCategories", "RecurringExpenses"];
   
   // Headers definitions
   var headers = {
@@ -424,9 +441,10 @@ function initSheets(ss) {
     "Admin": ["Hub Name", "Short Hub Name", "Company Tagline", "Company Address", "Tax TIN ID", "Order Prefix", "Currency Symbol", "Admin Username", "Admin Passcode", "Color Theme", "Admin Email", "App Logo URL", "App Favicon URL"],
     "Quotes": ["Enquiry ID", "Enquiry Number", "Product ID", "Product Name", "Product Category", "Company ID", "Company Name", "Contact Person", "Contact Email", "Contact Phone", "Quantity", "Preferred Branding Method", "Preferred Color", "Preferred Size", "Notes", "Status", "Created At", "Quoted Unit Price", "Quoted Total Price", "Quoted Tax", "Quoted Shipping", "Quote Notes", "Quoted Valid Until", "Quoted At", "Quoted Line Items", "Requested Product Addition", "Requested Product Addition At", "Requested Product Notes"],
     "Notifications": ["Notification ID", "Recipient Type", "Company Name", "Title", "Message", "Timestamp", "Read", "Order ID", "Order Number", "Type"],
-    "Jobs": ["Job ID", "Company ID", "Company Name", "Order ID", "Order Number", "Source", "Status", "Position", "Values JSON", "Items JSON", "Activities JSON", "Created At", "Updated At", "Created By"],
+    "Jobs": ["Job ID", "Company ID", "Company Name", "Order ID", "Order Number", "Source", "Status", "Position", "Values JSON", "Items JSON", "Activities JSON", "Comments JSON", "Created At", "Updated At", "Created By"],
     "JobColumns": ["Column ID", "Name", "Type", "Position", "Required", "Is System Field", "Is Hidden", "Options", "Created Date"],
     "JobItemColumns": ["Column ID", "Name", "Type", "Position", "Required", "Is System Field", "Is Hidden", "Calculation", "Options"],
+    "JobComments": ["Comment ID", "Job ID", "User ID", "User Name", "Comment", "Created At", "Updated At"],
     "Staff": ["Staff ID", "Full Name", "Position", "Department", "Employment Status", "Date Started", "Salary Type", "Basic Salary", "Allowances", "Other Compensation", "Notes", "Status", "Created At", "Updated At"],
     "StaffAccounts": ["Account ID", "Staff ID", "Name", "Username", "Passcode", "Role", "Status", "Email", "Phone", "Avatar URL", "Last Login", "Created At", "Updated At"],
     "Attendance": ["Attendance ID", "Staff ID", "Staff Name", "Date", "Clock In", "Clock Out", "Total Hours", "Status", "Notes", "Created At", "Updated At"],
@@ -1435,6 +1453,11 @@ function saveJob(ss, job) {
     activitiesJsonStr = typeof job.activities === 'string' ? job.activities : JSON.stringify(job.activities);
   }
 
+  var commentsJsonStr = "";
+  if (job.comments) {
+    commentsJsonStr = typeof job.comments === 'string' ? job.comments : JSON.stringify(job.comments);
+  }
+
   var jobMap = {
     "Job ID": targetId,
     "Company ID": job.companyId || "",
@@ -1447,6 +1470,7 @@ function saveJob(ss, job) {
     "Values JSON": valuesJsonStr,
     "Items JSON": itemsJsonStr,
     "Activities JSON": activitiesJsonStr,
+    "Comments JSON": commentsJsonStr,
     "Created At": job.createdAt || new Date().toISOString(),
     "Updated At": job.updatedAt || new Date().toISOString(),
     "Created By": job.createdBy || "Admin"
@@ -1507,6 +1531,63 @@ function updateJobStatus(ss, jobId, status) {
     }
   }
   return { status: "error", message: "Job not found" };
+}
+
+function saveJobComment(ss, comment) {
+  if (!comment) return { status: "error", message: "Invalid comment" };
+  var sheet = ss.getSheetByName("JobComments");
+  var expectedHeaders = ["Comment ID", "Job ID", "User ID", "User Name", "Comment", "Created At", "Updated At"];
+  var data = ensureHeaders(sheet, expectedHeaders);
+  var headers = data[0];
+  
+  var targetId = String(comment.id || ("cmt-" + new Date().getTime()));
+  var idIndex = 0;
+  for (var c = 0; c < headers.length; c++) {
+    var normH = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (normH === "commentid" || normH === "id") {
+      idIndex = c;
+      break;
+    }
+  }
+  
+  var rowIndex = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idIndex]).trim() === targetId) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+  
+  var commentMap = {
+    "Comment ID": targetId,
+    "Job ID": comment.jobId || "",
+    "User ID": comment.userId || "",
+    "User Name": comment.userName || "Admin",
+    "Comment": comment.comment || "",
+    "Created At": comment.createdAt || new Date().toISOString(),
+    "Updated At": comment.updatedAt || new Date().toISOString()
+  };
+  
+  var rowData = [];
+  for (var c = 0; c < headers.length; c++) {
+    rowData.push(getMapValueByHeader(commentMap, headers[c]));
+  }
+  
+  if (rowIndex !== -1) {
+    sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+  } else {
+    sheet.appendRow(rowData);
+  }
+  
+  return { status: "success", commentId: targetId };
+}
+
+function saveJobCommentsBatch(ss, comments) {
+  if (!Array.isArray(comments)) return { status: "error", message: "Invalid array" };
+  comments.forEach(function(c) {
+    saveJobComment(ss, c);
+  });
+  return { status: "success", count: comments.length };
 }
 
 function saveJobColumns(ss, columns) {

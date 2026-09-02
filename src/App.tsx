@@ -37,6 +37,7 @@ import { INITIAL_STAFF_MEMBERS, INITIAL_STAFF_ACCOUNTS, INITIAL_ATTENDANCE_RECOR
 import {
   formatLocalDate,
   normalizeAttendanceDate,
+  normalizeStaffId,
   calculateHoursWorked,
   isRecordActiveClockIn,
   cleanClockOut,
@@ -1730,28 +1731,59 @@ export default function App() {
         if (fetchedAttendance !== null && Array.isArray(fetchedAttendance)) {
           setAttendance(prevAttendance => {
             const fetchedMap = new Map(fetchedAttendance.map(a => [a.id, a]));
-            const now = Date.now();
 
             const mergedExisting = prevAttendance.map(localAtt => {
+              const normLocalDate = normalizeAttendanceDate(localAtt.date);
+              const cleanLocalStaffId = normalizeStaffId(localAtt.staffId);
+
               const serverAtt = fetchedMap.get(localAtt.id) || fetchedAttendance.find(fa => {
                 const normServerDate = normalizeAttendanceDate(fa.date);
-                const normLocalDate = normalizeAttendanceDate(localAtt.date);
-                return (fa.staffId || '').trim().toLowerCase() === (localAtt.staffId || '').trim().toLowerCase() && normServerDate === normLocalDate;
+                const cleanServerStaffId = normalizeStaffId(fa.staffId);
+                return (fa.id === localAtt.id) || (cleanServerStaffId && cleanLocalStaffId && cleanServerStaffId === cleanLocalStaffId && normServerDate === normLocalDate);
               });
 
               if (!serverAtt) return localAtt;
 
-              // CRITICAL: Protect active ongoing Clock-In sessions from being overwritten by stale server states
+              const cleanLocalIn = cleanClockIn(localAtt.clockIn);
+              const cleanLocalOut = cleanClockOut(localAtt.clockOut);
+              const cleanServerIn = cleanClockIn(serverAtt.clockIn);
+              const cleanServerOut = cleanClockOut(serverAtt.clockOut);
+
               const isLocalActive = isRecordActiveClockIn(localAtt);
+
+              // 1. If local state has an active ongoing Clock-In session
               if (isLocalActive) {
+                // If server has a legitimate subsequent clock-out that occurred on another device/browser
+                const serverHasClockOut = Boolean(cleanServerOut);
+                const serverUpdated = new Date(serverAtt.updatedAt || 0).getTime();
+                const localUpdated = new Date(localAtt.updatedAt || localAtt.createdAt || 0).getTime();
+                if (serverHasClockOut && !isNaN(serverUpdated) && serverUpdated > localUpdated) {
+                  const hours = Number(serverAtt.totalHours) > 0
+                    ? Number(serverAtt.totalHours)
+                    : calculateHoursWorked(cleanServerIn || cleanLocalIn, cleanServerOut, normLocalDate);
+                  return {
+                    ...serverAtt,
+                    id: localAtt.id || serverAtt.id,
+                    staffId: localAtt.staffId || serverAtt.staffId,
+                    staffName: localAtt.staffName || serverAtt.staffName,
+                    date: normLocalDate,
+                    clockIn: cleanServerIn || cleanLocalIn,
+                    clockOut: cleanServerOut,
+                    totalHours: hours,
+                    status: serverAtt.status || 'Present'
+                  };
+                }
+
+                // Preserve local active clock-in session
                 return {
                   ...serverAtt,
                   id: localAtt.id || serverAtt.id,
-                  staffId: localAtt.staffId,
+                  staffId: localAtt.staffId || serverAtt.staffId,
                   staffName: localAtt.staffName || serverAtt.staffName,
-                  date: normalizeAttendanceDate(localAtt.date),
-                  clockIn: cleanClockIn(localAtt.clockIn) || cleanClockIn(serverAtt.clockIn),
+                  date: normLocalDate,
+                  clockIn: cleanLocalIn || cleanServerIn,
                   clockOut: undefined,
+                  totalHours: 0,
                   status: 'Present',
                   notes: localAtt.notes || serverAtt.notes,
                   createdAt: localAtt.createdAt || serverAtt.createdAt,
@@ -1759,6 +1791,57 @@ export default function App() {
                 };
               }
 
+              // 2. If local state has a completed shift (clockIn + clockOut), protect working hours from stale server states
+              if (cleanLocalIn && cleanLocalOut) {
+                const localHours = Number(localAtt.totalHours) > 0
+                  ? Number(localAtt.totalHours)
+                  : calculateHoursWorked(cleanLocalIn, cleanLocalOut, normLocalDate);
+
+                // If server response lacks clock-out or has 0 hours, preserve local completed record
+                if (!cleanServerOut) {
+                  return {
+                    ...localAtt,
+                    id: localAtt.id || serverAtt.id,
+                    date: normLocalDate,
+                    clockIn: cleanLocalIn,
+                    clockOut: cleanLocalOut,
+                    totalHours: localHours,
+                    status: localAtt.status || serverAtt.status || 'Present'
+                  };
+                }
+
+                const localUpdated = new Date(localAtt.updatedAt || localAtt.createdAt || 0).getTime();
+                const serverUpdated = new Date(serverAtt.updatedAt || serverAtt.createdAt || 0).getTime();
+                if (!isNaN(localUpdated) && localUpdated > serverUpdated) {
+                  return {
+                    ...localAtt,
+                    id: localAtt.id || serverAtt.id,
+                    date: normLocalDate,
+                    clockIn: cleanLocalIn,
+                    clockOut: cleanLocalOut,
+                    totalHours: localHours,
+                    status: localAtt.status || 'Present'
+                  };
+                }
+
+                const serverHours = Number(serverAtt.totalHours) > 0
+                  ? Number(serverAtt.totalHours)
+                  : calculateHoursWorked(cleanServerIn || cleanLocalIn, cleanServerOut, normLocalDate);
+
+                return {
+                  ...serverAtt,
+                  id: localAtt.id || serverAtt.id,
+                  staffId: localAtt.staffId || serverAtt.staffId,
+                  staffName: localAtt.staffName || serverAtt.staffName,
+                  date: normLocalDate,
+                  clockIn: cleanServerIn || cleanLocalIn,
+                  clockOut: cleanServerOut,
+                  totalHours: serverHours > 0 ? serverHours : localHours,
+                  status: serverAtt.status || localAtt.status || 'Present'
+                };
+              }
+
+              // 3. Fallback timestamp comparison for other states
               const localUpdated = new Date(localAtt.updatedAt || localAtt.createdAt || 0).getTime();
               const serverUpdated = new Date(serverAtt.updatedAt || serverAtt.createdAt || 0).getTime();
               if (!isNaN(localUpdated) && localUpdated > serverUpdated) {
@@ -1768,17 +1851,40 @@ export default function App() {
             });
 
             const localIds = new Set(prevAttendance.map(a => a.id));
-            const localStaffDates = new Set(prevAttendance.map(a => `${(a.staffId || '').trim().toLowerCase()}_${normalizeAttendanceDate(a.date)}`));
+            const localStaffDates = new Set(prevAttendance.map(a => `${normalizeStaffId(a.staffId)}_${normalizeAttendanceDate(a.date)}`));
             const newServerAttendance = fetchedAttendance.filter(a => {
-              const key = `${(a.staffId || '').trim().toLowerCase()}_${normalizeAttendanceDate(a.date)}`;
+              const key = `${normalizeStaffId(a.staffId)}_${normalizeAttendanceDate(a.date)}`;
               return !localIds.has(a.id) && !localStaffDates.has(key);
+            }).map(a => {
+              const normDate = normalizeAttendanceDate(a.date);
+              const cIn = cleanClockIn(a.clockIn);
+              const cOut = cleanClockOut(a.clockOut);
+              const hours = Number(a.totalHours) > 0 ? Number(a.totalHours) : (cIn && cOut ? calculateHoursWorked(cIn, cOut, normDate) : 0);
+              return {
+                ...a,
+                date: normDate,
+                clockIn: cIn,
+                clockOut: cOut,
+                totalHours: hours
+              };
             });
 
             const merged = [...mergedExisting, ...newServerAttendance];
             const seen = new Set<string>();
             const seenStaffDates = new Set<string>();
-            return merged.filter(a => {
-              const staffDateKey = `${(a.staffId || '').trim().toLowerCase()}_${normalizeAttendanceDate(a.date)}`;
+
+            // Sort so complete records (active or with hours) are preferred during deduplication
+            const sortedMerged = [...merged].sort((a, b) => {
+              const aScore = (cleanClockIn(a.clockIn) && cleanClockOut(a.clockOut)) ? 2 : (isRecordActiveClockIn(a) ? 1 : 0);
+              const bScore = (cleanClockIn(b.clockIn) && cleanClockOut(b.clockOut)) ? 2 : (isRecordActiveClockIn(b) ? 1 : 0);
+              if (bScore !== aScore) return bScore - aScore;
+              const bTime = new Date(b.updatedAt || b.createdAt || 0).getTime() || 0;
+              const aTime = new Date(a.updatedAt || a.createdAt || 0).getTime() || 0;
+              return bTime - aTime;
+            });
+
+            return sortedMerged.filter(a => {
+              const staffDateKey = `${normalizeStaffId(a.staffId)}_${normalizeAttendanceDate(a.date)}`;
               if (seen.has(a.id) || seenStaffDates.has(staffDateKey)) return false;
               seen.add(a.id);
               seenStaffDates.add(staffDateKey);
@@ -2811,7 +2917,7 @@ export default function App() {
   const handleClockIn = async (staffId: string, staffName: string, notes?: string) => {
     const now = new Date();
     const dateStr = formatLocalDate(now);
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
 
     const newAttendance: AttendanceRecord = {
       id: generateAttendanceId(staffId, dateStr),
@@ -2819,6 +2925,7 @@ export default function App() {
       staffName,
       date: dateStr,
       clockIn: timeStr,
+      clockOut: undefined,
       totalHours: 0,
       status: 'Present',
       notes,
@@ -2827,7 +2934,8 @@ export default function App() {
     };
 
     setAttendance(prev => {
-      const existingIdx = prev.findIndex(a => a.id === newAttendance.id || ((a.staffId || '').trim().toLowerCase() === (staffId || '').trim().toLowerCase() && normalizeAttendanceDate(a.date) === dateStr));
+      const cleanSId = normalizeStaffId(staffId);
+      const existingIdx = prev.findIndex(a => a.id === newAttendance.id || (normalizeStaffId(a.staffId) === cleanSId && normalizeAttendanceDate(a.date) === dateStr));
       if (existingIdx > -1) {
         const updated = [...prev];
         updated[existingIdx] = { ...updated[existingIdx], ...newAttendance };
@@ -2843,19 +2951,22 @@ export default function App() {
 
   const handleClockOut = async (attendanceId: string, notes?: string) => {
     const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
 
     let updatedRecord: AttendanceRecord | null = null;
 
     setAttendance(prev => {
       return prev.map(rec => {
-        if (rec.id === attendanceId) {
+        const isTarget = rec.id === attendanceId ||
+          (normalizeStaffId(rec.staffId) === normalizeStaffId(attendanceId) && isRecordActiveClockIn(rec));
+        if (isTarget) {
           const hoursWorked = calculateHoursWorked(rec.clockIn, timeStr, rec.date);
 
           updatedRecord = {
             ...rec,
             clockOut: timeStr,
             totalHours: hoursWorked,
+            status: 'Present',
             notes: notes ? (rec.notes ? `${rec.notes} | ${notes}` : notes) : rec.notes,
             updatedAt: now.toISOString()
           };
@@ -3683,11 +3794,13 @@ export default function App() {
                 isSyncingSheets={isSyncingSheets}
                 activeTab={activeTab}
                 onTabChange={(t) => setActiveTab(t)}
+                appsScriptUrl={appsScriptConfig.isConnected ? appsScriptConfig.webAppUrl : undefined}
               />
             )}
 
             {loggedInUser.role !== 'staff' && (activeTab === 'admin' || activeTab === 'sync') && loggedInUser?.role === 'admin' && (
               <AdminDashboard
+                currentUser={loggedInUser}
                 products={products}
                 companies={companies}
                 orders={orders}

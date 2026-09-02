@@ -13,7 +13,9 @@ import {
   CompanyProfile,
   Order,
   JobActivity,
-  JobFieldType
+  JobFieldType,
+  AuthUser,
+  JobComment
 } from '../types';
 import {
   DEFAULT_JOB_COLUMNS,
@@ -52,9 +54,12 @@ import {
   Check,
   Eye,
   EyeOff,
-  Move
+  Move,
+  MessageSquare
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import JobCommentsSection from './JobCommentsSection';
+import JobDetailCollaborationModal from './JobDetailCollaborationModal';
 
 interface JobManagementBoardProps {
   jobs: Job[];
@@ -71,6 +76,8 @@ interface JobManagementBoardProps {
   onSelectOrder?: (order: Order) => void;
   currencySymbol?: string;
   highlightJobId?: string;
+  currentUser?: AuthUser;
+  appsScriptUrl?: string;
 }
 
 const STATUS_CONFIG: Record<JobStatus, { label: string; color: string; bg: string; border: string; badgeBg: string; textColor: string }> = {
@@ -494,7 +501,9 @@ export default function JobManagementBoard({
   onSaveJobItemColumns,
   onSelectOrder,
   currencySymbol = 'Php',
-  highlightJobId
+  highlightJobId,
+  currentUser,
+  appsScriptUrl
 }: JobManagementBoardProps) {
   // ----------------------------------------------------
   // Local UI State
@@ -512,6 +521,7 @@ export default function JobManagementBoard({
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAddJobModalOpen, setIsAddJobModalOpen] = useState(false);
+  const [selectedJobForModal, setSelectedJobForModal] = useState<Job | null>(null);
 
   // Group collapsed states (Default: Pending, Approved, In Production expanded; Shipped, Completed, Canceled collapsed)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<JobStatus, boolean>>({
@@ -530,8 +540,8 @@ export default function JobManagementBoard({
     return s;
   });
 
-  // Active tab inside expanded job ('items' | 'details' | 'activity')
-  const [jobDetailTab, setJobDetailTab] = useState<Record<string, 'items' | 'details' | 'activity'>>({});
+  // Active tab inside expanded job ('items' | 'details' | 'comments' | 'activity')
+  const [jobDetailTab, setJobDetailTab] = useState<Record<string, 'items' | 'details' | 'comments' | 'activity'>>({});
 
   // Drag and drop state for Jobs
   const [draggedJobId, setDraggedJobId] = useState<string | null>(null);
@@ -1605,6 +1615,24 @@ export default function JobManagementBoard({
                                           Manual
                                         </span>
                                       )}
+                                      {/* Comments Badge Button */}
+                                      <button
+                                        type="button"
+                                        onClick={e => {
+                                          e.stopPropagation();
+                                          setSelectedJobForModal(job);
+                                        }}
+                                        className={`inline-flex items-center gap-1 font-mono text-[9px] font-bold px-1.5 py-0.2 rounded border transition-all cursor-pointer ${
+                                          (job.comments?.length || 0) > 0
+                                            ? 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100'
+                                            : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100 hover:text-black'
+                                        }`}
+                                        title="View / add team comments for this job"
+                                        id={`btn-comments-badge-${job.id}`}
+                                      >
+                                        <MessageSquare className="w-2.5 h-2.5" />
+                                        <span>{job.comments?.length || 0}</span>
+                                      </button>
                                     </div>
                                     <InlineCellInput
                                       value={job.values['col-job-name']}
@@ -1828,18 +1856,32 @@ export default function JobManagementBoard({
 
                                 {/* Actions */}
                                 <td className="py-3 pr-4 pl-2 text-center">
-                                  <button
-                                    type="button"
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      setJobToDelete(job);
-                                    }}
-                                    className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
-                                    title="Delete Job"
-                                    id={`btn-delete-job-${job.id}`}
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                  <div className="flex items-center justify-center space-x-1">
+                                    <button
+                                      type="button"
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        setSelectedJobForModal(job);
+                                      }}
+                                      className="p-1.5 text-blue-600 hover:text-blue-800 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer"
+                                      title="Open Team Collaboration & Job Details"
+                                      id={`btn-open-modal-${job.id}`}
+                                    >
+                                      <MessageSquare className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        setJobToDelete(job);
+                                      }}
+                                      className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                                      title="Delete Job"
+                                      id={`btn-delete-job-${job.id}`}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
 
@@ -1861,6 +1903,18 @@ export default function JobManagementBoard({
                                             }`}
                                           >
                                             Production Items ({job.items?.length || 0})
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setJobDetailTab(prev => ({ ...prev, [job.id]: 'comments' }))}
+                                            className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center space-x-1.5 ${
+                                              currentDetailTab === 'comments'
+                                                ? 'bg-black text-white'
+                                                : 'text-gray-600 hover:bg-gray-100'
+                                            }`}
+                                          >
+                                            <MessageSquare className="w-3.5 h-3.5" />
+                                            <span>Comments ({job.comments?.length || 0})</span>
                                           </button>
                                           <button
                                             type="button"
@@ -2115,6 +2169,16 @@ export default function JobManagementBoard({
                                             </div>
                                           </div>
                                         </div>
+                                      )}
+
+                                      {/* TAB: COMMENTS & TEAM COLLABORATION */}
+                                      {currentDetailTab === 'comments' && (
+                                        <JobCommentsSection
+                                          job={job}
+                                          currentUser={currentUser}
+                                          appsScriptUrl={appsScriptUrl}
+                                          onSaveJob={onSaveJob}
+                                        />
                                       )}
 
                                       {/* TAB 2: JOB DETAILS & SPECS */}
@@ -2681,6 +2745,26 @@ export default function JobManagementBoard({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Full Job Details & Team Collaboration Modal */}
+      {selectedJobForModal && (
+        <JobDetailCollaborationModal
+          job={selectedJobForModal}
+          isOpen={Boolean(selectedJobForModal)}
+          onClose={() => setSelectedJobForModal(null)}
+          companies={companies}
+          orders={orders}
+          onSaveJob={(updatedJob, immediate) => {
+            setSelectedJobForModal(updatedJob);
+            onSaveJob(updatedJob, immediate);
+          }}
+          onUpdateJobStatus={onUpdateJobStatus}
+          onSelectOrder={onSelectOrder}
+          currencySymbol={currencySymbol}
+          currentUser={currentUser}
+          appsScriptUrl={appsScriptUrl}
+        />
+      )}
     </div>
   );
 }

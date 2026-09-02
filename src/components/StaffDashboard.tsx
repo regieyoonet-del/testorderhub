@@ -24,6 +24,7 @@ import { generateAttendanceId } from '../data/initialFinance';
 import {
   formatLocalDate,
   normalizeAttendanceDate,
+  normalizeStaffId,
   calculateElapsedDuration,
   isRecordActiveClockIn,
   cleanClockOut,
@@ -107,6 +108,7 @@ interface StaffDashboardProps {
   isSyncingSheets?: boolean;
   activeTab?: string;
   onTabChange?: (tab: string) => void;
+  appsScriptUrl?: string;
 }
 
 export default function StaffDashboard({
@@ -135,7 +137,8 @@ export default function StaffDashboard({
   onSyncSheets,
   isSyncingSheets = false,
   activeTab: controlledActiveTab,
-  onTabChange
+  onTabChange,
+  appsScriptUrl
 }: StaffDashboardProps) {
   // Navigation tabs for Staff Portal (Dashboard, Job Management, Time & Attendance, Payslips, Work History, Account Settings)
   const [internalTab, setInternalTab] = useState<StaffPortalTab>('dashboard');
@@ -166,10 +169,10 @@ export default function StaffDashboard({
 
   // Filter attendance records strictly for this staff member
   const myAttendance = useMemo(() => {
-    const sId = (currentUser.staffId || staffMember?.id || '').trim().toLowerCase();
+    const sId = normalizeStaffId(currentUser.staffId || staffMember?.id || '');
     if (!sId) return [];
     return attendanceRecords
-      .filter(r => (r.staffId || '').trim().toLowerCase() === sId)
+      .filter(r => normalizeStaffId(r.staffId) === sId)
       .sort((a, b) => {
         const dateA = normalizeAttendanceDate(a.date);
         const dateB = normalizeAttendanceDate(b.date);
@@ -868,6 +871,8 @@ export default function StaffDashboard({
                 onUpdateJobStatus={onUpdateJobStatus || (() => {})}
                 onDeleteJob={onDeleteJob || (() => {})}
                 currencySymbol={currencySymbol}
+                currentUser={currentUser}
+                appsScriptUrl={appsScriptUrl}
               />
             </div>
           </div>

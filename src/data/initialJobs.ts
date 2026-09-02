@@ -361,6 +361,7 @@ export function createJobFromOrder(
         timestamp: now
       }
     ],
+    comments: [],
     createdAt: now,
     updatedAt: now,
     createdBy: 'Admin'
