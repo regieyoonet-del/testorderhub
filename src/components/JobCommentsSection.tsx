@@ -61,6 +61,19 @@ function formatTimeAgo(dateStr: string): string {
   }
 }
 
+/**
+ * UI-only helper to display strictly the person's name in the comment header.
+ * Strips out any role, position, or title like (ADMIN), (STAFF), etc.
+ */
+function getCleanCommenterName(userName?: string): string {
+  if (!userName) return 'Team Member';
+  // Strip out parenthesized positions/roles such as (ADMIN), (STAFF), (admin), (staff), etc.
+  let cleaned = userName.replace(/\s*\([^)]*\)/g, '').trim();
+  // Strip out trailing position/role indicators such as " - Admin", " - Staff", "/ Admin", etc.
+  cleaned = cleaned.replace(/\s*[-–—/|:]\s*(admin|staff|manager|supervisor|operator|client|employee).*$/i, '').trim();
+  return cleaned || userName.trim();
+}
+
 export default function JobCommentsSection({
   job,
   currentUser,
@@ -260,16 +273,9 @@ export default function JobCommentsSection({
 
         {/* Action bar below input */}
         <div className="flex items-center justify-between pt-2 border-t border-gray-200/70">
-          <div className="flex items-center space-x-2 text-[10px] font-mono text-gray-400">
+          <div className="flex items-center space-x-1.5 text-[10px] font-mono text-gray-400">
             <span className="hidden sm:inline">Posting as:</span>
-            <span className="font-bold text-gray-700">{currentAuthorName}</span>
-            <span
-              className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
-                currentRole === 'admin' ? 'bg-black text-white' : 'bg-emerald-100 text-emerald-800'
-              }`}
-            >
-              {currentRole}
-            </span>
+            <span className="font-bold text-gray-800">{currentAuthorName}</span>
           </div>
 
           <div className="flex items-center space-x-2">
@@ -311,11 +317,17 @@ export default function JobCommentsSection({
         ) : (
           <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
             {comments.map((cmt, idx) => {
-              const isStaff = cmt.userName.toLowerCase().includes('staff');
+              const displayName = getCleanCommenterName(cmt.userName);
               const isCurrentUser =
                 cmt.userId === currentUserId ||
+                displayName.toLowerCase() === currentAuthorName.toLowerCase() ||
                 cmt.userName.toLowerCase().startsWith(currentAuthorName.toLowerCase());
               const canDelete = isCurrentUser || currentRole === 'admin';
+
+              const isStaff =
+                cmt.userName.toLowerCase().includes('staff') ||
+                cmt.userId?.toLowerCase().includes('staff') ||
+                (!cmt.userName.toLowerCase().includes('admin') && !cmt.userId?.toLowerCase().includes('admin'));
 
               return (
                 <div
@@ -323,7 +335,7 @@ export default function JobCommentsSection({
                   className="group bg-white hover:bg-gray-50/70 border border-gray-200 rounded-2xl p-3.5 transition-all shadow-2xs space-y-2"
                   id={`comment-card-${cmt.id}`}
                 >
-                  {/* Top row: Avatar + Name + Role + Time + Actions */}
+                  {/* Top row: Avatar + Name (only person's name) + Time + Actions */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center space-x-2.5 min-w-0">
                       <div
@@ -331,23 +343,12 @@ export default function JobCommentsSection({
                           isStaff ? 'bg-emerald-700' : 'bg-neutral-900'
                         }`}
                       >
-                        {cmt.userName.charAt(0).toUpperCase()}
+                        {(displayName || cmt.userName).charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-mono text-xs font-bold text-gray-900 truncate">
-                            {cmt.userName}
-                          </span>
-                          <span
-                            className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded uppercase ${
-                              isStaff
-                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                                : 'bg-neutral-100 text-neutral-800 border border-neutral-200'
-                            }`}
-                          >
-                            {isStaff ? 'Staff' : 'Admin'}
-                          </span>
-                        </div>
+                        <span className="font-mono text-xs font-bold text-gray-900 truncate block">
+                          {displayName}
+                        </span>
                       </div>
                     </div>
 

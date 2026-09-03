@@ -808,8 +808,20 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>(() => {
     try {
       const cached = sessionStorage.getItem('rp_logged_in_user');
+      const cachedTab = sessionStorage.getItem('rp_active_tab');
       if (cached) {
         const parsed = JSON.parse(cached);
+        if (cachedTab) {
+          if (parsed?.role === 'admin' && (cachedTab === 'admin' || cachedTab === 'sync')) return cachedTab;
+          if (parsed?.role === 'staff') {
+            const validStaffTabs = ['dashboard', 'jobs', 'catalog', 'attendance', 'payslips', 'work-history', 'profile'];
+            if (validStaffTabs.includes(cachedTab)) return cachedTab;
+          }
+          if (parsed?.role === 'client') {
+            const validClientTabs = ['catalog', 'browse', 'portals', 'history', 'quote-history', 'settings'];
+            if (validClientTabs.includes(cachedTab)) return cachedTab;
+          }
+        }
         if (parsed?.role === 'admin') return 'admin';
         if (parsed?.role === 'staff') return 'dashboard';
         if (parsed?.role === 'client') return 'catalog';
@@ -828,6 +840,12 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('rp_master_products', JSON.stringify(products));
   }, [products]);
+
+  useEffect(() => {
+    if (activeTab) {
+      sessionStorage.setItem('rp_active_tab', activeTab);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     try {
@@ -1937,12 +1955,15 @@ export default function App() {
 
   // Ensure default active tab is appropriate for logged-in user
   useEffect(() => {
-    if (loggedInUser?.role === 'admin') {
-      setActiveTab('admin');
-    } else if (loggedInUser?.role === 'staff') {
-      setActiveTab('dashboard');
-    } else if (loggedInUser?.role === 'client') {
-      setActiveTab('catalog');
+    if (!loggedInUser) return;
+    if (loggedInUser.role === 'admin') {
+      if (activeTab !== 'admin' && activeTab !== 'sync') setActiveTab('admin');
+    } else if (loggedInUser.role === 'staff') {
+      const validStaffTabs = ['dashboard', 'jobs', 'catalog', 'attendance', 'payslips', 'work-history', 'profile'];
+      if (!validStaffTabs.includes(activeTab)) setActiveTab('dashboard');
+    } else if (loggedInUser.role === 'client') {
+      const validClientTabs = ['catalog', 'browse', 'portals', 'history', 'quote-history', 'settings'];
+      if (!validClientTabs.includes(activeTab)) setActiveTab('catalog');
     }
   }, [loggedInUser?.role]);
 
@@ -2996,6 +3017,24 @@ export default function App() {
     }
   };
 
+  const handleSaveAttendanceBatch = (records: AttendanceRecord[]) => {
+    setAttendance(prev => {
+      const copy = [...prev];
+      records.forEach(record => {
+        const idx = copy.findIndex(a => a.id === record.id);
+        if (idx > -1) {
+          copy[idx] = record;
+        } else {
+          copy.unshift(record);
+        }
+      });
+      return copy;
+    });
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      records.forEach(rec => sheetsService.saveAttendance(appsScriptConfig.webAppUrl, rec));
+    }
+  };
+
   const handleSaveStaffAccount = (account: StaffAccount) => {
     setStaffAccounts(prev => {
       const idx = prev.findIndex(a => a.id === account.id || a.staffId === account.staffId);
@@ -3021,6 +3060,7 @@ export default function App() {
   const handleLogout = () => {
     setLoggedInUser(null);
     sessionStorage.removeItem('rp_logged_in_user');
+    sessionStorage.removeItem('rp_active_tab');
     localStorage.removeItem('rp_logged_in_user');
   };
 
@@ -3741,6 +3781,7 @@ export default function App() {
             loggedInUser.role === 'staff'
               ? {
                   jobs: jobs.length,
+                  catalog: catalogProducts.length,
                   payslips: payroll.filter(p => p.staffId === loggedInUser.staffId).length
                 }
               : {
@@ -3778,6 +3819,15 @@ export default function App() {
                 jobItemColumns={jobItemColumns}
                 companies={companies}
                 orders={orders}
+                catalogProducts={catalogProducts}
+                quoteEnquiries={quoteEnquiries}
+                onAddCatalogProduct={handleAddCatalogProduct}
+                onUpdateCatalogProduct={handleUpdateCatalogProduct}
+                onDeleteCatalogProduct={handleDeleteCatalogProduct}
+                onUpdateQuoteEnquiryStatus={handleUpdateQuoteEnquiryStatus}
+                onDeleteQuoteEnquiry={handleDeleteQuoteEnquiry}
+                onSaveQuoteEnquiry={handleSaveQuoteEnquiry}
+                onAddProductToCompanyCatalog={handleAddProductToCompanyCatalog}
                 onClockIn={handleClockIn}
                 onClockOut={handleClockOut}
                 onUpdateAttendance={handleSaveAttendance}
@@ -3832,6 +3882,8 @@ export default function App() {
                 onSavePayroll={handleSavePayroll}
                 onSavePayrollBatch={handleSavePayrollBatch}
                 onDeletePayroll={handleDeletePayroll}
+                onSaveAttendance={handleSaveAttendance}
+                onSaveAttendanceBatch={handleSaveAttendanceBatch}
                 onSaveExpense={handleSaveExpense}
                 onSaveExpensesBatch={handleSaveExpensesBatch}
                 onDeleteExpense={handleDeleteExpense}

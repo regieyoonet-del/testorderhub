@@ -23,6 +23,7 @@ import {
   ExpenseRecord,
   RecurringExpense,
   ExpenseCategory,
+  AuthUser,
   getDisplayPurchaserName
 } from '../types';
 import AppsScriptInstructions from './AppsScriptInstructions';
@@ -129,6 +130,8 @@ interface AdminDashboardProps {
   payroll?: PayrollRecord[];
   attendance?: AttendanceRecord[];
   staffAccounts?: StaffAccount[];
+  onSaveAttendance?: (record: AttendanceRecord) => void;
+  onSaveAttendanceBatch?: (records: AttendanceRecord[]) => void;
   expenses?: ExpenseRecord[];
   recurringExpenses?: RecurringExpense[];
   expenseCategories?: ExpenseCategory[];
@@ -199,6 +202,8 @@ export default function AdminDashboard({
   payroll = [],
   attendance = [],
   staffAccounts = [],
+  onSaveAttendance,
+  onSaveAttendanceBatch,
   expenses = [],
   recurringExpenses = [],
   expenseCategories = [],
@@ -1672,6 +1677,8 @@ export default function AdminDashboard({
           onSavePayroll={onSavePayroll}
           onSavePayrollBatch={onSavePayrollBatch}
           onDeletePayroll={onDeletePayroll}
+          onSaveAttendance={onSaveAttendance}
+          onSaveAttendanceBatch={onSaveAttendanceBatch}
           systemSettings={systemSettings}
           currencySymbol={currencySymbol}
         />

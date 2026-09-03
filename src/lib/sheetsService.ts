@@ -1835,6 +1835,27 @@ export const sheetsService = {
           otherCompensation: Number(getProp(item, ['OtherCompensation', 'otherCompensation', 'Other Compensation', 'Bonuses']) || 0),
           notes: String(getProp(item, ['Notes', 'notes', 'Remarks']) || ''),
           status: (getProp(item, ['Status', 'status']) || 'Active') as any,
+          shiftStartTime: getProp(item, ['ShiftStartTime', 'shiftStartTime', 'Shift Start Time', 'ShiftStart']) ? String(getProp(item, ['ShiftStartTime', 'shiftStartTime', 'Shift Start Time', 'ShiftStart'])) : '08:00',
+          shiftEndTime: getProp(item, ['ShiftEndTime', 'shiftEndTime', 'Shift End Time', 'ShiftEnd']) ? String(getProp(item, ['ShiftEndTime', 'shiftEndTime', 'Shift End Time', 'ShiftEnd'])) : '17:00',
+          workingDays: (() => {
+            const rawDays = getProp(item, ['WorkingDays', 'workingDays', 'Working Days', 'Schedule']);
+            if (Array.isArray(rawDays)) return rawDays;
+            if (typeof rawDays === 'string') {
+              try {
+                const parsed = JSON.parse(rawDays);
+                if (Array.isArray(parsed)) return parsed;
+              } catch {
+                return rawDays.split(',').map((d: string) => d.trim()).filter(Boolean);
+              }
+            }
+            return ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+          })(),
+          gracePeriodMinutes: getProp(item, ['GracePeriodMinutes', 'gracePeriodMinutes', 'Grace Period Minutes', 'GracePeriod']) !== undefined
+            ? Number(getProp(item, ['GracePeriodMinutes', 'gracePeriodMinutes', 'Grace Period Minutes', 'GracePeriod']))
+            : 15,
+          breakMinutes: getProp(item, ['BreakMinutes', 'breakMinutes', 'Break Minutes', 'BreakDuration']) !== undefined
+            ? Number(getProp(item, ['BreakMinutes', 'breakMinutes', 'Break Minutes', 'BreakDuration']))
+            : 60,
           createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
           updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
         }));
@@ -2051,6 +2072,15 @@ export const sheetsService = {
             totalHours,
             status: (getProp(item, ['Status', 'status']) || 'Present') as any,
             notes: getProp(item, ['Notes', 'notes', 'Remarks']) ? String(getProp(item, ['Notes', 'notes', 'Remarks'])) : undefined,
+            regularPayableStart: getProp(item, ['RegularPayableStart', 'regularPayableStart', 'Regular Payable Start']) ? String(getProp(item, ['RegularPayableStart', 'regularPayableStart', 'Regular Payable Start'])) : undefined,
+            regularPayableEnd: getProp(item, ['RegularPayableEnd', 'regularPayableEnd', 'Regular Payable End']) ? String(getProp(item, ['RegularPayableEnd', 'regularPayableEnd', 'Regular Payable End'])) : undefined,
+            regularHours: getProp(item, ['RegularHours', 'regularHours', 'Regular Hours']) !== undefined ? Number(getProp(item, ['RegularHours', 'regularHours', 'Regular Hours'])) : undefined,
+            lateMinutes: getProp(item, ['LateMinutes', 'lateMinutes', 'Late Minutes']) !== undefined ? Number(getProp(item, ['LateMinutes', 'lateMinutes', 'Late Minutes'])) : undefined,
+            overtimeHours: getProp(item, ['OvertimeHours', 'overtimeHours', 'Overtime Hours', 'OT Hours']) !== undefined ? Number(getProp(item, ['OvertimeHours', 'overtimeHours', 'Overtime Hours', 'OT Hours'])) : undefined,
+            overtimeStatus: (getProp(item, ['OvertimeStatus', 'overtimeStatus', 'Overtime Status']) || undefined) as any,
+            overtimeApprovedHours: getProp(item, ['OvertimeApprovedHours', 'overtimeApprovedHours', 'Overtime Approved Hours']) !== undefined ? Number(getProp(item, ['OvertimeApprovedHours', 'overtimeApprovedHours', 'Overtime Approved Hours'])) : undefined,
+            overtimeReviewedBy: getProp(item, ['OvertimeReviewedBy', 'overtimeReviewedBy', 'Overtime Reviewed By']) ? String(getProp(item, ['OvertimeReviewedBy', 'overtimeReviewedBy', 'Overtime Reviewed By'])) : undefined,
+            overtimeNotes: getProp(item, ['OvertimeNotes', 'overtimeNotes', 'Overtime Notes']) ? String(getProp(item, ['OvertimeNotes', 'overtimeNotes', 'Overtime Notes'])) : undefined,
             createdAt: rawCreated ? String(rawCreated) : undefined,
             updatedAt: rawUpdated ? String(rawUpdated) : (rawCreated ? String(rawCreated) : undefined)
           };
@@ -2143,6 +2173,7 @@ export const sheetsService = {
       if (Array.isArray(rawData)) {
         return rawData.map(item => {
           const itemizedDeductions = parseObjectProp(getProp(item, ['ItemizedDeductionsJSON', 'itemizedDeductions', 'Itemized Deductions JSON', 'Itemized Deductions']));
+          const manualAdjustments = parseObjectProp(getProp(item, ['ManualAdjustmentsJSON', 'manualAdjustments', 'Manual Adjustments JSON', 'Manual Adjustments']));
           return {
             id: String(getProp(item, ['PayrollID', 'payrollId', 'id', 'Payroll ID']) || `PR-${Date.now()}`),
             staffId: String(getProp(item, ['StaffID', 'staffId', 'Staff ID']) || ''),
@@ -2154,8 +2185,20 @@ export const sheetsService = {
             payDate: String(getProp(item, ['PayDate', 'payDate', 'Pay Date', 'Date']) || ''),
             salaryType: getProp(item, ['SalaryType', 'salaryType', 'Salary Type', 'PayType']) ? (getProp(item, ['SalaryType', 'salaryType', 'Salary Type', 'PayType']) as any) : undefined,
             rateSnapshot: getProp(item, ['RateSnapshot', 'rateSnapshot', 'Rate Snapshot', 'Rate']) !== undefined ? Number(getProp(item, ['RateSnapshot', 'rateSnapshot', 'Rate Snapshot', 'Rate'])) : undefined,
+            hourlyRateSnapshot: getProp(item, ['HourlyRateSnapshot', 'hourlyRateSnapshot', 'Hourly Rate']) !== undefined ? Number(getProp(item, ['HourlyRateSnapshot', 'hourlyRateSnapshot', 'Hourly Rate'])) : undefined,
             daysWorked: getProp(item, ['DaysWorked', 'daysWorked', 'Days Worked', 'Days']) !== undefined ? Number(getProp(item, ['DaysWorked', 'daysWorked', 'Days Worked', 'Days'])) : undefined,
             hoursWorked: getProp(item, ['HoursWorked', 'hoursWorked', 'Hours Worked', 'Hours']) !== undefined ? Number(getProp(item, ['HoursWorked', 'hoursWorked', 'Hours Worked', 'Hours'])) : undefined,
+            scheduledHours: getProp(item, ['ScheduledHours', 'scheduledHours', 'Scheduled Hours']) !== undefined ? Number(getProp(item, ['ScheduledHours', 'scheduledHours', 'Scheduled Hours'])) : undefined,
+            actualHours: getProp(item, ['ActualHours', 'actualHours', 'Actual Hours']) !== undefined ? Number(getProp(item, ['ActualHours', 'actualHours', 'Actual Hours'])) : undefined,
+            regularHours: getProp(item, ['RegularHours', 'regularHours', 'Regular Hours', 'RegularPayableHours']) !== undefined ? Number(getProp(item, ['RegularHours', 'regularHours', 'Regular Hours', 'RegularPayableHours'])) : undefined,
+            lateMinutes: getProp(item, ['LateMinutes', 'lateMinutes', 'Late Minutes']) !== undefined ? Number(getProp(item, ['LateMinutes', 'lateMinutes', 'Late Minutes'])) : undefined,
+            undertimeMinutes: getProp(item, ['UndertimeMinutes', 'undertimeMinutes', 'Undertime Minutes']) !== undefined ? Number(getProp(item, ['UndertimeMinutes', 'undertimeMinutes', 'Undertime Minutes'])) : undefined,
+            lateDeduction: getProp(item, ['LateDeduction', 'lateDeduction', 'Late Deduction']) !== undefined ? Number(getProp(item, ['LateDeduction', 'lateDeduction', 'Late Deduction'])) : undefined,
+            undertimeDeduction: getProp(item, ['UndertimeDeduction', 'undertimeDeduction', 'Undertime Deduction']) !== undefined ? Number(getProp(item, ['UndertimeDeduction', 'undertimeDeduction', 'Undertime Deduction'])) : undefined,
+            candidateOvertimeHours: getProp(item, ['CandidateOvertimeHours', 'candidateOvertimeHours', 'Candidate OT']) !== undefined ? Number(getProp(item, ['CandidateOvertimeHours', 'candidateOvertimeHours', 'Candidate OT'])) : undefined,
+            approvedOvertimeHours: getProp(item, ['ApprovedOvertimeHours', 'approvedOvertimeHours', 'Approved OT', 'Approved Overtime']) !== undefined ? Number(getProp(item, ['ApprovedOvertimeHours', 'approvedOvertimeHours', 'Approved OT', 'Approved Overtime'])) : undefined,
+            overtimePay: getProp(item, ['OvertimePay', 'overtimePay', 'Overtime Pay', 'OT Pay']) !== undefined ? Number(getProp(item, ['OvertimePay', 'overtimePay', 'Overtime Pay', 'OT Pay'])) : undefined,
+            manualAdjustments: Array.isArray(manualAdjustments) ? manualAdjustments : undefined,
             basicPay: Number(getProp(item, ['BasicPay', 'basicPay', 'Basic Pay', 'BasicSalary']) || 0),
             allowances: Number(getProp(item, ['Allowances', 'allowances', 'Allowance']) || 0),
             otherEarnings: Number(getProp(item, ['OtherEarnings', 'otherEarnings', 'Other Earnings', 'Bonuses', 'Overtime']) || 0),
@@ -2166,6 +2209,8 @@ export const sheetsService = {
             netPay: Number(getProp(item, ['NetPay', 'netPay', 'Net Pay']) || 0),
             status: (getProp(item, ['Status', 'status']) || 'Draft') as any,
             notes: String(getProp(item, ['Notes', 'notes', 'Remarks']) || ''),
+            finalizedAt: getProp(item, ['FinalizedAt', 'finalizedAt', 'Finalized At']) ? String(getProp(item, ['FinalizedAt', 'finalizedAt', 'Finalized At'])) : undefined,
+            finalizedBy: getProp(item, ['FinalizedBy', 'finalizedBy', 'Finalized By']) ? String(getProp(item, ['FinalizedBy', 'finalizedBy', 'Finalized By'])) : undefined,
             createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
             updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
           };
@@ -2864,6 +2909,27 @@ export const sheetsService = {
           otherCompensation: Number(getProp(item, ['OtherCompensation', 'otherCompensation', 'Other Compensation', 'Bonuses']) || 0),
           notes: String(getProp(item, ['Notes', 'notes', 'Remarks']) || ''),
           status: (getProp(item, ['Status', 'status']) || 'Active') as any,
+          shiftStartTime: getProp(item, ['ShiftStartTime', 'shiftStartTime', 'Shift Start Time', 'ShiftStart']) ? String(getProp(item, ['ShiftStartTime', 'shiftStartTime', 'Shift Start Time', 'ShiftStart'])) : '08:00',
+          shiftEndTime: getProp(item, ['ShiftEndTime', 'shiftEndTime', 'Shift End Time', 'ShiftEnd']) ? String(getProp(item, ['ShiftEndTime', 'shiftEndTime', 'Shift End Time', 'ShiftEnd'])) : '17:00',
+          workingDays: (() => {
+            const rawDays = getProp(item, ['WorkingDays', 'workingDays', 'Working Days', 'Schedule']);
+            if (Array.isArray(rawDays)) return rawDays;
+            if (typeof rawDays === 'string') {
+              try {
+                const parsed = JSON.parse(rawDays);
+                if (Array.isArray(parsed)) return parsed;
+              } catch {
+                return rawDays.split(',').map((d: string) => d.trim()).filter(Boolean);
+              }
+            }
+            return ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+          })(),
+          gracePeriodMinutes: getProp(item, ['GracePeriodMinutes', 'gracePeriodMinutes', 'Grace Period Minutes', 'GracePeriod']) !== undefined
+            ? Number(getProp(item, ['GracePeriodMinutes', 'gracePeriodMinutes', 'Grace Period Minutes', 'GracePeriod']))
+            : 15,
+          breakMinutes: getProp(item, ['BreakMinutes', 'breakMinutes', 'Break Minutes', 'BreakDuration']) !== undefined
+            ? Number(getProp(item, ['BreakMinutes', 'breakMinutes', 'Break Minutes', 'BreakDuration']))
+            : 60,
           createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
           updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
         }));
@@ -2916,6 +2982,15 @@ export const sheetsService = {
             totalHours,
             status: (getProp(item, ['Status', 'status']) || 'Present') as any,
             notes: getProp(item, ['Notes', 'notes', 'Remarks']) ? String(getProp(item, ['Notes', 'notes', 'Remarks'])) : undefined,
+            regularPayableStart: getProp(item, ['RegularPayableStart', 'regularPayableStart', 'Regular Payable Start']) ? String(getProp(item, ['RegularPayableStart', 'regularPayableStart', 'Regular Payable Start'])) : undefined,
+            regularPayableEnd: getProp(item, ['RegularPayableEnd', 'regularPayableEnd', 'Regular Payable End']) ? String(getProp(item, ['RegularPayableEnd', 'regularPayableEnd', 'Regular Payable End'])) : undefined,
+            regularHours: getProp(item, ['RegularHours', 'regularHours', 'Regular Hours']) !== undefined ? Number(getProp(item, ['RegularHours', 'regularHours', 'Regular Hours'])) : undefined,
+            lateMinutes: getProp(item, ['LateMinutes', 'lateMinutes', 'Late Minutes']) !== undefined ? Number(getProp(item, ['LateMinutes', 'lateMinutes', 'Late Minutes'])) : undefined,
+            overtimeHours: getProp(item, ['OvertimeHours', 'overtimeHours', 'Overtime Hours', 'OT Hours']) !== undefined ? Number(getProp(item, ['OvertimeHours', 'overtimeHours', 'Overtime Hours', 'OT Hours'])) : undefined,
+            overtimeStatus: (getProp(item, ['OvertimeStatus', 'overtimeStatus', 'Overtime Status']) || undefined) as any,
+            overtimeApprovedHours: getProp(item, ['OvertimeApprovedHours', 'overtimeApprovedHours', 'Overtime Approved Hours']) !== undefined ? Number(getProp(item, ['OvertimeApprovedHours', 'overtimeApprovedHours', 'Overtime Approved Hours'])) : undefined,
+            overtimeReviewedBy: getProp(item, ['OvertimeReviewedBy', 'overtimeReviewedBy', 'Overtime Reviewed By']) ? String(getProp(item, ['OvertimeReviewedBy', 'overtimeReviewedBy', 'Overtime Reviewed By'])) : undefined,
+            overtimeNotes: getProp(item, ['OvertimeNotes', 'overtimeNotes', 'Overtime Notes']) ? String(getProp(item, ['OvertimeNotes', 'overtimeNotes', 'Overtime Notes'])) : undefined,
             createdAt: rawCreated ? String(rawCreated) : undefined,
             updatedAt: rawUpdated ? String(rawUpdated) : (rawCreated ? String(rawCreated) : undefined)
           };

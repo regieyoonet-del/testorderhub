@@ -144,12 +144,16 @@ export default function JobDetailCollaborationModal({
                   ? 'bg-emerald-500 text-white border-emerald-600'
                   : job.status === 'In Production'
                   ? 'bg-blue-500 text-white border-blue-600'
-                  : job.status === 'Ready for Production'
-                  ? 'bg-amber-500 text-white border-amber-600'
-                  : 'bg-gray-800 text-white border-gray-700'
+                  : job.status === 'Approved'
+                  ? 'bg-indigo-500 text-white border-indigo-600'
+                  : job.status === 'Shipped'
+                  ? 'bg-purple-500 text-white border-purple-600'
+                  : job.status === 'Canceled'
+                  ? 'bg-red-500 text-white border-red-600'
+                  : 'bg-amber-500 text-white border-amber-600'
               }`}
             >
-              {['Pending', 'Ready for Production', 'In Production', 'Quality Check', 'Completed', 'Cancelled'].map(st => (
+              {(['Pending', 'Approved', 'In Production', 'Shipped', 'Completed', 'Canceled'] as JobStatus[]).map(st => (
                 <option key={st} value={st} className="bg-neutral-900 text-white">{st}</option>
               ))}
             </select>

@@ -92,6 +92,12 @@ export default function NavigationDrawer({
             count: counts.jobs !== undefined ? counts.jobs : null
           },
           {
+            id: 'catalog',
+            label: 'ARH Products',
+            icon: Layers,
+            count: counts.catalog !== undefined ? counts.catalog : null
+          },
+          {
             id: 'attendance',
             label: 'Time & Attendance',
             icon: Clock,

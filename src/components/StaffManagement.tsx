@@ -60,8 +60,17 @@ import {
   CheckCheck,
   KeyRound,
   Shield,
-  RefreshCw
+  RefreshCw,
+  Sliders
 } from 'lucide-react';
+import StaffShiftModal from './StaffShiftModal';
+import OvertimeApprovalStation from './OvertimeApprovalStation';
+import {
+  getStaffShiftConfig,
+  calculateShiftAttendancePayroll,
+  formatMinutesToTime12,
+  parseTimeToMinutes
+} from '../utils/payrollShiftUtils';
 
 interface StaffManagementProps {
   staff: StaffMember[];
@@ -76,6 +85,8 @@ interface StaffManagementProps {
   onSavePayroll: (record: PayrollRecord) => void;
   onSavePayrollBatch?: (records: PayrollRecord[]) => void;
   onDeletePayroll?: (payrollId: string) => void;
+  onSaveAttendance?: (record: AttendanceRecord) => void;
+  onSaveAttendanceBatch?: (records: AttendanceRecord[]) => void;
   systemSettings: SystemSettings;
   currencySymbol?: string;
 }
@@ -93,10 +104,18 @@ export default function StaffManagement({
   onSavePayroll,
   onSavePayrollBatch,
   onDeletePayroll,
+  onSaveAttendance,
+  onSaveAttendanceBatch,
   systemSettings,
   currencySymbol = 'Php'
 }: StaffManagementProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'staff' | 'payroll'>('staff');
+  const [activeSubTab, setActiveSubTab] = useState<'staff' | 'shifts' | 'payroll'>('staff');
+
+  // ----------------------------------------------------
+  // SHIFT MANAGEMENT MODAL STATE
+  // ----------------------------------------------------
+  const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
+  const [selectedStaffForShift, setSelectedStaffForShift] = useState<StaffMember | null>(null);
 
   // ----------------------------------------------------
   // STAFF DIRECTORY STATE & FILTERS
@@ -120,7 +139,12 @@ export default function StaffManagement({
     allowances: 0,
     otherCompensation: 0,
     notes: '',
-    status: 'Active'
+    status: 'Active',
+    shiftStartTime: '08:00',
+    shiftEndTime: '17:00',
+    workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+    gracePeriodMinutes: 15,
+    breakMinutes: 60
   });
 
   // ----------------------------------------------------
@@ -254,10 +278,16 @@ export default function StaffManagement({
   }, [filteredPayroll, staff]);
 
   // ----------------------------------------------------
-  // STAFF CRUD HANDLERS
+  // STAFF & SHIFT CRUD HANDLERS
   // ----------------------------------------------------
+  const handleOpenShiftModal = (member: StaffMember) => {
+    setSelectedStaffForShift(member);
+    setIsShiftModalOpen(true);
+  };
+
   const handleOpenNewStaff = () => {
     setEditingStaff(null);
+    const defaultShift = getStaffShiftConfig();
     setStaffFormData({
       fullName: '',
       position: '',
@@ -269,13 +299,19 @@ export default function StaffManagement({
       allowances: 0,
       otherCompensation: 0,
       notes: '',
-      status: 'Active'
+      status: 'Active',
+      shiftStartTime: defaultShift.shiftStartTime,
+      shiftEndTime: defaultShift.shiftEndTime,
+      workingDays: defaultShift.workingDays,
+      gracePeriodMinutes: defaultShift.gracePeriodMinutes,
+      breakMinutes: defaultShift.breakMinutes
     });
     setIsStaffModalOpen(true);
   };
 
   const handleOpenEditStaff = (member: StaffMember) => {
     setEditingStaff(member);
+    const memberShift = getStaffShiftConfig(member);
     setStaffFormData({
       fullName: member.fullName,
       position: member.position,
@@ -287,7 +323,12 @@ export default function StaffManagement({
       allowances: member.allowances || 0,
       otherCompensation: member.otherCompensation || 0,
       notes: member.notes || '',
-      status: member.status
+      status: member.status,
+      shiftStartTime: memberShift.shiftStartTime,
+      shiftEndTime: memberShift.shiftEndTime,
+      workingDays: memberShift.workingDays,
+      gracePeriodMinutes: memberShift.gracePeriodMinutes,
+      breakMinutes: memberShift.breakMinutes
     });
     setIsStaffModalOpen(true);
   };
@@ -312,6 +353,11 @@ export default function StaffManagement({
       otherCompensation: Number(staffFormData.otherCompensation) || 0,
       notes: staffFormData.notes?.trim() || '',
       status: staffFormData.status,
+      shiftStartTime: staffFormData.shiftStartTime || '08:00',
+      shiftEndTime: staffFormData.shiftEndTime || '17:00',
+      workingDays: staffFormData.workingDays || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+      gracePeriodMinutes: staffFormData.gracePeriodMinutes ?? 15,
+      breakMinutes: staffFormData.breakMinutes ?? 60,
       createdAt: editingStaff?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -530,6 +576,25 @@ export default function StaffManagement({
   };
 
   // ----------------------------------------------------
+  // PENDING OVERTIME COUNT FOR BADGES
+  // ----------------------------------------------------
+  const pendingOvertimeCount = useMemo(() => {
+    let count = 0;
+    const staffMap = new Map<string, StaffMember>();
+    staff.forEach(s => staffMap.set(s.id, s));
+
+    attendance.forEach(att => {
+      const member = staffMap.get(att.staffId) || staff.find(s => s.fullName.toLowerCase() === (att.staffName || '').toLowerCase());
+      const calc = calculateShiftAttendancePayroll(att, member);
+      const status = att.overtimeStatus || calc.overtimeStatus;
+      if (status === 'Pending' && (calc.overtimeHours > 0 || (att.overtimeHours && att.overtimeHours > 0))) {
+        count++;
+      }
+    });
+    return count;
+  }, [attendance, staff]);
+
+  // ----------------------------------------------------
   // QUALIFYING ATTENDANCE HELPER FOR PAYROLL
   // ----------------------------------------------------
   const computeQualifyingAttendance = (
@@ -539,8 +604,19 @@ export default function StaffManagement({
     records: AttendanceRecord[]
   ) => {
     if (!staffId) {
-      return { qualifyingDays: 0, qualifyingHours: 0, qualifyingDates: [] as string[], incompletePunches: 0 };
+      return {
+        qualifyingDays: 0,
+        qualifyingHours: 0,
+        regularHours: 0,
+        approvedOvertimeHours: 0,
+        pendingOvertimeHours: 0,
+        lateMinutes: 0,
+        qualifyingDates: [] as string[],
+        incompletePunches: 0
+      };
     }
+
+    const targetStaff = staff.find(s => s.id === staffId);
 
     const staffAtt = records.filter(a => {
       const sIdMatch = (a.staffId || '').trim().toLowerCase() === staffId.trim().toLowerCase();
@@ -554,6 +630,10 @@ export default function StaffManagement({
     const dateHoursMap = new Map<string, number>();
     const processedRecordIds = new Set<string>();
     let incompleteCount = 0;
+    let totalRegularHours = 0;
+    let totalApprovedOvertime = 0;
+    let totalPendingOvertime = 0;
+    let totalLateMinutes = 0;
 
     for (const rec of staffAtt) {
       if (rec.id && processedRecordIds.has(rec.id)) continue;
@@ -566,7 +646,6 @@ export default function StaffManagement({
 
       const clockOut = cleanClockOut(rec.clockOut);
       const hasClockOut = Boolean(clockOut);
-      const hours = Number(rec.totalHours) || 0;
 
       // Active clock-in without clock-out or missing clock-out does NOT automatically count
       if (!hasClockOut || rec.status === 'Missing Clock Out') {
@@ -574,23 +653,35 @@ export default function StaffManagement({
         continue;
       }
 
-      // Valid completed workday shift
-      if (hours > 0 && (rec.status === 'Present' || rec.status === 'Late' || hasClockOut)) {
+      // Calculate shift-aware metrics strictly respecting employee's configured shift & grace period
+      const calc = calculateShiftAttendancePayroll(rec, targetStaff);
+
+      totalRegularHours += calc.regularHours;
+      totalApprovedOvertime += calc.approvedOvertimeHours;
+      if (calc.overtimeStatus === 'Pending') {
+        totalPendingOvertime += calc.overtimeHours;
+      }
+      totalLateMinutes += calc.lateMinutes;
+
+      // Regular payable hours + only approved overtime hours count toward qualifying pay hours
+      const payableDayHours = calc.regularHours + calc.approvedOvertimeHours;
+      if (payableDayHours > 0) {
         const normD = normalizeAttendanceDate(rec.date);
         const existing = dateHoursMap.get(normD) || 0;
-        dateHoursMap.set(normD, existing + hours);
+        dateHoursMap.set(normD, existing + payableDayHours);
       }
     }
 
     const qualifyingDays = dateHoursMap.size;
-    let totalHours = 0;
-    dateHoursMap.forEach(h => {
-      totalHours += h;
-    });
+    const qualifyingHours = Number((totalRegularHours + totalApprovedOvertime).toFixed(2));
 
     return {
       qualifyingDays,
-      qualifyingHours: Number(totalHours.toFixed(2)),
+      qualifyingHours,
+      regularHours: Number(totalRegularHours.toFixed(2)),
+      approvedOvertimeHours: Number(totalApprovedOvertime.toFixed(2)),
+      pendingOvertimeHours: Number(totalPendingOvertime.toFixed(2)),
+      lateMinutes: totalLateMinutes,
       qualifyingDates: Array.from(dateHoursMap.keys()).sort(),
       incompletePunches: incompleteCount
     };
@@ -1300,6 +1391,24 @@ export default function StaffManagement({
           </button>
           <button
             type="button"
+            onClick={() => setActiveSubTab('shifts')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+              activeSubTab === 'shifts'
+                ? 'bg-black text-white shadow-xs'
+                : 'text-gray-600 hover:text-black hover:bg-gray-200/60'
+            }`}
+            id="tab-staff-shifts"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            Shifts &amp; Overtime
+            {pendingOvertimeCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500 text-black leading-none animate-pulse">
+                {pendingOvertimeCount}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveSubTab('payroll')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
               activeSubTab === 'payroll'
@@ -1436,6 +1545,7 @@ export default function StaffManagement({
                     <th className="py-3 px-4">Staff ID &amp; Name</th>
                     <th className="py-3 px-4">Position &amp; Dept</th>
                     <th className="py-3 px-4">Employment</th>
+                    <th className="py-3 px-4">Scheduled Shift</th>
                     <th className="py-3 px-4 text-right">Compensation Rate</th>
                     <th className="py-3 px-4 text-center">Account Access</th>
                     <th className="py-3 px-4 text-center">HR Status</th>
@@ -1445,13 +1555,16 @@ export default function StaffManagement({
                 <tbody className="divide-y divide-gray-100">
                   {filteredStaff.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-12 text-center text-gray-400 font-mono text-xs">
+                      <td colSpan={8} className="py-12 text-center text-gray-400 font-mono text-xs">
                         No employees found matching the filter criteria.
                       </td>
                     </tr>
                   ) : (
                     filteredStaff.map(member => {
                       const account = findStaffAccount(member.id);
+                      const shiftCfg = getStaffShiftConfig(member);
+                      const start12 = formatMinutesToTime12(parseTimeToMinutes(shiftCfg.shiftStartTime));
+                      const end12 = formatMinutesToTime12(parseTimeToMinutes(shiftCfg.shiftEndTime));
                       return (
                         <tr key={member.id} className="hover:bg-gray-50/70 transition-colors">
                           <td className="py-3.5 px-4">
@@ -1469,6 +1582,26 @@ export default function StaffManagement({
                             <div className="text-[10px] text-gray-400 font-mono mt-0.5">
                               Since {member.dateStarted || 'N/A'}
                             </div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenShiftModal(member)}
+                              className="text-left group cursor-pointer"
+                              title="Click to edit shift schedule & grace period"
+                            >
+                              <div className="flex items-center gap-1.5 font-bold font-mono text-xs text-blue-950 group-hover:text-blue-700 transition-colors">
+                                <Clock className="w-3 h-3 text-blue-600 shrink-0" />
+                                <span>{start12} – {end12}</span>
+                              </div>
+                              <div className="flex items-center gap-1 mt-0.5 text-[10px] text-gray-500 font-mono">
+                                <span className="bg-blue-50 text-blue-800 border border-blue-200/60 px-1 rounded font-bold">
+                                  {shiftCfg.gracePeriodMinutes}m grace
+                                </span>
+                                <span>•</span>
+                                <span>{shiftCfg.workingDays.length}d/wk</span>
+                              </div>
+                            </button>
                           </td>
                           <td className="py-3.5 px-4 text-right font-mono">
                             <div className="font-bold text-black">
@@ -1545,6 +1678,14 @@ export default function StaffManagement({
                             <div className="flex items-center justify-end gap-1.5">
                               <button
                                 type="button"
+                                onClick={() => handleOpenShiftModal(member)}
+                                className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                                title="Configure Shift Schedule & Grace Period"
+                              >
+                                <Clock className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => handleOpenAccountModal(member)}
                                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                                   account
@@ -1595,6 +1736,121 @@ export default function StaffManagement({
               </table>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* TAB 2: SHIFT SCHEDULES & OVERTIME APPROVALS          */}
+      {/* ---------------------------------------------------- */}
+      {activeSubTab === 'shifts' && (
+        <div className="space-y-6">
+          {/* Shift Management Header Card */}
+          <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4 mb-4">
+              <div>
+                <h3 className="text-base font-extrabold uppercase text-black tracking-wider flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-blue-600" />
+                  Staff Shift Schedules &amp; Attendance Rules
+                </h3>
+                <p className="text-xs text-gray-500 font-mono mt-0.5">
+                  Configure working hours, late grace periods, and scheduled days per staff member. Shift rules govern payable regular hours and overtime non-destructively.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-bold text-gray-500 bg-gray-100 px-3 py-1.5 rounded-xl border border-gray-200">
+                  {staff.length} Configured Schedules
+                </span>
+              </div>
+            </div>
+
+            {/* Staff Shift Cards Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200 font-mono text-[10px] uppercase font-bold text-gray-500">
+                    <th className="py-3 px-4">Employee</th>
+                    <th className="py-3 px-4">Scheduled Shift</th>
+                    <th className="py-3 px-4 text-center">Grace Period</th>
+                    <th className="py-3 px-4 text-center">Meal Break</th>
+                    <th className="py-3 px-4">Working Days</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {staff.map(member => {
+                    const cfg = getStaffShiftConfig(member);
+                    const start12 = formatMinutesToTime12(parseTimeToMinutes(cfg.shiftStartTime));
+                    const end12 = formatMinutesToTime12(parseTimeToMinutes(cfg.shiftEndTime));
+                    return (
+                      <tr key={`shift-${member.id}`} className="hover:bg-blue-50/20 transition-colors">
+                        <td className="py-3.5 px-4">
+                          <div className="font-bold text-black text-sm">{member.fullName}</div>
+                          <div className="text-[10px] text-gray-500 font-mono">
+                            {member.position} • <span className="text-gray-400">{member.department}</span>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="font-mono font-bold text-blue-900 text-xs">
+                            {start12} – {end12}
+                          </div>
+                          <div className="text-[10px] text-gray-400 font-mono mt-0.5">
+                            24h: {cfg.shiftStartTime} - {cfg.shiftEndTime}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <span className="inline-block px-2.5 py-1 rounded-lg font-mono text-[11px] font-bold bg-amber-50 text-amber-900 border border-amber-200">
+                            {cfg.gracePeriodMinutes} mins
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <span className="inline-block px-2.5 py-1 rounded-lg font-mono text-[11px] font-bold bg-gray-100 text-gray-700 border border-gray-200">
+                            {cfg.breakMinutes} mins
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="flex flex-wrap gap-1">
+                            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(d => {
+                              const active = cfg.workingDays.includes(d);
+                              return (
+                                <span
+                                  key={d}
+                                  className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold ${
+                                    active
+                                      ? 'bg-blue-600 text-white'
+                                      : 'bg-gray-100 text-gray-400'
+                                  }`}
+                                >
+                                  {d.slice(0, 3)}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenShiftModal(member)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black hover:bg-neutral-800 text-white rounded-xl text-[10px] font-mono font-bold uppercase transition-colors cursor-pointer shadow-2xs"
+                          >
+                            <Clock className="w-3 h-3" />
+                            Edit Shift
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Overtime Approval Station */}
+          <OvertimeApprovalStation
+            staff={staff}
+            attendance={attendance}
+            onSaveAttendance={onSaveAttendance}
+            onSaveAttendanceBatch={onSaveAttendanceBatch}
+          />
         </div>
       )}
 
@@ -1910,6 +2166,84 @@ export default function StaffManagement({
                     <option value="Active">Active (Eligible for Payroll)</option>
                     <option value="Inactive">Inactive / Archived</option>
                   </select>
+                </div>
+
+                {/* Shift & Attendance Rules */}
+                <div className="sm:col-span-2 bg-blue-50/50 p-4 rounded-2xl border border-blue-200/80 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-extrabold uppercase font-mono text-blue-950 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-blue-600" />
+                      Scheduled Shift &amp; Attendance Rules
+                    </span>
+                    <span className="text-[10px] font-mono text-blue-800 bg-blue-100/70 px-2 py-0.5 rounded font-bold">
+                      Editable per employee
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] uppercase font-mono font-bold text-gray-700">Shift Start Time</label>
+                      <input
+                        type="time"
+                        value={staffFormData.shiftStartTime || '08:00'}
+                        onChange={e => setStaffFormData({ ...staffFormData, shiftStartTime: e.target.value })}
+                        className="w-full p-2 bg-white border border-gray-200 focus:border-black rounded-xl font-mono text-xs font-bold"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] uppercase font-mono font-bold text-gray-700">Shift End Time</label>
+                      <input
+                        type="time"
+                        value={staffFormData.shiftEndTime || '17:00'}
+                        onChange={e => setStaffFormData({ ...staffFormData, shiftEndTime: e.target.value })}
+                        className="w-full p-2 bg-white border border-gray-200 focus:border-black rounded-xl font-mono text-xs font-bold"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] uppercase font-mono font-bold text-gray-700">Late Grace Period</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          max="60"
+                          value={staffFormData.gracePeriodMinutes ?? 15}
+                          onChange={e => setStaffFormData({ ...staffFormData, gracePeriodMinutes: parseInt(e.target.value) || 0 })}
+                          className="w-full p-2 pr-12 bg-white border border-gray-200 focus:border-black rounded-xl font-mono text-xs font-bold"
+                        />
+                        <span className="absolute right-2.5 top-2 text-[10px] font-mono text-gray-400 font-bold">mins</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Working Days Checkboxes */}
+                  <div className="space-y-1.5 pt-1">
+                    <label className="block text-[10px] uppercase font-mono font-bold text-gray-700">Scheduled Working Days</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => {
+                        const currentDays = staffFormData.workingDays || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+                        const isSelected = currentDays.includes(day);
+                        return (
+                          <button
+                            key={day}
+                            type="button"
+                            onClick={() => {
+                              const updated = isSelected
+                                ? currentDays.filter(d => d !== day)
+                                : [...currentDays, day];
+                              setStaffFormData({ ...staffFormData, workingDays: updated });
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold cursor-pointer transition-colors ${
+                              isSelected
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                            }`}
+                          >
+                            {day.slice(0, 3)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-1 sm:col-span-2">
@@ -2656,6 +2990,25 @@ export default function StaffManagement({
             </form>
           </div>
         </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* MODAL: STAFF SHIFT & ATTENDANCE RULES CONFIGURATION  */}
+      {/* ---------------------------------------------------- */}
+      {isShiftModalOpen && selectedStaffForShift && (
+        <StaffShiftModal
+          staff={selectedStaffForShift}
+          isOpen={isShiftModalOpen}
+          onClose={() => {
+            setIsShiftModalOpen(false);
+            setSelectedStaffForShift(null);
+          }}
+          onSaveShift={updatedStaff => {
+            onSaveStaff(updatedStaff);
+            setIsShiftModalOpen(false);
+            setSelectedStaffForShift(null);
+          }}
+        />
       )}
     </div>
   );

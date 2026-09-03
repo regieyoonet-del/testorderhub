@@ -18,7 +18,10 @@ import {
   CompanyProfile,
   Order,
   SystemSettings,
-  AuthUser
+  AuthUser,
+  CatalogProduct,
+  QuoteEnquiry,
+  Product
 } from '../types';
 import { generateAttendanceId } from '../data/initialFinance';
 import {
@@ -32,6 +35,7 @@ import {
   parseClockInDate
 } from '../utils/attendanceUtils';
 import JobManagementBoard from './JobManagementBoard';
+import AdminProductCatalog from './AdminProductCatalog';
 import {
   Clock,
   Calendar,
@@ -76,6 +80,7 @@ import {
 export type StaffPortalTab =
   | 'dashboard'
   | 'jobs'
+  | 'catalog'
   | 'attendance'
   | 'payslips'
   | 'work-history'
@@ -92,6 +97,15 @@ interface StaffDashboardProps {
   jobItemColumns: JobItemColumn[];
   companies?: CompanyProfile[];
   orders?: Order[];
+  catalogProducts?: CatalogProduct[];
+  quoteEnquiries?: QuoteEnquiry[];
+  onAddCatalogProduct?: (product: CatalogProduct) => void;
+  onUpdateCatalogProduct?: (product: CatalogProduct) => void;
+  onDeleteCatalogProduct?: (productId: string) => void;
+  onUpdateQuoteEnquiryStatus?: (enquiryId: string, status: QuoteEnquiry['status']) => void;
+  onDeleteQuoteEnquiry?: (enquiryId: string) => void;
+  onSaveQuoteEnquiry?: (updatedEnquiry: QuoteEnquiry) => void;
+  onAddProductToCompanyCatalog?: (product: Product, companyIdentifier: string) => void;
   onClockIn: (staffId: string, staffName: string, notes?: string) => Promise<void> | void;
   onClockOut: (attendanceId: string, notes?: string) => Promise<void> | void;
   onUpdateAttendance?: (record: AttendanceRecord) => void;
@@ -122,6 +136,15 @@ export default function StaffDashboard({
   jobItemColumns = [],
   companies = [],
   orders = [],
+  catalogProducts = [],
+  quoteEnquiries = [],
+  onAddCatalogProduct,
+  onUpdateCatalogProduct,
+  onDeleteCatalogProduct,
+  onUpdateQuoteEnquiryStatus,
+  onDeleteQuoteEnquiry,
+  onSaveQuoteEnquiry,
+  onAddProductToCompanyCatalog,
   onClockIn,
   onClockOut,
   onUpdateAttendance,
@@ -140,12 +163,12 @@ export default function StaffDashboard({
   onTabChange,
   appsScriptUrl
 }: StaffDashboardProps) {
-  // Navigation tabs for Staff Portal (Dashboard, Job Management, Time & Attendance, Payslips, Work History, Account Settings)
+  // Navigation tabs for Staff Portal (Dashboard, Job Management, ARH Products, Time & Attendance, Payslips, Work History, Account Settings)
   const [internalTab, setInternalTab] = useState<StaffPortalTab>('dashboard');
   
   const currentTab: StaffPortalTab = useMemo(() => {
     if (controlledActiveTab) {
-      const validTabs: StaffPortalTab[] = ['dashboard', 'jobs', 'attendance', 'payslips', 'work-history', 'profile'];
+      const validTabs: StaffPortalTab[] = ['dashboard', 'jobs', 'catalog', 'attendance', 'payslips', 'work-history', 'profile'];
       if (validTabs.includes(controlledActiveTab as StaffPortalTab)) {
         return controlledActiveTab as StaffPortalTab;
       }
@@ -531,84 +554,88 @@ export default function StaffDashboard({
 
   return (
     <div className="space-y-6">
-      {/* Top Header Profile Banner */}
-      <div className="bg-white border-2 border-black rounded-[28px] p-6 sm:p-8 shadow-md">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-black text-white flex items-center justify-center font-mono text-2xl font-black shadow-inner shrink-0">
-              {(currentUser.name || staffMember?.fullName || 'S')[0].toUpperCase()}
-            </div>
-            <div>
-              <div className="flex items-center gap-2.5">
-                <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-black">
-                  {currentUser.name || staffMember?.fullName || 'Staff Member'}
-                </h1>
-                <span className="bg-emerald-100 text-emerald-800 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border border-emerald-300 uppercase">
-                  Active Staff
-                </span>
+      {/* Top Header Profile Banner & Password Warning - Only shown on DASHBOARD tab */}
+      {currentTab === 'dashboard' && (
+        <>
+          <div className="bg-white border-2 border-black rounded-[28px] p-6 sm:p-8 shadow-md">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-black text-white flex items-center justify-center font-mono text-2xl font-black shadow-inner shrink-0">
+                  {(currentUser.name || staffMember?.fullName || 'S')[0].toUpperCase()}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-black">
+                      {currentUser.name || staffMember?.fullName || 'Staff Member'}
+                    </h1>
+                    <span className="bg-emerald-100 text-emerald-800 text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border border-emerald-300 uppercase">
+                      Active Staff
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold text-gray-500 font-sans mt-1">
+                    {staffMember?.position || 'Staff Specialist'} • {staffMember?.department || 'Operations'} • ID: {currentUser.staffId || staffMember?.id || 'STF-101'}
+                  </p>
+                </div>
               </div>
-              <p className="text-xs font-semibold text-gray-500 font-sans mt-1">
-                {staffMember?.position || 'Staff Specialist'} • {staffMember?.department || 'Operations'} • ID: {currentUser.staffId || staffMember?.id || 'STF-101'}
-              </p>
+
+              {/* Quick Realtime Clock & Actions */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 text-center font-mono">
+                  <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Philippine Time</div>
+                  <div className="text-lg font-black text-black">
+                    {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </div>
+                </div>
+
+                {onSyncSheets && (
+                  <button
+                    onClick={() => onSyncSheets()}
+                    disabled={isSyncingSheets}
+                    className="bg-gray-100 hover:bg-gray-200 text-black border border-gray-300 font-bold text-xs uppercase tracking-wider px-4 py-3 rounded-2xl transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
+                    title="Sync latest records from cloud"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isSyncingSheets ? 'animate-spin' : ''}`} />
+                    <span className="hidden sm:inline">Sync Cloud</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={onLogout}
+                  className="bg-black hover:bg-neutral-800 text-white font-black text-xs uppercase tracking-wider px-5 py-3 rounded-2xl border border-black transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Quick Realtime Clock & Actions */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 text-center font-mono">
-              <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Philippine Time</div>
-              <div className="text-lg font-black text-black">
-                {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          {/* Temporary Password Change Advisory Banner */}
+          {staffAccount?.mustChangePassword && (
+            <div className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm animate-fade-in">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-amber-200 text-amber-900 rounded-xl shrink-0 font-bold">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black uppercase font-mono text-amber-900">
+                    Action Required: Set Permanent Password
+                  </h3>
+                  <p className="text-xs text-amber-800 font-sans mt-0.5">
+                    You are currently logged in with a temporary admin-issued password. Please create your personalized permanent password in Account Settings.
+                  </p>
+                </div>
               </div>
-            </div>
-
-            {onSyncSheets && (
               <button
-                onClick={() => onSyncSheets()}
-                disabled={isSyncingSheets}
-                className="bg-gray-100 hover:bg-gray-200 text-black border border-gray-300 font-bold text-xs uppercase tracking-wider px-4 py-3 rounded-2xl transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
-                title="Sync latest records from cloud"
+                type="button"
+                onClick={() => handleSelectTab('profile')}
+                className="px-4 py-2.5 bg-amber-900 hover:bg-black text-white font-mono text-xs font-bold uppercase rounded-xl transition-colors cursor-pointer shrink-0"
               >
-                <RefreshCw className={`w-4 h-4 ${isSyncingSheets ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">Sync Cloud</span>
+                Update Password Now
               </button>
-            )}
-
-            <button
-              onClick={onLogout}
-              className="bg-black hover:bg-neutral-800 text-white font-black text-xs uppercase tracking-wider px-5 py-3 rounded-2xl border border-black transition-all flex items-center gap-2 cursor-pointer shadow-sm"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>Sign Out</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Temporary Password Change Advisory Banner */}
-      {staffAccount?.mustChangePassword && currentTab !== 'profile' && (
-        <div className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm animate-fade-in">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-amber-200 text-amber-900 rounded-xl shrink-0 font-bold">
-              <Lock className="w-5 h-5" />
             </div>
-            <div>
-              <h3 className="text-xs font-black uppercase font-mono text-amber-900">
-                Action Required: Set Permanent Password
-              </h3>
-              <p className="text-xs text-amber-800 font-sans mt-0.5">
-                You are currently logged in with a temporary admin-issued password. Please create your personalized permanent password in Account Settings.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => handleSelectTab('profile')}
-            className="px-4 py-2.5 bg-amber-900 hover:bg-black text-white font-mono text-xs font-bold uppercase rounded-xl transition-colors cursor-pointer shrink-0"
-          >
-            Update Password Now
-          </button>
-        </div>
+          )}
+        </>
       )}
 
       {/* ========================================================================= */}
@@ -877,6 +904,30 @@ export default function StaffDashboard({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB: ARH PRODUCTS SHOWCASE & MANAGEMENT (SHARED WITH ADMIN) */}
+      {/* ========================================================================= */}
+      {currentTab === 'catalog' && (
+        <AdminProductCatalog
+          products={catalogProducts || []}
+          quoteEnquiries={quoteEnquiries || []}
+          onAddProduct={onAddCatalogProduct || (() => {})}
+          onUpdateProduct={onUpdateCatalogProduct || (() => {})}
+          onDeleteProduct={onDeleteCatalogProduct || (() => {})}
+          onUpdateQuoteEnquiryStatus={onUpdateQuoteEnquiryStatus || (() => {})}
+          onDeleteQuoteEnquiry={onDeleteQuoteEnquiry}
+          onSaveQuoteEnquiry={onSaveQuoteEnquiry}
+          onAddProductToCompanyCatalog={onAddProductToCompanyCatalog}
+          currencySymbol={currencySymbol}
+          hubName={systemSettings?.hubName}
+          appLogoUrl={systemSettings?.logoUrl}
+          adminEmail={systemSettings?.adminEmail}
+          companyTagline={systemSettings?.companyTagline}
+          companyAddress={systemSettings?.companyAddress}
+          taxId={systemSettings?.taxId}
+        />
       )}
 
       {/* ========================================================================= */}

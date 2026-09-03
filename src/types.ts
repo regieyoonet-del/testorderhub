@@ -411,6 +411,12 @@ export interface StaffMember {
   avatarUrl?: string;
   createdAt?: string;
   updatedAt?: string;
+  // Shift & Payroll Attendance Settings
+  shiftStartTime?: string;     // e.g. '08:00' (24-hour HH:mm) or '08:00 AM'
+  shiftEndTime?: string;       // e.g. '17:00' (24-hour HH:mm) or '05:00 PM'
+  workingDays?: string[];      // e.g. ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+  gracePeriodMinutes?: number; // default: 15 minutes late grace period
+  breakMinutes?: number;       // default: 60 minutes unpaid break
 }
 
 export type StaffAccountStatus = 'Active' | 'Inactive' | 'Suspended';
@@ -434,6 +440,7 @@ export interface StaffAccount {
 }
 
 export type AttendanceStatus = 'Present' | 'Late' | 'Missing Clock Out' | 'Absent' | 'Leave';
+export type OvertimeStatus = 'Pending' | 'Approved' | 'Rejected';
 
 export interface AttendanceRecord {
   id: string; // e.g. 'ATT-2026-001'
@@ -447,9 +454,32 @@ export interface AttendanceRecord {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+  // Payroll calculation & overtime fields
+  regularPayableStart?: string; // e.g. '08:00 AM' (Shift-aligned payable start)
+  regularPayableEnd?: string;   // e.g. '05:00 PM' (Shift-aligned payable end)
+  regularHours?: number;        // Payable regular hours (e.g. 8.00)
+  lateMinutes?: number;         // Late deduction minutes (0 if within grace period)
+  isWithinGracePeriod?: boolean;
+  undertimeMinutes?: number;    // Minutes departed before shift end
+  overtimeHours?: number;       // Raw overtime worked beyond shift end time
+  overtimeStatus?: OvertimeStatus; // 'Pending' | 'Approved' | 'Rejected'
+  overtimeApprovedHours?: number;  // Approved overtime hours included in payroll
+  overtimeReviewedBy?: string;
+  overtimeReviewedAt?: string;
+  overtimeNotes?: string;
 }
 
-export type PayrollStatus = 'Draft' | 'Reviewed' | 'Finalized' | 'Paid' | 'Voided';
+export type PayrollStatus = 'Draft' | 'Ready for Approval' | 'Reviewed' | 'Finalized' | 'Paid' | 'Voided';
+
+export interface PayrollManualAdjustment {
+  id: string;
+  type: 'earning' | 'deduction';
+  amount: number;
+  reason: string;
+  category?: string; // e.g. 'Additional Earning' | 'Manual Deduction' | 'Payroll Adjustment' | 'Approved Overtime Adjustment'
+  adminName: string;
+  timestamp: string; // ISO string
+}
 
 export interface PayrollDeductionItem {
   id: string;
@@ -468,18 +498,32 @@ export interface PayrollRecord {
   payDate: string;        // YYYY-MM-DD
   salaryType?: SalaryType; // Snapshot: 'Monthly' | 'Daily' | 'Hourly'
   rateSnapshot?: number;   // Snapshot of basic salary rate at the time of payroll (e.g. 700)
+  hourlyRateSnapshot?: number; // Snapshot of computed hourly rate
   daysWorked?: number;     // Snapshot of days worked (for Daily pay)
   hoursWorked?: number;    // Snapshot of hours worked (for Hourly pay)
+  scheduledHours?: number; // Scheduled regular hours for the period
+  actualHours?: number;    // Raw logged hours across all punches
+  regularHours?: number;   // Regular payable hours (shift clamped, grace honored)
+  lateMinutes?: number;    // Total late arrival minutes
+  undertimeMinutes?: number; // Total early clock-out undertime minutes
+  lateDeduction?: number;  // Monetary deduction for late arrivals
+  undertimeDeduction?: number; // Monetary deduction for early departures
+  candidateOvertimeHours?: number; // Total candidate OT hours worked
+  approvedOvertimeHours?: number;  // Approved OT hours eligible for pay
+  overtimePay?: number;    // Payable overtime compensation
+  manualAdjustments?: PayrollManualAdjustment[]; // Controlled manual adjustments
   basicPay: number;
   allowances: number;
   otherEarnings: number;
-  grossPay: number;       // basicPay + allowances + otherEarnings
+  grossPay: number;       // basicPay + allowances + otherEarnings (includes overtimePay)
   deductions: number;     // Total deductions numeric value
   itemizedDeductions?: PayrollDeductionItem[];
   totalDeductions: number;
   netPay: number;         // grossPay - totalDeductions
   status: PayrollStatus;
   notes?: string;
+  finalizedAt?: string;
+  finalizedBy?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -546,6 +590,7 @@ export type RecurringExpense = RecurringExpenseRule;
 export type UserRole = 'admin' | 'client' | 'staff';
 
 export interface AuthUser {
+  id?: string;
   role: UserRole;
   companyId?: string;
   staffId?: string;
