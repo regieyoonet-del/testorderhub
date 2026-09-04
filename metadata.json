@@ -1,6 +1,6 @@
 {
   "name": "ARH Print Hub",
-  "description": "Minimal B2B ordering hub for company uniforms, IDs, business cards, and promo products, featuring Job Management & Production Board, quick repeating orders, responsive collapsible sidebar navigation, and Google Sheets synchronization.",
+  "description": "Minimal B2B ordering hub for company uniforms, IDs, business cards, and promo products, featuring Job Management & Production Board, biometric DTR attendance & payroll calculation review with shift grace period rules, overtime approval, and Google Sheets synchronization.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

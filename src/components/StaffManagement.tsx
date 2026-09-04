@@ -61,10 +61,13 @@ import {
   KeyRound,
   Shield,
   RefreshCw,
-  Sliders
+  Sliders,
+  Calculator,
+  Sparkles
 } from 'lucide-react';
 import StaffShiftModal from './StaffShiftModal';
 import OvertimeApprovalStation from './OvertimeApprovalStation';
+import PayrollCalculationReview from './PayrollCalculationReview';
 import {
   getStaffShiftConfig,
   calculateShiftAttendancePayroll,
@@ -89,6 +92,7 @@ interface StaffManagementProps {
   onSaveAttendanceBatch?: (records: AttendanceRecord[]) => void;
   systemSettings: SystemSettings;
   currencySymbol?: string;
+  currentAdminName?: string;
 }
 
 export default function StaffManagement({
@@ -107,9 +111,10 @@ export default function StaffManagement({
   onSaveAttendance,
   onSaveAttendanceBatch,
   systemSettings,
-  currencySymbol = 'Php'
+  currencySymbol = 'Php',
+  currentAdminName = 'Administrator'
 }: StaffManagementProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'staff' | 'shifts' | 'payroll'>('staff');
+  const [activeSubTab, setActiveSubTab] = useState<'staff' | 'shifts' | 'payroll-calculation' | 'payroll'>('staff');
 
   // ----------------------------------------------------
   // SHIFT MANAGEMENT MODAL STATE
@@ -1362,20 +1367,10 @@ export default function StaffManagement({
 
   return (
     <div className="space-y-6 font-sans text-left" id="admin-staff-management-container">
-      {/* Top Header & Section Tabs */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-5">
-        <div>
-          <h2 className="text-xl font-extrabold uppercase text-black tracking-wider flex items-center gap-2">
-            <Users className="w-5 h-5 text-black" />
-            Staff &amp; Payroll Management
-          </h2>
-          <p className="text-xs text-gray-500 font-mono mt-0.5">
-            Manage employee directory, compensation profiles, and process verified pay stubs.
-          </p>
-        </div>
-
+      {/* Section Tabs */}
+      <div className="flex items-center justify-start border-b border-gray-200 pb-4 overflow-x-auto">
         {/* Tab Switcher */}
-        <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200 shrink-0">
+        <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200 shrink-0 overflow-x-auto">
           <button
             type="button"
             onClick={() => setActiveSubTab('staff')}
@@ -1409,6 +1404,22 @@ export default function StaffManagement({
           </button>
           <button
             type="button"
+            onClick={() => setActiveSubTab('payroll-calculation')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+              activeSubTab === 'payroll-calculation'
+                ? 'bg-black text-white shadow-xs'
+                : 'text-gray-600 hover:text-black hover:bg-gray-200/60'
+            }`}
+            id="tab-payroll-calculation"
+          >
+            <Calculator className="w-3.5 h-3.5" />
+            Payroll Calculation &amp; Review
+            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-600 text-white leading-none">
+              Live DTR
+            </span>
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveSubTab('payroll')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
               activeSubTab === 'payroll'
@@ -1418,7 +1429,7 @@ export default function StaffManagement({
             id="tab-payroll-records"
           >
             <DollarSign className="w-3.5 h-3.5" />
-            Payroll &amp; Payslips ({payroll.length})
+            Saved Pay Records ({payroll.length})
           </button>
         </div>
       </div>
@@ -1855,10 +1866,51 @@ export default function StaffManagement({
       )}
 
       {/* ---------------------------------------------------- */}
+      {/* TAB: PAYROLL CALCULATION & REVIEW                    */}
+      {/* ---------------------------------------------------- */}
+      {activeSubTab === 'payroll-calculation' && (
+        <PayrollCalculationReview
+          staff={staff}
+          payroll={payroll}
+          attendance={attendance}
+          onSavePayroll={onSavePayroll}
+          onSavePayrollBatch={onSavePayrollBatch}
+          currencySymbol={currencySymbol}
+          currentAdminName={currentAdminName}
+        />
+      )}
+
+      {/* ---------------------------------------------------- */}
       {/* TAB 2: PAYROLL & PAYSLIPS                            */}
       {/* ---------------------------------------------------- */}
       {activeSubTab === 'payroll' && (
         <div className="space-y-4">
+          {/* Quick Engine Banner */}
+          <div className="bg-gradient-to-r from-emerald-950 via-neutral-900 to-black rounded-2xl p-4 border border-emerald-800/40 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                <Calculator className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div>
+                <h4 className="text-sm font-extrabold uppercase tracking-wide flex items-center gap-2">
+                  <span>Biometric DTR Calculation Engine</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-300 font-mono font-bold">15-Day Cut-off Ready</span>
+                </h4>
+                <p className="text-xs text-neutral-300 font-mono mt-0.5">
+                  Automatically sync 8:00 AM–5:00 PM shifts, 15m grace period, undertime &amp; approved overtime into verified take-home pay.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('payroll-calculation')}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer shrink-0 flex items-center gap-2 shadow-sm hover:scale-[1.02]"
+            >
+              <span>Launch Calculation &amp; Review</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
           {/* Controls Bar */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-4 rounded-2xl border border-gray-200">
             <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
@@ -1888,6 +1940,16 @@ export default function StaffManagement({
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => setActiveSubTab('payroll-calculation')}
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer shadow-2xs"
+                id="calc-dtr-review-btn"
+              >
+                <Calculator className="w-3.5 h-3.5" />
+                Live DTR Calc
+              </button>
+
               <button
                 type="button"
                 onClick={() => setIsBatchPayrollModalOpen(true)}

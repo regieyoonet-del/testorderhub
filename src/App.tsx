@@ -58,6 +58,7 @@ import LoginScreen from './components/LoginScreen';
 import AdminDashboard from './components/AdminDashboard';
 import StaffDashboard from './components/StaffDashboard';
 import NavigationDrawer from './components/NavigationDrawer';
+import { applyPwaBranding, registerPwaServiceWorker } from './utils/dynamicPWA';
 import OrderPortals from './components/OrderPortals';
 import PublicOrderPortal from './components/PublicOrderPortal';
 import { getProductUnitPrice } from './utils/pricing';
@@ -719,6 +720,10 @@ export default function App() {
       adminEmail: (parsed.adminEmail && parsed.adminEmail.trim() !== '') ? parsed.adminEmail : 'regie.yoonet@gmail.com',
       logoUrl: parsed.logoUrl || '',
       faviconUrl: parsed.faviconUrl || '',
+      pwaIconUrl: parsed.pwaIconUrl || '',
+      pwaIcon192Url: parsed.pwaIcon192Url || '',
+      pwaIcon512Url: parsed.pwaIcon512Url || '',
+      pwaIconMaskableUrl: parsed.pwaIconMaskableUrl || '',
       companyTagline: parsed.companyTagline !== undefined ? parsed.companyTagline : '',
       companyAddress: parsed.companyAddress !== undefined ? parsed.companyAddress : '',
       taxId: parsed.taxId !== undefined ? parsed.taxId : '',
@@ -878,6 +883,16 @@ export default function App() {
       link.href = faviconHref;
     }
   }, [systemSettings.faviconUrl, systemSettings.logoUrl]);
+
+  // Initialize PWA service worker once on mount
+  useEffect(() => {
+    registerPwaServiceWorker();
+  }, []);
+
+  // Dynamically apply PWA branding, manifest, and icons across sessions
+  useEffect(() => {
+    applyPwaBranding(systemSettings);
+  }, [systemSettings]);
 
   useEffect(() => {
     localStorage.setItem('rp_companies', JSON.stringify(companies));

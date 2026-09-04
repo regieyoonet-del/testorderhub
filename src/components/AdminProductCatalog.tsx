@@ -420,34 +420,6 @@ export default function AdminProductCatalog({
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Top Banner & Stats */}
-      <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <h2 className="text-2xl font-black uppercase tracking-tight text-black font-sans">
-            ARH Products
-          </h2>
-          <p className="text-xs text-gray-500 font-sans mt-1 leading-relaxed">
-            Manage your full company promotional product range. Add new products, update specifications, and view quote requests submitted by customers.
-          </p>
-        </div>
-
-        {/* Stats Badges */}
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
-          <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 text-center min-w-[110px]">
-            <span className="block text-xl font-extrabold font-mono text-black leading-none">{products.length}</span>
-            <span className="text-[10px] font-mono uppercase text-gray-500 font-bold">Total Products</span>
-          </div>
-          <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 text-center min-w-[110px]">
-            <span className="block text-xl font-extrabold font-mono text-black leading-none">{activeCount}</span>
-            <span className="text-[10px] font-mono uppercase text-gray-500 font-bold">Active in Catalog</span>
-          </div>
-          <div className="bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2.5 text-center min-w-[110px]">
-            <span className="block text-xl font-extrabold font-mono text-black leading-none">{newEnquiriesCount}</span>
-            <span className="text-[10px] font-mono uppercase text-gray-500 font-bold">New Quote Requests</span>
-          </div>
-        </div>
-      </div>
-
       {/* Subtabs Switcher */}
       <div className="flex bg-gray-100 p-1.5 rounded-2xl gap-2 border border-gray-200 max-w-fit">
         <button

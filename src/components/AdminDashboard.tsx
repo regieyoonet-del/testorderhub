@@ -97,6 +97,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import ClientDashboardModal from './ClientDashboardModal';
 import ReceiptGenerator from './ReceiptGenerator';
 import QuoteBuilder from './QuoteBuilder';
+import { AdminAppBranding } from './AdminAppBranding';
 
 interface AdminDashboardProps {
   products: Product[];
@@ -325,6 +326,7 @@ export default function AdminDashboard({
     isSettingsDirtyRef.current = false;
 
     onUpdateSystemSettings({
+      ...systemSettings,
       hubName: hubName.trim(),
       shortHubName: shortHubName.trim(),
       companyTagline: companyTagline.trim(),
@@ -782,7 +784,7 @@ export default function AdminDashboard({
     { id: 'orders', label: 'Orders', icon: ClipboardList, count: directCompanyOrders.length },
     { id: 'staff', label: 'Staff Management', icon: Users, count: (staff || []).length },
     { id: 'expenses', label: 'Expenses & Outflow', icon: Receipt, count: (expenses || []).length },
-    { id: 'analytics', label: 'Financial Analytics', icon: BarChart3, count: null },
+    { id: 'analytics', label: 'Financial & Sales Analytics', icon: BarChart3, count: null },
     { id: 'receipt', label: 'Receipt Generator', icon: Receipt, count: null },
     { id: 'quotes', label: 'Quote Builder', icon: Calculator, count: null },
     { id: 'settings', label: 'Admin Settings', icon: Settings, count: null },
@@ -1681,6 +1683,7 @@ export default function AdminDashboard({
           onSaveAttendanceBatch={onSaveAttendanceBatch}
           systemSettings={systemSettings}
           currencySymbol={currencySymbol}
+          currentAdminName={currentUser?.username || 'Administrator'}
         />
       )}
 
@@ -1725,7 +1728,14 @@ export default function AdminDashboard({
       )}
 
       {adminTab === 'settings' && (
-        <div className="max-w-4xl mx-auto animate-fade-in" id="admin-settings-tab">
+        <div className="max-w-4xl mx-auto animate-fade-in space-y-8" id="admin-settings-tab">
+          {/* Progressive Web App (PWA) & Mobile App Icon Branding Settings */}
+          <AdminAppBranding
+            systemSettings={systemSettings}
+            onUpdateSystemSettings={onUpdateSystemSettings}
+            onForceSyncAll={onForceSyncAll}
+          />
+
           <form onSubmit={handleSaveSettings} className="bg-white border border-gray-200 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
             <div className="border-b border-gray-100 pb-4">
               <h3 className="text-base uppercase font-extrabold text-black tracking-tight flex items-center gap-2">

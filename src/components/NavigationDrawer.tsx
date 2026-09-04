@@ -21,6 +21,7 @@ import {
   User
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface NavigationDrawerProps {
   isOpen: boolean;
@@ -271,8 +272,11 @@ export default function NavigationDrawer({
               </nav>
             </div>
 
-            {/* Drawer Bottom Section with Sign Out & Footer */}
+            {/* Drawer Bottom Section with PWA Install, Sign Out & Footer */}
             <div className="pt-4 border-t border-gray-200 mt-auto space-y-3">
+              {/* Install PWA Button */}
+              <PWAInstallButton variant="drawer" appName={systemSettings?.hubName || 'ARH Print Hub'} />
+
               {onLogout && (
                 <button
                   type="button"

@@ -19,6 +19,12 @@ import {
   DEFAULT_EXPENSE_CATEGORIES
 } from '../data/initialFinance';
 import {
+  MONTH_OPTIONS,
+  matchesYearMonth,
+  parseYearMonth,
+  formatPeriodLabel
+} from '../utils/financeFilters';
+import {
   Receipt,
   DollarSign,
   Plus,
@@ -82,7 +88,23 @@ export default function ExpensesManagement({
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [yearFilter, setYearFilter] = useState<string>('all');
   const [monthFilter, setMonthFilter] = useState<string>('all');
+
+  // Dynamic available years list
+  const availableYears = useMemo(() => {
+    const yearsSet = new Set<string>();
+    const currentYear = new Date().getFullYear();
+    yearsSet.add(String(currentYear));
+    yearsSet.add(String(currentYear - 1));
+
+    expenses.forEach(e => {
+      const p = parseYearMonth(e.expenseDate);
+      if (p) yearsSet.add(String(p.year));
+    });
+
+    return Array.from(yearsSet).sort((a, b) => Number(b) - Number(a));
+  }, [expenses]);
 
   // Expense Form Modal
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -140,11 +162,11 @@ export default function ExpensesManagement({
       const matchesCat = categoryFilter === 'all' || e.category.toLowerCase() === categoryFilter.toLowerCase();
       const matchesType = typeFilter === 'all' || e.expenseType === typeFilter;
       const matchesStatus = statusFilter === 'all' || e.paymentStatus === statusFilter;
-      const matchesMonth = monthFilter === 'all' || e.expenseDate.startsWith(monthFilter);
+      const matchesPeriod = matchesYearMonth(e.expenseDate, yearFilter, monthFilter);
 
-      return matchesSearch && matchesCat && matchesType && matchesStatus && matchesMonth;
+      return matchesSearch && matchesCat && matchesType && matchesStatus && matchesPeriod;
     }).sort((a, b) => new Date(b.expenseDate).getTime() - new Date(a.expenseDate).getTime());
-  }, [expenses, expenseSearch, categoryFilter, typeFilter, statusFilter, monthFilter]);
+  }, [expenses, expenseSearch, categoryFilter, typeFilter, statusFilter, yearFilter, monthFilter]);
 
   // Filtered Recurring Expenses
   const filteredRecurring = useMemo(() => {
@@ -426,18 +448,8 @@ export default function ExpensesManagement({
 
   return (
     <div className="space-y-6 font-sans text-left" id="admin-expenses-management-container">
-      {/* Top Header & Section Tabs */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-5">
-        <div>
-          <h2 className="text-xl font-extrabold uppercase text-black tracking-wider flex items-center gap-2">
-            <Receipt className="w-5 h-5 text-black" />
-            Expenses &amp; Outflow Tracking
-          </h2>
-          <p className="text-xs text-gray-500 font-mono mt-0.5">
-            Log overhead, recurring production subscriptions, workshop materials, and track pending payables.
-          </p>
-        </div>
-
+      {/* Section Tabs */}
+      <div className="flex items-center justify-start border-b border-gray-200 pb-4 overflow-x-auto">
         {/* Tab Switcher */}
         <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200 shrink-0">
           <button
@@ -596,6 +608,59 @@ export default function ExpensesManagement({
                 <option value="Pending">Pending</option>
                 <option value="Voided">Voided</option>
               </select>
+
+              {/* Year Filter */}
+              <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1 shadow-2xs">
+                <label htmlFor="expense-year-select" className="text-[10px] font-mono font-bold text-gray-400 uppercase">
+                  Year:
+                </label>
+                <select
+                  id="expense-year-select"
+                  value={yearFilter}
+                  onChange={e => setYearFilter(e.target.value)}
+                  className="text-xs font-mono font-bold bg-transparent focus:outline-none cursor-pointer"
+                >
+                  <option value="all">All Years</option>
+                  {availableYears.map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Month Filter */}
+              <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1 shadow-2xs">
+                <label htmlFor="expense-month-select" className="text-[10px] font-mono font-bold text-gray-400 uppercase">
+                  Month:
+                </label>
+                <select
+                  id="expense-month-select"
+                  value={monthFilter}
+                  onChange={e => setMonthFilter(e.target.value)}
+                  className="text-xs font-mono font-bold bg-transparent focus:outline-none cursor-pointer"
+                >
+                  {MONTH_OPTIONS.map(m => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {(yearFilter !== 'all' || monthFilter !== 'all' || categoryFilter !== 'all' || typeFilter !== 'all' || statusFilter !== 'all' || expenseSearch) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setYearFilter('all');
+                    setMonthFilter('all');
+                    setCategoryFilter('all');
+                    setTypeFilter('all');
+                    setStatusFilter('all');
+                    setExpenseSearch('');
+                  }}
+                  className="text-xs font-mono font-bold text-red-600 hover:text-red-800 px-2 py-1 rounded cursor-pointer"
+                  title="Reset all filters"
+                >
+                  Reset
+                </button>
+              )}
             </div>
 
             <button

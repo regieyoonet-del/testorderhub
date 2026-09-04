@@ -294,6 +294,10 @@ export interface SystemSettings {
   adminEmail?: string;
   logoUrl?: string;
   faviconUrl?: string;
+  pwaIconUrl?: string; // Master / 512x512 custom PWA app icon (base64 or URL)
+  pwaIcon192Url?: string; // 192x192 optimized PWA app icon
+  pwaIcon512Url?: string; // 512x512 optimized PWA app icon
+  pwaIconMaskableUrl?: string; // 512x512 maskable safe-zone icon
   adminUsername?: string;
   adminPasscode?: string;
   companyTagline?: string;

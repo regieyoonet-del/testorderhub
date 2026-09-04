@@ -18,6 +18,7 @@ import {
   JobItemColumn
 } from '../types';
 import { calculateJobTotals, calculateSubItemTotalQty, calculateSubItemTotalAmount } from '../data/initialJobs';
+import { MONTH_OPTIONS, matchesYearMonth, parseYearMonth, formatPeriodLabel } from '../utils/financeFilters';
 import {
   TrendingUp,
   TrendingDown,
@@ -127,6 +128,8 @@ export default function AnalyticsDashboard({
   currencySymbol = 'Php'
 }: AnalyticsDashboardProps) {
   const [timeRange, setTimeRange] = useState<'all' | '30days' | '90days' | 'this_year'>('all');
+  const [selectedYear, setSelectedYear] = useState<string>('all');
+  const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [analyticsView, setAnalyticsView] = useState<'overview' | 'profit_loss' | 'cash_flow' | 'sales_clients'>('overview');
 
   // Sales History Table Filters
@@ -156,9 +159,44 @@ export default function AnalyticsDashboard({
   };
 
   // ----------------------------------------------------
-  // DATE FILTERING CUTOFF
+  // AVAILABLE YEARS (Derived dynamically from data)
+  // ----------------------------------------------------
+  const availableYears = useMemo(() => {
+    const yearsSet = new Set<string>();
+    const currentYear = new Date().getFullYear();
+    yearsSet.add(String(currentYear));
+    yearsSet.add(String(currentYear - 1));
+
+    orders.forEach(o => {
+      const p = parseYearMonth(o.createdAt);
+      if (p) yearsSet.add(String(p.year));
+    });
+
+    (jobs || []).forEach(j => {
+      const p = parseYearMonth(getJobDateStr(j));
+      if (p) yearsSet.add(String(p.year));
+    });
+
+    (expenses || []).forEach(e => {
+      const p = parseYearMonth(e.expenseDate);
+      if (p) yearsSet.add(String(p.year));
+    });
+
+    (payroll || []).forEach(pRec => {
+      const p = parseYearMonth(pRec.payDate || pRec.payPeriodEnd || pRec.createdAt);
+      if (p) yearsSet.add(String(p.year));
+    });
+
+    return Array.from(yearsSet).sort((a, b) => Number(b) - Number(a));
+  }, [orders, jobs, expenses, payroll]);
+
+  // ----------------------------------------------------
+  // DATE FILTERING CUTOFF (For quick presets)
   // ----------------------------------------------------
   const filterDateCutoff = useMemo(() => {
+    if (selectedYear !== 'all' || selectedMonth !== 'all') {
+      return null; // Year/Month filter takes precedence
+    }
     const now = new Date();
     if (timeRange === '30days') {
       const d = new Date();
@@ -174,14 +212,26 @@ export default function AnalyticsDashboard({
       return new Date(now.getFullYear(), 0, 1);
     }
     return null;
-  }, [timeRange]);
+  }, [timeRange, selectedYear, selectedMonth]);
+
+  // Helper to evaluate whether an item date falls within the selected period filter
+  const isItemInPeriod = (dateStr?: string | null): boolean => {
+    if (!dateStr) return false;
+    if (!matchesYearMonth(dateStr, selectedYear, selectedMonth)) return false;
+    if (selectedYear === 'all' && selectedMonth === 'all' && filterDateCutoff) {
+      const d = new Date(dateStr);
+      if (!isNaN(d.getTime()) && d.getTime() < filterDateCutoff.getTime()) {
+        return false;
+      }
+    }
+    return true;
+  };
 
   // Scoped Direct Company Orders (Strictly excluding Storefronts & Portals)
   const scopedOrders = useMemo(() => {
     const directOnly = orders.filter(o => isDirectCompanyOrder(o));
-    if (!filterDateCutoff) return directOnly;
-    return directOnly.filter(o => new Date(o.createdAt).getTime() >= filterDateCutoff.getTime());
-  }, [orders, filterDateCutoff]);
+    return directOnly.filter(o => isItemInPeriod(o.createdAt));
+  }, [orders, selectedYear, selectedMonth, filterDateCutoff]);
 
   // Scoped Manual Jobs (STRICT ANTI-DOUBLE-COUNTING & STOREFRONT EXCLUSION)
   // 1. Must NOT be linked to an existing Direct Company Order (by orderId, orderNumber, or source === 'Company Order')
@@ -207,25 +257,17 @@ export default function AnalyticsDashboard({
       return true;
     });
 
-    if (!filterDateCutoff) return manualOnly;
-
-    return manualOnly.filter(j => {
-      const dateVal = getJobDateStr(j);
-      const d = new Date(dateVal);
-      return !isNaN(d.getTime()) && d.getTime() >= filterDateCutoff.getTime();
-    });
-  }, [jobs, orders, filterDateCutoff]);
+    return manualOnly.filter(j => isItemInPeriod(getJobDateStr(j)));
+  }, [jobs, orders, selectedYear, selectedMonth, filterDateCutoff]);
 
   // Scoped Expenses & Payroll
   const scopedExpenses = useMemo(() => {
-    if (!filterDateCutoff) return expenses;
-    return expenses.filter(e => new Date(e.expenseDate).getTime() >= filterDateCutoff.getTime());
-  }, [expenses, filterDateCutoff]);
+    return expenses.filter(e => isItemInPeriod(e.expenseDate));
+  }, [expenses, selectedYear, selectedMonth, filterDateCutoff]);
 
   const scopedPayroll = useMemo(() => {
-    if (!filterDateCutoff) return payroll;
-    return payroll.filter(p => new Date(p.payDate).getTime() >= filterDateCutoff.getTime());
-  }, [payroll, filterDateCutoff]);
+    return payroll.filter(p => isItemInPeriod(p.payDate || p.payPeriodEnd || p.createdAt));
+  }, [payroll, selectedYear, selectedMonth, filterDateCutoff]);
 
   // ----------------------------------------------------
   // UNIFIED SALES HISTORY & REVENUE LEDGER
@@ -490,9 +532,111 @@ export default function AnalyticsDashboard({
   }, [scopedOrders, scopedManualJobs, scopedExpenses, scopedPayroll, staff, recurringExpenses, jobItemColumns]);
 
   // ----------------------------------------------------
-  // MONTHLY FINANCIAL TRENDS (Revenue vs Expenses vs Profit)
+  // MONTHLY & PERIOD FINANCIAL TRENDS (Revenue vs Expenses vs Profit)
   // ----------------------------------------------------
   const monthlyFinancialTrends = useMemo(() => {
+    // Mode 1: A specific Year and specific Month is chosen (e.g. September 2026)
+    if (selectedYear !== 'all' && selectedMonth !== 'all') {
+      const yearNum = parseInt(selectedYear, 10);
+      const monthNum = parseInt(selectedMonth, 10);
+      const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
+      const monthObj = MONTH_OPTIONS.find(m => m.value === selectedMonth);
+      const monthShort = monthObj ? monthObj.shortLabel : 'Mo';
+
+      const buckets = [
+        { label: `${monthShort} 1–7`, start: 1, end: 7, revenue: 0, expenses: 0, payroll: 0, profit: 0 },
+        { label: `${monthShort} 8–14`, start: 8, end: 14, revenue: 0, expenses: 0, payroll: 0, profit: 0 },
+        { label: `${monthShort} 15–21`, start: 15, end: 21, revenue: 0, expenses: 0, payroll: 0, profit: 0 },
+        { label: `${monthShort} 22–28`, start: 22, end: 28, revenue: 0, expenses: 0, payroll: 0, profit: 0 },
+        { label: `${monthShort} 29–${daysInMonth}`, start: 29, end: daysInMonth, revenue: 0, expenses: 0, payroll: 0, profit: 0 }
+      ];
+
+      const getBucket = (dateStr?: string) => {
+        if (!dateStr) return null;
+        let day: number | null = null;
+        const match = String(dateStr).match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+        if (match) {
+          day = parseInt(match[3], 10);
+        } else {
+          const d = new Date(dateStr);
+          if (!isNaN(d.getTime())) day = d.getDate();
+        }
+        if (day === null) return null;
+        return buckets.find(b => day! >= b.start && day! <= b.end) || null;
+      };
+
+      scopedOrders.forEach(o => {
+        if (o.status === 'Pending' || o.status === 'Pending Approval' || (o.status as any) === 'Draft' || o.status === 'Canceled') return;
+        const b = getBucket(o.createdAt);
+        if (b) b.revenue += (o.totalAmount || 0);
+      });
+
+      scopedManualJobs.forEach(j => {
+        if (j.status === 'Pending' || (j.status as any) === 'Draft' || j.status === 'Canceled') return;
+        const b = getBucket(getJobDateStr(j));
+        if (b) b.revenue += getJobRevenue(j);
+      });
+
+      scopedExpenses.forEach(e => {
+        if (e.paymentStatus === 'Voided') return;
+        const b = getBucket(e.expenseDate);
+        if (b) b.expenses += (e.amount || 0);
+      });
+
+      scopedPayroll.forEach(p => {
+        if (p.status === 'Voided') return;
+        const b = getBucket(p.payDate || p.payPeriodEnd || p.createdAt);
+        if (b) b.payroll += (p.grossPay || 0);
+      });
+
+      return buckets.map(b => ({
+        month: b.label,
+        revenue: b.revenue,
+        expenses: b.expenses,
+        payroll: b.payroll,
+        profit: b.revenue - (b.expenses + b.payroll)
+      }));
+    }
+
+    // Mode 2: A specific Year is chosen, all months
+    if (selectedYear !== 'all' && selectedMonth === 'all') {
+      const monthBuckets: Record<string, { month: string; revenue: number; expenses: number; payroll: number; profit: number }> = {};
+      MONTH_OPTIONS.filter(m => m.value !== 'all').forEach(m => {
+        const key = `${selectedYear}-${m.value}`;
+        monthBuckets[key] = { month: m.shortLabel, revenue: 0, expenses: 0, payroll: 0, profit: 0 };
+      });
+
+      scopedOrders.forEach(o => {
+        if (o.status === 'Pending' || o.status === 'Pending Approval' || (o.status as any) === 'Draft' || o.status === 'Canceled') return;
+        const key = (o.createdAt || '').slice(0, 7);
+        if (monthBuckets[key]) monthBuckets[key].revenue += (o.totalAmount || 0);
+      });
+
+      scopedManualJobs.forEach(j => {
+        if (j.status === 'Pending' || (j.status as any) === 'Draft' || j.status === 'Canceled') return;
+        const key = getJobDateStr(j).slice(0, 7);
+        if (monthBuckets[key]) monthBuckets[key].revenue += getJobRevenue(j);
+      });
+
+      scopedExpenses.forEach(e => {
+        if (e.paymentStatus === 'Voided') return;
+        const key = (e.expenseDate || '').slice(0, 7);
+        if (monthBuckets[key]) monthBuckets[key].expenses += (e.amount || 0);
+      });
+
+      scopedPayroll.forEach(p => {
+        if (p.status === 'Voided') return;
+        const key = (p.payDate || p.payPeriodEnd || p.createdAt || '').slice(0, 7);
+        if (monthBuckets[key]) monthBuckets[key].payroll += (p.grossPay || 0);
+      });
+
+      return Object.values(monthBuckets).map(m => ({
+        ...m,
+        profit: m.revenue - (m.expenses + m.payroll)
+      }));
+    }
+
+    // Mode 3: Default rolling 6 calendar months
     const monthMap: Record<string, { month: string; revenue: number; expenses: number; payroll: number; profit: number }> = {};
 
     // Generate last 6 calendar months
@@ -545,7 +689,7 @@ export default function AnalyticsDashboard({
       ...m,
       profit: m.revenue - (m.expenses + m.payroll)
     }));
-  }, [scopedOrders, scopedManualJobs, scopedExpenses, scopedPayroll, jobItemColumns]);
+  }, [scopedOrders, scopedManualJobs, scopedExpenses, scopedPayroll, selectedYear, selectedMonth, jobItemColumns]);
 
   // ----------------------------------------------------
   // EXPENSE CATEGORY DISTRIBUTION
@@ -663,22 +807,10 @@ export default function AnalyticsDashboard({
 
   return (
     <div className="space-y-6 font-sans text-left" id="comprehensive-analytics-root">
-      {/* Top Header Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-5">
-        <div>
-          <h2 className="text-xl font-extrabold uppercase text-black tracking-wider flex items-center gap-2">
-            <BarChart3 className="w-5 h-5 text-black" />
-            Executive Financial &amp; Sales Analytics
-          </h2>
-          <p className="text-xs text-gray-500 font-mono mt-0.5">
-            Internal analytics: Direct Company Orders + Recognized Manual Jobs (Custom Storefronts excluded).
-          </p>
-        </div>
-
-        {/* View & Date Filters */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Sub-view Navigation */}
-          <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200">
+      {/* View & Period Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-4">
+        {/* Sub-view Navigation */}
+        <div className="flex items-center bg-gray-100 p-1 rounded-xl border border-gray-200">
             <button
               type="button"
               onClick={() => setAnalyticsView('overview')}
@@ -717,19 +849,63 @@ export default function AnalyticsDashboard({
             </button>
           </div>
 
-          {/* Time Range Filter */}
-          <select
-            value={timeRange}
-            onChange={e => setTimeRange(e.target.value as any)}
-            className="px-3 py-2 text-xs border border-gray-200 focus:border-black rounded-xl font-mono bg-white font-bold cursor-pointer"
-          >
-            <option value="all">All Time History</option>
-            <option value="30days">Last 30 Days</option>
-            <option value="90days">Last 90 Days</option>
-            <option value="this_year">This Calendar Year</option>
-          </select>
+          {/* Dedicated Year and Month Period Filters */}
+          <div className="flex flex-wrap items-center gap-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200 shadow-2xs">
+            <div className="flex items-center gap-1.5 px-1.5 text-[11px] font-mono font-bold text-gray-500 uppercase">
+              <Calendar className="w-3.5 h-3.5 text-black" />
+              <span className="hidden sm:inline">Period:</span>
+            </div>
+
+            {/* Year Selector */}
+            <div className="flex items-center gap-1">
+              <label htmlFor="analytics-year-select" className="text-[10px] font-mono font-bold text-gray-400 uppercase">
+                Year:
+              </label>
+              <select
+                id="analytics-year-select"
+                value={selectedYear}
+                onChange={e => setSelectedYear(e.target.value)}
+                className="px-2.5 py-1.5 text-xs font-mono font-bold border border-gray-200 focus:border-black rounded-lg bg-white cursor-pointer shadow-2xs"
+              >
+                <option value="all">All Years</option>
+                {availableYears.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Month Selector */}
+            <div className="flex items-center gap-1">
+              <label htmlFor="analytics-month-select" className="text-[10px] font-mono font-bold text-gray-400 uppercase">
+                Month:
+              </label>
+              <select
+                id="analytics-month-select"
+                value={selectedMonth}
+                onChange={e => setSelectedMonth(e.target.value)}
+                className="px-2.5 py-1.5 text-xs font-mono font-bold border border-gray-200 focus:border-black rounded-lg bg-white cursor-pointer shadow-2xs"
+              >
+                {MONTH_OPTIONS.map(m => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {(selectedYear !== 'all' || selectedMonth !== 'all') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedYear('all');
+                  setSelectedMonth('all');
+                }}
+                className="px-2 py-1 text-[10px] font-mono font-bold text-red-600 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
+                title="Reset to all-time"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </div>
-      </div>
 
       {/* ---------------------------------------------------- */}
       {/* 4 PRIMARY EXECUTIVE KPI CARDS                        */}

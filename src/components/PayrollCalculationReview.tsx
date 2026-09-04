@@ -47,6 +47,7 @@ interface PayrollCalculationReviewProps {
   onSavePayrollBatch?: (records: PayrollRecord[]) => void;
   currencySymbol?: string;
   currentUser?: AuthUser | null;
+  currentAdminName?: string;
 }
 
 export default function PayrollCalculationReview({
@@ -56,7 +57,8 @@ export default function PayrollCalculationReview({
   onSavePayroll,
   onSavePayrollBatch,
   currencySymbol = '₱',
-  currentUser
+  currentUser,
+  currentAdminName
 }: PayrollCalculationReviewProps) {
   // Pay Period options
   const standardPeriods = useMemo(() => generateStandardPayPeriods(), []);
@@ -289,7 +291,7 @@ export default function PayrollCalculationReview({
 
   // Finalize payroll handler
   const handleConfirmFinalize = () => {
-    const adminName = currentUser?.name || 'Administrator';
+    const adminName = currentAdminName || currentUser?.name || 'Administrator';
     const timestamp = new Date().toISOString();
 
     const finalizedRecords = calculatedBreakdowns.map(b => {

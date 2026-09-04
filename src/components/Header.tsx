@@ -6,6 +6,7 @@
 import React from 'react';
 import { CompanyProfile, SystemSettings, AppNotification } from '../types';
 import NotificationBell from './NotificationBell';
+import { PWAInstallButton } from './PWAInstallButton';
 import {
   ShoppingCart,
   Repeat,
@@ -142,6 +143,9 @@ export default function Header({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* PWA Install Button for mobile/desktop browsers */}
+          <PWAInstallButton variant="header" appName={systemSettings?.hubName || 'ARH Print Hub'} />
+
           {(userRole === 'admin' || userRole === 'staff') && isSheetsConnected && onSyncSheets && (
             <button
               onClick={onSyncSheets}

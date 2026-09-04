@@ -11,7 +11,6 @@ import {
   Trash2,
   Copy,
   Check,
-  Sparkles,
   Clock,
   User,
   Shield,
@@ -27,16 +26,6 @@ interface JobCommentsSectionProps {
   onSaveJob: (job: Job, immediate?: boolean) => void;
   className?: string;
 }
-
-const QUICK_INSTRUCTION_TEMPLATES = [
-  { label: 'Updated Artwork', text: '🎨 Please use the updated artwork attached to this job.' },
-  { label: 'Logo 10% Smaller', text: '📏 Customer requested the logo to be 10% smaller.' },
-  { label: 'Use 43s Mesh', text: '🕸️ Use 43s mesh for this screen print.' },
-  { label: 'Waiting Approval', text: '⏳ Waiting for customer approval before production.' },
-  { label: 'Proof Confirmed', text: '✅ Final mock proof approved by customer.' },
-  { label: 'Special Polybag', text: '📦 Pack individually in polybags with size stickers.' },
-  { label: 'Rush Order', text: '⚠️ Rush order: prioritize printing and QC today.' },
-];
 
 function formatTimeAgo(dateStr: string): string {
   try {
@@ -193,10 +182,6 @@ export default function JobCommentsSection({
     }
   };
 
-  const handleQuickTemplateClick = (templateText: string) => {
-    setCommentInput(prev => (prev ? `${prev}\n${templateText}` : templateText));
-  };
-
   return (
     <div className={`space-y-4 ${className}`} id={`job-comments-section-${job.id}`}>
       {/* Header & Description */}
@@ -220,26 +205,6 @@ export default function JobCommentsSection({
 
         <div className="font-mono text-[10px] text-gray-400 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200">
           Job ID: <strong className="text-black">{job.id}</strong>
-        </div>
-      </div>
-
-      {/* Quick Instruction Templates */}
-      <div className="space-y-1.5">
-        <div className="flex items-center space-x-1.5 text-[10px] font-mono font-bold text-gray-500">
-          <Sparkles className="w-3 h-3 text-amber-500" />
-          <span>Quick Instruction Presets (Click to insert):</span>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {QUICK_INSTRUCTION_TEMPLATES.map((tmpl, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => handleQuickTemplateClick(tmpl.text)}
-              className="px-2.5 py-1 text-[10px] font-mono font-medium bg-gray-50 hover:bg-neutral-900 hover:text-white border border-gray-200 hover:border-black rounded-lg transition-all cursor-pointer text-gray-700 shadow-2xs active:scale-95"
-            >
-              {tmpl.label}
-            </button>
-          ))}
         </div>
       </div>
 
