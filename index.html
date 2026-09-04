@@ -14,6 +14,37 @@
     <meta name="application-name" content="ARH Hub" />
     <title>ARH Print Hub</title>
     <meta name="description" content="Minimal B2B ordering hub for company uniforms, IDs, business cards, and promo products, featuring Job Management & Production Board, biometric DTR attendance & payroll calculation review with shift grace period rules, overtime approval, and Google Sheets synchronization." />
+    <script>
+      // Early PWA installation listener and Service Worker registration
+      window.__pwaPrompt = null;
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        window.__pwaPrompt = e;
+        window.dispatchEvent(new CustomEvent('pwa-prompt-ready'));
+      });
+      window.addEventListener('appinstalled', function () {
+        window.__pwaPrompt = null;
+        window.dispatchEvent(new CustomEvent('pwa-installed'));
+      });
+
+      if ('serviceWorker' in navigator) {
+        var registerSW = function () {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(function (reg) {
+              reg.update();
+            })
+            .catch(function (err) {
+              console.warn('[PWA] SW register notice:', err);
+            });
+        };
+
+        if (document.readyState === 'complete') {
+          registerSW();
+        } else {
+          window.addEventListener('load', registerSW);
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

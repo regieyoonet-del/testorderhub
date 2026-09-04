@@ -5,7 +5,17 @@
 
 import React, { useState } from 'react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
-import { Download, Smartphone, Share, PlusSquare, X, Check } from 'lucide-react';
+import {
+  Download,
+  Share,
+  PlusSquare,
+  X,
+  Check,
+  ExternalLink,
+  Laptop,
+  Compass,
+  Monitor
+} from 'lucide-react';
 
 interface PWAInstallButtonProps {
   variant?: 'header' | 'drawer' | 'settings' | 'compact';
@@ -16,11 +26,11 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   variant = 'header',
   appName = 'ARH Print Hub'
 }) => {
-  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
-  const [showIOSGuide, setShowIOSGuide] = useState(false);
+  const { isInstallable, isInstalled, isInIframe, platformInfo, install } = usePWAInstall();
+  const [showGuideModal, setShowGuideModal] = useState(false);
   const [installSuccess, setInstallSuccess] = useState(false);
 
-  // If already installed, show subtle installed badge in settings, but hide in header/drawer
+  // Requirement 3: If already installed / running in standalone mode, hide the Install button
   if (isInstalled) {
     if (variant === 'settings') {
       return (
@@ -34,18 +44,18 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   }
 
   const handleInstallClick = async () => {
+    // 1. If browser exposes native prompt, trigger it immediately
     if (isInstallable) {
       const accepted = await install();
       if (accepted) {
         setInstallSuccess(true);
         setTimeout(() => setInstallSuccess(false), 5000);
       }
-    } else if (isIOS) {
-      setShowIOSGuide(true);
-    } else {
-      // Ambient explanation for browsers where prompt was dismissed or not triggered yet
-      alert(`To install ${appName} as an app, tap your browser's menu (three dots or share button) and select "Install app" or "Add to Home screen".`);
+      return;
     }
+
+    // 2. If native prompt not directly available, show platform-specific guide modal
+    setShowGuideModal(true);
   };
 
   // Render variant styles
@@ -62,8 +72,13 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
           <span>Install App</span>
         </button>
 
-        {showIOSGuide && (
-          <IOSInstallModal onClose={() => setShowIOSGuide(false)} appName={appName} />
+        {showGuideModal && (
+          <PlatformInstallModal
+            onClose={() => setShowGuideModal(false)}
+            appName={appName}
+            isInIframe={isInIframe}
+            platformInfo={platformInfo}
+          />
         )}
       </>
     );
@@ -84,12 +99,17 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
             <span>Install {appName}</span>
           </div>
           <span className="text-[10px] bg-white/20 text-white px-2 py-0.5 rounded font-mono">
-            {isIOS ? 'iOS' : 'PWA'}
+            {platformInfo.isMac ? 'macOS' : platformInfo.isIOS ? 'iOS' : 'PWA'}
           </span>
         </button>
 
-        {showIOSGuide && (
-          <IOSInstallModal onClose={() => setShowIOSGuide(false)} appName={appName} />
+        {showGuideModal && (
+          <PlatformInstallModal
+            onClose={() => setShowGuideModal(false)}
+            appName={appName}
+            isInIframe={isInIframe}
+            platformInfo={platformInfo}
+          />
         )}
       </>
     );
@@ -105,7 +125,15 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
           id="pwa-settings-install-btn"
         >
           <Download className="w-3.5 h-3.5" />
-          <span>{isInstallable ? 'Install PWA on this Device' : isIOS ? 'Install on iPhone / iPad' : 'Install / Add to Home Screen'}</span>
+          <span>
+            {isInstallable
+              ? 'Install PWA on this Device'
+              : platformInfo.isMac
+              ? 'Install on Mac'
+              : platformInfo.isIOS
+              ? 'Install on iPhone / iPad'
+              : 'Install App'}
+          </span>
         </button>
 
         {installSuccess && (
@@ -116,22 +144,49 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
         )}
       </div>
 
-      {showIOSGuide && (
-        <IOSInstallModal onClose={() => setShowIOSGuide(false)} appName={appName} />
+      {showGuideModal && (
+        <PlatformInstallModal
+          onClose={() => setShowGuideModal(false)}
+          appName={appName}
+          isInIframe={isInIframe}
+          platformInfo={platformInfo}
+        />
       )}
     </>
   );
 };
 
-interface IOSModalProps {
+interface PlatformModalProps {
   onClose: () => void;
   appName: string;
+  isInIframe: boolean;
+  platformInfo: {
+    isMac: boolean;
+    isIOS: boolean;
+    isWindows: boolean;
+    isAndroid: boolean;
+    isChrome: boolean;
+    isSafari: boolean;
+    isEdge: boolean;
+    isFirefox: boolean;
+  };
 }
 
-const IOSInstallModal: React.FC<IOSModalProps> = ({ onClose, appName }) => {
+const PlatformInstallModal: React.FC<PlatformModalProps> = ({
+  onClose,
+  appName,
+  isInIframe,
+  platformInfo
+}) => {
+  const openDirectTab = () => {
+    if (typeof window !== 'undefined') {
+      window.open(window.location.href, '_blank');
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
-      <div className="bg-white rounded-2xl border border-gray-200 max-w-sm w-full p-6 space-y-4 shadow-2xl relative text-left">
+      <div className="bg-white rounded-2xl border border-gray-200 max-w-md w-full p-6 space-y-4 shadow-2xl relative text-left">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-black p-1 rounded-lg transition-colors cursor-pointer"
@@ -139,44 +194,150 @@ const IOSInstallModal: React.FC<IOSModalProps> = ({ onClose, appName }) => {
           <X className="w-5 h-5" />
         </button>
 
+        {/* Header */}
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center shrink-0 font-bold font-mono">
             ARH
           </div>
           <div>
             <h3 className="text-sm font-bold text-black uppercase tracking-tight">Install {appName}</h3>
-            <p className="text-[11px] text-gray-500 font-mono">Add to iPhone or iPad Home Screen</p>
-          </div>
-        </div>
-
-        <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3 text-xs text-gray-700 font-mono">
-          <div className="flex items-start gap-2.5">
-            <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center shrink-0 text-[10px] font-bold">
-              1
-            </div>
-            <p className="leading-relaxed">
-              Tap the <strong>Share</strong> icon <Share className="w-3.5 h-3.5 inline mx-1 text-blue-600" /> in your Safari bottom bar.
-            </p>
-          </div>
-
-          <div className="flex items-start gap-2.5">
-            <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center shrink-0 text-[10px] font-bold">
-              2
-            </div>
-            <p className="leading-relaxed">
-              Scroll down and select <strong>Add to Home Screen</strong> <PlusSquare className="w-3.5 h-3.5 inline mx-1 text-gray-700" />.
-            </p>
-          </div>
-
-          <div className="flex items-start gap-2.5">
-            <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center shrink-0 text-[10px] font-bold">
-              3
-            </div>
-            <p className="leading-relaxed">
-              Tap <strong>Add</strong> at top-right. Launch directly from your home screen like a native app.
+            <p className="text-[11px] text-gray-500 font-mono">
+              {platformInfo.isMac
+                ? 'Desktop App for macOS'
+                : platformInfo.isIOS
+                ? 'Add to iPhone / iPad'
+                : platformInfo.isWindows
+                ? 'Desktop App for Windows'
+                : 'Standalone Web App'}
             </p>
           </div>
         </div>
+
+        {/* IFRAME NOTICE: If currently inside an iframe (like AI Studio preview), direct to top-level tab */}
+        {isInIframe && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-mono font-bold text-amber-900">
+              <Laptop className="w-4 h-4 text-amber-700" />
+              <span>Preview Window Detected</span>
+            </div>
+            <p className="text-xs text-amber-800 leading-relaxed font-mono">
+              Chrome requires Progressive Web Apps to be installed from a direct, top-level browser tab rather than an embedded preview frame.
+            </p>
+            <button
+              onClick={openDirectTab}
+              className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-black text-white hover:bg-neutral-800 text-xs font-mono uppercase font-bold tracking-wider cursor-pointer shadow-xs transition-colors"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Open in Full Tab to Install</span>
+            </button>
+          </div>
+        )}
+
+        {/* PLATFORM-SPECIFIC INSTRUCTIONS */}
+        {platformInfo.isMac ? (
+          /* macOS Instructions */
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3 text-xs text-gray-700 font-mono">
+            <div className="flex items-center gap-2 pb-1 border-b border-gray-200 font-bold text-black">
+              <Laptop className="w-4 h-4 text-black" />
+              <span>macOS Chrome / Chromium Installation</span>
+            </div>
+
+            <div className="flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center shrink-0 text-[10px] font-bold">
+                1
+              </div>
+              <p className="leading-relaxed">
+                In Chrome's address bar (Omnibox), look for the <strong>Install</strong> icon{' '}
+                <Monitor className="w-3.5 h-3.5 inline mx-1 text-black" /> on the right side next to the bookmark star.
+              </p>
+            </div>
+
+            <div className="flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center shrink-0 text-[10px] font-bold">
+                2
+              </div>
+              <p className="leading-relaxed">
+                Or click the <strong>Chrome menu (⋮)</strong> in the upper right &gt; <strong>Save and Share</strong> &gt; select <strong>Install {appName}...</strong>
+              </p>
+            </div>
+
+            <div className="flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center shrink-0 text-[10px] font-bold">
+                3
+              </div>
+              <p className="leading-relaxed">
+                Click <strong>Install</strong>. {appName} will launch in its own native Mac window and appear in your <strong>Applications</strong> folder and <strong>Dock</strong>.
+              </p>
+            </div>
+
+            {platformInfo.isSafari && (
+              <div className="pt-2 border-t border-gray-200 text-[11px] text-gray-600">
+                <strong>Safari on macOS Sonoma+:</strong> Click <strong>File</strong> in the top Mac menu bar &gt; <strong>Add to Dock...</strong>
+              </div>
+            )}
+          </div>
+        ) : platformInfo.isIOS ? (
+          /* iOS Instructions */
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3 text-xs text-gray-700 font-mono">
+            <div className="flex items-center gap-2 pb-1 border-b border-gray-200 font-bold text-black">
+              <Compass className="w-4 h-4 text-blue-600" />
+              <span>iOS Safari Installation</span>
+            </div>
+
+            <div className="flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center shrink-0 text-[10px] font-bold">
+                1
+              </div>
+              <p className="leading-relaxed">
+                Tap the <strong>Share</strong> button <Share className="w-3.5 h-3.5 inline mx-1 text-blue-600" /> in your Safari bottom navigation bar.
+              </p>
+            </div>
+
+            <div className="flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center shrink-0 text-[10px] font-bold">
+                2
+              </div>
+              <p className="leading-relaxed">
+                Scroll down and select <strong>Add to Home Screen</strong> <PlusSquare className="w-3.5 h-3.5 inline mx-1 text-gray-700" />.
+              </p>
+            </div>
+
+            <div className="flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center shrink-0 text-[10px] font-bold">
+                3
+              </div>
+              <p className="leading-relaxed">
+                Tap <strong>Add</strong> at top right. Launch directly from your home screen as a standalone app.
+              </p>
+            </div>
+          </div>
+        ) : (
+          /* Windows / Android / Generic Desktop Instructions */
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3 text-xs text-gray-700 font-mono">
+            <div className="flex items-center gap-2 pb-1 border-b border-gray-200 font-bold text-black">
+              <Monitor className="w-4 h-4 text-black" />
+              <span>Desktop / Android Installation</span>
+            </div>
+
+            <div className="flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center shrink-0 text-[10px] font-bold">
+                1
+              </div>
+              <p className="leading-relaxed">
+                Click the <strong>Install</strong> icon in your browser's address bar.
+              </p>
+            </div>
+
+            <div className="flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center shrink-0 text-[10px] font-bold">
+                2
+              </div>
+              <p className="leading-relaxed">
+                Or open your browser menu (three dots <strong>⋮</strong>) and select <strong>Install {appName}</strong>.
+              </p>
+            </div>
+          </div>
+        )}
 
         <button
           onClick={onClose}
