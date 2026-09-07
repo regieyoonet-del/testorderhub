@@ -1332,11 +1332,11 @@ export default function PublicOrderPortal({
                     id="submit-portal-order-btn"
                   >
                     {isSubmitting ? (
-                      <span>Submitting Order...</span>
+                      <span>Placing Order...</span>
                     ) : (
                       <>
                         <Send className="w-4 h-4" />
-                        <span>Submit Corporate Order</span>
+                        <span>Place Order</span>
                       </>
                     )}
                   </button>

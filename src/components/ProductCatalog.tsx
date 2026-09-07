@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product, CartItem, ProductAddOn } from '../types';
 import { getProductUnitPrice } from '../utils/pricing';
-import { Check, Plus, AlertCircle, Sparkles, SlidersHorizontal, Heart, Clock, Truck, Edit3, X, Save } from 'lucide-react';
+import { Check, Plus, AlertCircle, Sparkles, ChevronDown, Heart, Clock, Truck, Edit3, X, Save } from 'lucide-react';
 import ProductDetailsPage from './ProductDetailsPage';
 import ProductImageCarousel from './ProductImageCarousel';
 import { sheetsService } from '../lib/sheetsService';
@@ -162,31 +162,31 @@ export default function ProductCatalog({ products, onAddToCart, onUpdateProduct,
 
   return (
     <div className="space-y-8">
-      {/* Category Header Filters */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b border-black pb-4">
-        <div>
-          <h2 className="text-xl font-bold uppercase tracking-tight text-black">Product Catalog</h2>
-          <p className="text-xs text-gray-500 font-mono">Select repeatable corporate products &amp; custom uniforms</p>
-        </div>
-        
-        {/* Horizontal Category Scroll */}
-        <div className="flex items-center space-x-1.5 overflow-x-auto custom-scrollbar pb-3 pt-1 w-full md:w-auto max-w-full">
-          <SlidersHorizontal className="w-4 h-4 text-black mr-2 shrink-0 hidden md:inline" />
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3.5 py-1.5 text-xs font-sans uppercase font-bold tracking-wider border rounded-xl transition-all whitespace-nowrap focus:outline-none cursor-pointer shrink-0 ${
-                selectedCategory === cat
-                  ? 'bg-black text-white border-black shadow-xs'
-                  : 'bg-white text-gray-500 border-gray-200 hover:text-black hover:border-black'
-              }`}
-              id={`cat-filter-${cat.replace(/\s+/g, '-').toLowerCase()}`}
+      {/* Category Dropdown Filter */}
+      <div className="flex items-center justify-between border-b border-black pb-4">
+        <div className="relative w-full sm:w-64">
+          <label htmlFor="product-category-dropdown" className="sr-only">Category</label>
+          <div className="relative">
+            <select
+              id="product-category-dropdown"
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="w-full appearance-none bg-white text-black font-sans text-xs uppercase font-bold tracking-wider px-3.5 py-2.5 pr-9 border border-black rounded-xl shadow-2xs hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-black cursor-pointer transition-colors"
             >
-              {cat}
-            </button>
-          ))}
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat === 'All' ? 'All Categories' : cat}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-black">
+              <ChevronDown className="w-4 h-4" />
+            </div>
+          </div>
         </div>
+        <span className="hidden sm:inline-block text-xs font-mono text-gray-500 font-bold uppercase tracking-wider">
+          {filteredProducts.length} {filteredProducts.length === 1 ? 'Product' : 'Products'}
+        </span>
       </div>
 
       {/* Adding Notification Banner */}

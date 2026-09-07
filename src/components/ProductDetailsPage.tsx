@@ -6,7 +6,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { X, Check, Plus, ArrowLeft, ShieldCheck, HelpCircle, Layers, Tag, Award, Edit, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
+import { X, Check, Plus, ArrowLeft, HelpCircle, Layers, Tag, Edit, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
 import { Product } from '../types';
 
 interface ProductDetailsPageProps {
@@ -197,20 +197,8 @@ export default function ProductDetailsPage({ product, onClose, onEdit, editLabel
             )}
 
             {/* Spec Highlights Card */}
-            <div className="bg-white border border-gray-200 rounded-3xl p-5 space-y-4">
-              <h4 className="font-extrabold text-[10px] uppercase font-mono tracking-widest text-black border-b border-gray-100 pb-2.5 flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-neutral-900" />
-                Enterprise Fulfillment Grade
-              </h4>
+            <div className="bg-white border border-gray-200 rounded-3xl p-5">
               <div className="grid grid-cols-2 gap-4 text-xs font-mono">
-                <div>
-                  <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold leading-none">B2B Standard</span>
-                  <span className="font-bold text-black uppercase mt-1 block">Certified Logo Match</span>
-                </div>
-                <div>
-                  <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold leading-none">Fulfillment</span>
-                  <span className="font-bold text-black uppercase mt-1 block">Custom-on-Demand</span>
-                </div>
                 <div>
                   <span className="block text-[8px] uppercase tracking-wider text-gray-400 font-bold leading-none">Min Order</span>
                   <span className="font-bold text-black uppercase mt-1 block">{product.minQuantity} {product.unit}</span>
@@ -230,10 +218,6 @@ export default function ProductDetailsPage({ product, onClose, onEdit, editLabel
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="px-2.5 py-0.5 bg-gray-100 text-gray-700 text-[9px] font-bold tracking-widest uppercase rounded font-mono">
                   {product.category}
-                </span>
-                <span className="px-2.5 py-0.5 bg-neutral-900 text-white text-[9px] font-bold tracking-widest uppercase rounded font-mono flex items-center gap-1">
-                  <Award className="w-3 h-3" />
-                  Pre-Approved Contract Spec
                 </span>
               </div>
 

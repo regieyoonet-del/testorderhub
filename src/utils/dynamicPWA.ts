@@ -102,7 +102,7 @@ export function applyPwaBranding(settings: Partial<SystemSettings>) {
         start_url: '/',
         scope: '/',
         display: 'standalone',
-        orientation: 'portrait',
+        orientation: 'any',
         theme_color: '#0a0a0a',
         background_color: '#ffffff',
         categories: ['business', 'productivity'],

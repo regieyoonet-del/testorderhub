@@ -3,9 +3,9 @@
 // GUARANTEE: Google Sheets API, Apps Script sync, external Auth, and live business data
 // are NEVER cached or intercepted - they pass directly to the network.
 
-const SW_VERSION = 'arh-pwa-v2.1';
+const SW_VERSION = 'arh-pwa-v2.2';
 const BRANDING_CACHE = 'pwa-branding-cache';
-const SHELL_CACHE = 'pwa-shell-v2';
+const SHELL_CACHE = 'pwa-shell-v2.2';
 
 const PRECACHE_ASSETS = [
   '/',
