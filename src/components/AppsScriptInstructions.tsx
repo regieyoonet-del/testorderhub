@@ -2000,6 +2000,29 @@ function saveRecurringExpense(ss, rule) {
     }
   }
 
+  // If not found by targetId, check if an existing row matches by Name and Start Date
+  if (rowIndex === -1) {
+    var nameIdx = -1;
+    var startIdx = -1;
+    for (var c = 0; c < headers.length; c++) {
+      var nh = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (nh === "expensename" || nh === "name") nameIdx = c;
+      if (nh === "startdate") startIdx = c;
+    }
+    if (nameIdx !== -1) {
+      var sName = String(rule.name || rule.expenseName || "").trim().toLowerCase();
+      var sStart = String(rule.startDate || "").slice(0, 7);
+      for (var i = 1; i < data.length; i++) {
+        var rowName = String(data[i][nameIdx] || "").trim().toLowerCase();
+        var rowStart = startIdx !== -1 ? String(data[i][startIdx] || "").slice(0, 7) : "";
+        if (rowName === sName && (!sStart || !rowStart || rowStart === sStart)) {
+          rowIndex = i + 1;
+          break;
+        }
+      }
+    }
+  }
+
   var specificMonthsJson = "";
   if (rule.specificMonths) {
     specificMonthsJson = typeof rule.specificMonths === 'string' ? rule.specificMonths : JSON.stringify(rule.specificMonths);

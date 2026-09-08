@@ -303,6 +303,7 @@ export interface SystemSettings {
   companyTagline?: string;
   companyAddress?: string;
   taxId?: string;
+  targetProfitMargin?: number; // Target Profit Margin % (e.g. 30 for 30%)
 }
 
 export interface OrderPortal {
@@ -581,6 +582,7 @@ export interface RecurringExpenseRule {
   frequency: RecurringFrequency;
   startDate: string; // YYYY-MM-DD
   endDate?: string;   // YYYY-MM-DD (optional)
+  durationMonths?: number; // Duration in months (optional, e.g. 12)
   paymentsPerYear: number; // e.g., 12, 4, 2, 1
   specificMonths?: number[]; // [1, 2... 12] where 1 is January
   status: 'Active' | 'Inactive';

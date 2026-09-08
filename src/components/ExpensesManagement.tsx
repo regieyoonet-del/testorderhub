@@ -135,6 +135,8 @@ export default function ExpensesManagement({
     amount: 15000,
     frequency: 'Monthly',
     startDate: new Date().toISOString().slice(0, 10),
+    endDate: '',
+    durationMonths: undefined,
     paymentsPerYear: 12,
     specificMonths: undefined,
     status: 'Active',
@@ -322,9 +324,11 @@ export default function ExpensesManagement({
     setRecurringFormData({
       name: '',
       category: expenseCategories[0]?.name || 'Rent & Studio Lease',
-      amount: 15000,
+      amount: 2500,
       frequency: 'Monthly',
       startDate: new Date().toISOString().slice(0, 10),
+      endDate: '',
+      durationMonths: 12,
       paymentsPerYear: 12,
       specificMonths: undefined,
       status: 'Active',
@@ -341,7 +345,8 @@ export default function ExpensesManagement({
       amount: recurring.amount,
       frequency: recurring.frequency,
       startDate: recurring.startDate,
-      endDate: recurring.endDate,
+      endDate: recurring.endDate || '',
+      durationMonths: recurring.durationMonths,
       paymentsPerYear: recurring.paymentsPerYear || 12,
       specificMonths: recurring.specificMonths,
       status: recurring.status,
@@ -365,14 +370,21 @@ export default function ExpensesManagement({
       ppy = recurringFormData.specificMonths.length;
     }
 
+    const existingMatch = !editingRecurring ? recurringExpenses.find(r => 
+      r.name.trim().toLowerCase() === recurringFormData.name.trim().toLowerCase() &&
+      r.category.trim().toLowerCase() === recurringFormData.category.trim().toLowerCase() &&
+      (r.startDate || '').slice(0, 7) === (recurringFormData.startDate || '').slice(0, 7)
+    ) : undefined;
+
     const rule: RecurringExpense = {
-      id: editingRecurring ? editingRecurring.id : generateRecurringExpenseId(recurringExpenses),
+      id: editingRecurring ? editingRecurring.id : (existingMatch?.id || generateRecurringExpenseId(recurringExpenses)),
       name: recurringFormData.name.trim(),
       category: recurringFormData.category,
       amount: Number(recurringFormData.amount) || 0,
       frequency: recurringFormData.frequency,
       startDate: recurringFormData.startDate,
-      endDate: recurringFormData.endDate || undefined,
+      endDate: recurringFormData.endDate?.trim() ? recurringFormData.endDate.trim() : undefined,
+      durationMonths: recurringFormData.durationMonths ? Number(recurringFormData.durationMonths) : undefined,
       paymentsPerYear: ppy,
       specificMonths: recurringFormData.specificMonths,
       status: recurringFormData.status,
@@ -856,10 +868,19 @@ export default function ExpensesManagement({
                             <span className="text-[10px] text-gray-400 font-normal"> / {rule.frequency.toLowerCase()}</span>
                           </span>
                         </div>
+                        {rule.durationMonths && (
+                          <div className="flex justify-between items-baseline text-[10px] text-gray-500 pt-1 border-t border-gray-200">
+                            <span>Duration / Term:</span>
+                            <span className="font-bold text-gray-800">
+                              {rule.durationMonths} months
+                              {rule.startDate ? ` (${rule.startDate.slice(0, 7)}${rule.endDate ? ` to ${rule.endDate.slice(0, 7)}` : ''})` : ''}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex justify-between items-baseline text-[10px] text-gray-500 pt-1 border-t border-gray-200">
-                          <span>Annualized Run-rate:</span>
-                          <span className="font-bold text-gray-800">
-                            {currencySymbol} {yearlyAmt.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          <span>{rule.durationMonths ? 'Total Commitment:' : 'Annualized Run-rate:'}</span>
+                          <span className={`font-bold ${rule.durationMonths ? 'text-emerald-700' : 'text-gray-800'}`}>
+                            {currencySymbol} {(rule.durationMonths ? rule.durationMonths * rule.amount : yearlyAmt).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </span>
                         </div>
                       </div>
@@ -1252,14 +1273,99 @@ export default function ExpensesManagement({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Start Date</label>
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">Start Date *</label>
                   <input
                     type="date"
                     required
                     value={recurringFormData.startDate}
-                    onChange={e => setRecurringFormData({ ...recurringFormData, startDate: e.target.value })}
+                    onChange={e => {
+                      const newStart = e.target.value;
+                      let newEnd = recurringFormData.endDate;
+                      if (recurringFormData.durationMonths && newStart) {
+                        const [sy, sm] = newStart.split('-').map(Number);
+                        if (sy && sm) {
+                          const endTotal = (sy * 12 + sm - 1) + (recurringFormData.durationMonths - 1);
+                          const ey = Math.floor(endTotal / 12);
+                          const em = (endTotal % 12) + 1;
+                          const daysInM = new Date(ey, em, 0).getDate();
+                          newEnd = `${ey}-${String(em).padStart(2, '0')}-${String(daysInM).padStart(2, '0')}`;
+                        }
+                      }
+                      setRecurringFormData({ ...recurringFormData, startDate: newStart, endDate: newEnd });
+                    }}
                     className="w-full p-2.5 border border-gray-200 focus:border-black rounded-xl font-mono text-xs focus:outline-none"
                   />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">
+                    Duration (Months)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="120"
+                    placeholder="e.g. 12 (leave blank for ongoing)"
+                    value={recurringFormData.durationMonths || ''}
+                    onChange={e => {
+                      const val = e.target.value ? parseInt(e.target.value, 10) : undefined;
+                      let newEnd = recurringFormData.endDate;
+                      if (val && recurringFormData.startDate) {
+                        const [sy, sm] = recurringFormData.startDate.split('-').map(Number);
+                        if (sy && sm) {
+                          const endTotal = (sy * 12 + sm - 1) + (val - 1);
+                          const ey = Math.floor(endTotal / 12);
+                          const em = (endTotal % 12) + 1;
+                          const daysInM = new Date(ey, em, 0).getDate();
+                          newEnd = `${ey}-${String(em).padStart(2, '0')}-${String(daysInM).padStart(2, '0')}`;
+                        }
+                      }
+                      setRecurringFormData({
+                        ...recurringFormData,
+                        durationMonths: val,
+                        endDate: newEnd
+                      });
+                    }}
+                    className="w-full p-2.5 border border-gray-200 focus:border-black rounded-xl font-mono text-xs focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] uppercase font-mono font-bold text-gray-600">
+                    End Date (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={recurringFormData.endDate || ''}
+                    onChange={e => {
+                      const val = e.target.value;
+                      let dur = recurringFormData.durationMonths;
+                      if (val && recurringFormData.startDate) {
+                        const [sy, sm] = recurringFormData.startDate.split('-').map(Number);
+                        const [ey, em] = val.split('-').map(Number);
+                        if (sy && sm && ey && em) {
+                          const diff = (ey * 12 + em - 1) - (sy * 12 + sm - 1) + 1;
+                          if (diff > 0) dur = diff;
+                        }
+                      }
+                      setRecurringFormData({
+                        ...recurringFormData,
+                        endDate: val,
+                        durationMonths: dur
+                      });
+                    }}
+                    className="w-full p-2.5 border border-gray-200 focus:border-black rounded-xl font-mono text-xs focus:outline-none"
+                  />
+                </div>
+
+                <div className="sm:col-span-2 p-3 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-between text-xs font-mono">
+                  <span className="text-gray-600 font-bold uppercase text-[10px]">Total Recurring Commitment:</span>
+                  <span className="font-extrabold text-sm text-black">
+                    {currencySymbol} {((recurringFormData.durationMonths ? recurringFormData.durationMonths * (recurringFormData.amount || 0) : (recurringFormData.frequency === 'Monthly' ? 12 : recurringFormData.paymentsPerYear || 12) * (recurringFormData.amount || 0))).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <span className="text-[10px] text-gray-500 font-normal ml-1">
+                      ({recurringFormData.durationMonths ? `${recurringFormData.durationMonths} months` : '1-Year Annualized'})
+                    </span>
+                  </span>
                 </div>
 
                 <div className="space-y-1 sm:col-span-2">

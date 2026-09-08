@@ -9,6 +9,7 @@ import { parseColorList, resolveColorHex } from '../utils/colorUtils';
 import { normalizeAttendanceDate, cleanClockOut, cleanClockIn, calculateHoursWorked } from '../utils/attendanceUtils';
 import { DEFAULT_QUOTE_NOTES } from '../constants/quoteDefaults';
 import { EMBEDDED_APPS_SCRIPT_URL } from '../config';
+import { deduplicateRecurringExpenses } from '../utils/financeCalculations';
 
 export { parseColorList, resolveColorHex };
 
@@ -2448,7 +2449,7 @@ export const sheetsService = {
       if (!response.ok) return null;
       const rawData = await response.json();
       if (Array.isArray(rawData)) {
-        return rawData.map(item => {
+        const rules = rawData.map(item => {
           const rawMonths = getProp(item, ['SpecificMonthsJSON', 'specificMonths', 'Specific Months', 'MonthsJSON']);
           let specificMonths: number[] | undefined = undefined;
           if (Array.isArray(rawMonths)) {
@@ -2462,14 +2463,23 @@ export const sheetsService = {
             }
           }
 
+          const rawId = getProp(item, ['RecurringExpenseID', 'recurringExpenseId', 'id', 'Recurring Expense ID']);
+          const rawName = String(getProp(item, ['ExpenseName', 'expenseName', 'Name', 'name', 'Expense Name', 'Description']) || '').trim();
+          const rawCat = String(getProp(item, ['Category', 'category']) || 'Miscellaneous').trim();
+          const rawAmt = Number(getProp(item, ['Amount', 'amount', 'Cost']) || 0);
+          const rawStart = String(getProp(item, ['StartDate', 'startDate', 'Start Date']) || new Date().toISOString().split('T')[0]).trim();
+          const stableFallbackId = `REC-EXP-${rawName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'item'}-${rawAmt}-${rawStart.slice(0, 7)}`;
+          const id = String(rawId || stableFallbackId);
+
           return {
-            id: String(getProp(item, ['RecurringExpenseID', 'recurringExpenseId', 'id', 'Recurring Expense ID']) || `REC-EXP-${Date.now()}`),
-            name: String(getProp(item, ['ExpenseName', 'expenseName', 'Name', 'name', 'Expense Name', 'Description']) || ''),
-            category: String(getProp(item, ['Category', 'category']) || 'Miscellaneous'),
-            amount: Number(getProp(item, ['Amount', 'amount', 'Cost']) || 0),
+            id,
+            name: rawName,
+            category: rawCat,
+            amount: rawAmt,
             frequency: (getProp(item, ['Frequency', 'frequency']) || 'Monthly') as any,
-            startDate: String(getProp(item, ['StartDate', 'startDate', 'Start Date']) || new Date().toISOString().split('T')[0]),
+            startDate: rawStart,
             endDate: getProp(item, ['EndDate', 'endDate', 'End Date']) ? String(getProp(item, ['EndDate', 'endDate', 'End Date'])) : undefined,
+            durationMonths: getProp(item, ['DurationMonths', 'durationMonths', 'Duration', 'Duration (Months)']) ? Number(getProp(item, ['DurationMonths', 'durationMonths', 'Duration', 'Duration (Months)'])) : undefined,
             paymentsPerYear: Number(getProp(item, ['PaymentsPerYear', 'paymentsPerYear', 'Payments Per Year']) || 12),
             specificMonths,
             status: (getProp(item, ['Status', 'status']) || 'Active') as any,
@@ -2478,6 +2488,7 @@ export const sheetsService = {
             updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
           };
         });
+        return deduplicateRecurringExpenses(rules);
       }
       return null;
     } catch (error) {
@@ -3085,14 +3096,23 @@ export const sheetsService = {
             }
           }
 
+          const rawId = getProp(item, ['RecurringExpenseID', 'recurringExpenseId', 'id', 'Recurring Expense ID']);
+          const rawName = String(getProp(item, ['ExpenseName', 'expenseName', 'Name', 'name', 'Expense Name', 'Description']) || '').trim();
+          const rawCat = String(getProp(item, ['Category', 'category']) || 'Miscellaneous').trim();
+          const rawAmt = Number(getProp(item, ['Amount', 'amount', 'Cost']) || 0);
+          const rawStart = String(getProp(item, ['StartDate', 'startDate', 'Start Date']) || new Date().toISOString().split('T')[0]).trim();
+          const stableFallbackId = `REC-EXP-${rawName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'item'}-${rawAmt}-${rawStart.slice(0, 7)}`;
+          const id = String(rawId || stableFallbackId);
+
           return {
-            id: String(getProp(item, ['RecurringExpenseID', 'recurringExpenseId', 'id', 'Recurring Expense ID']) || `REC-EXP-${Date.now()}`),
-            name: String(getProp(item, ['ExpenseName', 'expenseName', 'Name', 'name', 'Expense Name', 'Description']) || ''),
-            category: String(getProp(item, ['Category', 'category']) || 'Miscellaneous'),
-            amount: Number(getProp(item, ['Amount', 'amount', 'Cost']) || 0),
+            id,
+            name: rawName,
+            category: rawCat,
+            amount: rawAmt,
             frequency: (getProp(item, ['Frequency', 'frequency']) || 'Monthly') as any,
-            startDate: String(getProp(item, ['StartDate', 'startDate', 'Start Date']) || new Date().toISOString().split('T')[0]),
+            startDate: rawStart,
             endDate: getProp(item, ['EndDate', 'endDate', 'End Date']) ? String(getProp(item, ['EndDate', 'endDate', 'End Date'])) : undefined,
+            durationMonths: getProp(item, ['DurationMonths', 'durationMonths', 'Duration', 'Duration (Months)']) ? Number(getProp(item, ['DurationMonths', 'durationMonths', 'Duration', 'Duration (Months)'])) : undefined,
             paymentsPerYear: Number(getProp(item, ['PaymentsPerYear', 'paymentsPerYear', 'Payments Per Year']) || 12),
             specificMonths,
             status: (getProp(item, ['Status', 'status']) || 'Active') as any,
@@ -3101,6 +3121,7 @@ export const sheetsService = {
             updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
           };
         });
+        recurringExpenses = deduplicateRecurringExpenses(recurringExpenses);
       }
 
       return {

@@ -33,6 +33,7 @@ import JobManagementBoard from './JobManagementBoard';
 import StaffManagement from './StaffManagement';
 import ExpensesManagement from './ExpensesManagement';
 import AnalyticsDashboard from './AnalyticsDashboard';
+import FinancialOverview from './FinancialOverview';
 import { createJobFromOrder } from '../data/initialJobs';
 import {
   ResponsiveContainer,
@@ -159,7 +160,7 @@ interface AdminDashboardProps {
   onForceSyncAll: () => Promise<boolean>;
   onPullFromSheets?: () => Promise<void>;
   isSyncingSheets?: boolean;
-  initialTab?: 'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'analytics' | 'receipt' | 'quotes' | 'settings' | 'sync';
+  initialTab?: 'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'receipt' | 'quotes' | 'settings' | 'sync';
   initialCatalogSection?: 'catalog' | 'enquiries';
   highlightEnquiryNumber?: string;
   highlightOrderNumber?: string;
@@ -242,7 +243,7 @@ export default function AdminDashboard({
   onLogout,
   currentUser
 }: AdminDashboardProps) {
-  const [adminTab, setAdminTab] = useState<'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'analytics' | 'receipt' | 'quotes' | 'settings' | 'sync'>(initialTab || 'jobs');
+  const [adminTab, setAdminTab] = useState<'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'receipt' | 'quotes' | 'settings' | 'sync'>(initialTab || 'jobs');
 
   const [internalDrawerOpen, setInternalDrawerOpen] = useState(false);
   const isDrawerOpen = isMobileNavOpen !== undefined ? isMobileNavOpen : internalDrawerOpen;
@@ -784,6 +785,7 @@ export default function AdminDashboard({
     { id: 'orders', label: 'Orders', icon: ClipboardList, count: directCompanyOrders.length },
     { id: 'staff', label: 'Staff Management', icon: Users, count: (staff || []).length },
     { id: 'expenses', label: 'Expenses & Outflow', icon: Receipt, count: (expenses || []).length },
+    { id: 'financial-overview', label: 'Financial Overview', icon: DollarSign, count: null },
     { id: 'analytics', label: 'Financial & Sales Analytics', icon: BarChart3, count: null },
     { id: 'receipt', label: 'Receipt Generator', icon: Receipt, count: null },
     { id: 'quotes', label: 'Quote Builder', icon: Calculator, count: null },
@@ -1703,6 +1705,23 @@ export default function AdminDashboard({
           onDeleteRecurringExpense={onDeleteRecurringExpense}
           onSaveExpenseCategories={onSaveExpenseCategories}
           systemSettings={systemSettings}
+          currencySymbol={currencySymbol}
+        />
+      )}
+
+      {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
+      {/* FINANCIAL OVERVIEW (MONTH-BY-MONTH & ANNUAL QUOTA BREAKDOWN) */}
+      {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
+      {adminTab === 'financial-overview' && (
+        <FinancialOverview
+          orders={directCompanyOrders}
+          jobs={jobs}
+          jobItemColumns={jobItemColumns}
+          expenses={expenses}
+          payroll={payroll}
+          recurringExpenses={recurringExpenses}
+          systemSettings={systemSettings}
+          onUpdateSystemSettings={onUpdateSystemSettings}
           currencySymbol={currencySymbol}
         />
       )}

@@ -46,6 +46,7 @@ import {
 import { DEFAULT_QUOTE_NOTES } from './constants/quoteDefaults';
 import { sheetsService } from './lib/sheetsService';
 import { EMBEDDED_APPS_SCRIPT_URL } from './config';
+import { deduplicateRecurringExpenses } from './utils/financeCalculations';
 import Header from './components/Header';
 import ProductCatalog from './components/ProductCatalog';
 import BrowseProducts from './components/BrowseProducts';
@@ -460,7 +461,7 @@ export default function App() {
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
-        return Array.isArray(parsed) ? parsed : [];
+        return Array.isArray(parsed) ? deduplicateRecurringExpenses(parsed) : [];
       } catch {
         return [];
       }
@@ -727,6 +728,7 @@ export default function App() {
       companyTagline: parsed.companyTagline !== undefined ? parsed.companyTagline : '',
       companyAddress: parsed.companyAddress !== undefined ? parsed.companyAddress : '',
       taxId: parsed.taxId !== undefined ? parsed.taxId : '',
+      targetProfitMargin: typeof parsed.targetProfitMargin === 'number' ? parsed.targetProfitMargin : 30,
       adminUsername,
       adminPasscode
     };
@@ -1697,8 +1699,9 @@ export default function App() {
         // Process recurring expenses
         if (fetchedRecurringExpenses !== null && Array.isArray(fetchedRecurringExpenses)) {
           setRecurringExpenses(prevRules => {
-            const fetchedMap = new Map(fetchedRecurringExpenses.map(r => [r.id, r]));
-            const fetchedIds = new Set(fetchedRecurringExpenses.map(r => r.id));
+            const cleanFetched = deduplicateRecurringExpenses(fetchedRecurringExpenses);
+            const fetchedMap = new Map(cleanFetched.map(r => [r.id, r]));
+            const fetchedIds = new Set(cleanFetched.map(r => r.id));
             const now = Date.now();
             const mergedExisting = prevRules.map(localRule => {
               const serverRule = fetchedMap.get(localRule.id);
@@ -1711,19 +1714,14 @@ export default function App() {
               return serverRule;
             });
             const prevIds = new Set(prevRules.map(r => r.id));
-            const newServerRules = fetchedRecurringExpenses.filter(r => !prevIds.has(r.id));
+            const newServerRules = cleanFetched.filter(r => !prevIds.has(r.id));
             const activeExisting = mergedExisting.filter(r => {
               if (fetchedIds.has(r.id)) return true;
               const createdTimestamp = new Date(r.createdAt || 0).getTime();
               return !isNaN(createdTimestamp) && (now - createdTimestamp < 60000);
             });
             const merged = [...activeExisting, ...newServerRules];
-            const seen = new Set<string>();
-            return merged.filter(r => {
-              if (seen.has(r.id)) return false;
-              seen.add(r.id);
-              return true;
-            });
+            return deduplicateRecurringExpenses(merged);
           });
         }
 
@@ -2519,11 +2517,24 @@ export default function App() {
       updatedAt: new Date().toISOString()
     };
     setRecurringExpenses(prev => {
-      const exists = prev.some(r => r.id === updated.id);
-      if (exists) {
-        return prev.map(r => r.id === updated.id ? updated : r);
+      const normName = updated.name.toLowerCase().trim();
+      const normCat = updated.category.toLowerCase().trim();
+      const startYm = (updated.startDate || '').slice(0, 7);
+
+      const existsIndex = prev.findIndex(r =>
+        r.id === updated.id ||
+        (r.name.toLowerCase().trim() === normName &&
+         r.category.toLowerCase().trim() === normCat &&
+         (r.startDate || '').slice(0, 7) === startYm)
+      );
+
+      let nextList: RecurringExpenseRule[];
+      if (existsIndex >= 0) {
+        nextList = prev.map((r, idx) => idx === existsIndex ? updated : r);
+      } else {
+        nextList = [updated, ...prev];
       }
-      return [updated, ...prev];
+      return deduplicateRecurringExpenses(nextList);
     });
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
       sheetsService.saveRecurringExpense(appsScriptConfig.webAppUrl, updated).catch(err => console.warn('Save recurring expense sync notice:', err));
@@ -2531,9 +2542,10 @@ export default function App() {
   };
 
   const handleSaveRecurringExpensesBatch = (rulesList: RecurringExpenseRule[]) => {
-    setRecurringExpenses(rulesList);
+    const cleanList = deduplicateRecurringExpenses(rulesList);
+    setRecurringExpenses(cleanList);
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
-      sheetsService.saveRecurringExpensesBatch(appsScriptConfig.webAppUrl, rulesList).catch(err => console.warn('Save recurring expenses batch sync notice:', err));
+      sheetsService.saveRecurringExpensesBatch(appsScriptConfig.webAppUrl, cleanList).catch(err => console.warn('Save recurring expenses batch sync notice:', err));
     }
   };
 
