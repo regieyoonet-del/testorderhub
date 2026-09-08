@@ -150,6 +150,47 @@ export default function ExpensesManagement({
   const [newCatDesc, setNewCatDesc] = useState('');
   const [newCatType, setNewCatType] = useState<ExpenseType>('Fixed');
 
+  // Deletion Confirmation States (In-App Modals to prevent browser iframe sandbox blocking)
+  const [expenseToDelete, setExpenseToDelete] = useState<ExpenseRecord | null>(null);
+  const [recurringToDelete, setRecurringToDelete] = useState<RecurringExpense | null>(null);
+
+  // Form error states (replaces blocked window.alert)
+  const [expenseFormError, setExpenseFormError] = useState<string | null>(null);
+  const [recurringFormError, setRecurringFormError] = useState<string | null>(null);
+  const [catFormError, setCatFormError] = useState<string | null>(null);
+
+  // In-app Action Toast / Notification
+  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'info' | 'error'; message: string } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
+    setToastMessage({ message, type });
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 4000);
+  };
+
+  const handleConfirmDeleteExpense = () => {
+    if (!expenseToDelete) return;
+    const targetId = expenseToDelete.id;
+    const targetName = expenseToDelete.name;
+    setExpenseToDelete(null);
+    if (onDeleteExpense) {
+      onDeleteExpense(targetId);
+      showToast(`Deleted expense record "${targetName}" (${targetId})`, 'info');
+    }
+  };
+
+  const handleConfirmDeleteRecurring = () => {
+    if (!recurringToDelete) return;
+    const targetId = recurringToDelete.id;
+    const targetName = recurringToDelete.name;
+    setRecurringToDelete(null);
+    if (onDeleteRecurringExpense) {
+      onDeleteRecurringExpense(targetId);
+      showToast(`Deleted recurring schedule "${targetName}" (${targetId})`, 'info');
+    }
+  };
+
   // Filtered Expenses
   const filteredExpenses = useMemo(() => {
     return expenses.filter(e => {
@@ -235,6 +276,7 @@ export default function ExpensesManagement({
   // ----------------------------------------------------
   const handleOpenNewExpense = () => {
     setEditingExpense(null);
+    setExpenseFormError(null);
     const defaultCat = expenseCategories[0]?.name || 'Rent & Studio Lease';
     setExpenseFormData({
       name: '',
@@ -254,6 +296,7 @@ export default function ExpensesManagement({
 
   const handleOpenEditExpense = (record: ExpenseRecord) => {
     setEditingExpense(record);
+    setExpenseFormError(null);
     setExpenseFormData({
       name: record.name,
       category: record.category,
@@ -273,11 +316,11 @@ export default function ExpensesManagement({
   const handleSaveExpenseSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!expenseFormData.name.trim()) {
-      alert('Please enter expense title / description.');
+      setExpenseFormError('Please enter an expense title / description.');
       return;
     }
     if (Number(expenseFormData.amount) <= 0) {
-      alert('Please enter a valid expense amount.');
+      setExpenseFormError('Please enter a valid positive expense amount.');
       return;
     }
 
@@ -304,6 +347,8 @@ export default function ExpensesManagement({
     onSaveExpense(record);
     setIsExpenseModalOpen(false);
     setEditingExpense(null);
+    setExpenseFormError(null);
+    showToast(editingExpense ? `Updated expense "${record.name}"` : `Saved expense "${record.name}"`, 'success');
   };
 
   const handleQuickMarkPaid = (record: ExpenseRecord) => {
@@ -314,6 +359,7 @@ export default function ExpensesManagement({
       updatedAt: new Date().toISOString()
     };
     onSaveExpense(updated);
+    showToast(`Marked "${record.name}" as Paid`, 'success');
   };
 
   // ----------------------------------------------------
@@ -321,6 +367,7 @@ export default function ExpensesManagement({
   // ----------------------------------------------------
   const handleOpenNewRecurring = () => {
     setEditingRecurring(null);
+    setRecurringFormError(null);
     setRecurringFormData({
       name: '',
       category: expenseCategories[0]?.name || 'Rent & Studio Lease',
@@ -339,6 +386,7 @@ export default function ExpensesManagement({
 
   const handleOpenEditRecurring = (recurring: RecurringExpense) => {
     setEditingRecurring(recurring);
+    setRecurringFormError(null);
     setRecurringFormData({
       name: recurring.name,
       category: recurring.category,
@@ -358,7 +406,11 @@ export default function ExpensesManagement({
   const handleSaveRecurringSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!recurringFormData.name.trim()) {
-      alert('Please enter a recurring expense name.');
+      setRecurringFormError('Please enter a recurring expense name.');
+      return;
+    }
+    if (Number(recurringFormData.amount) <= 0) {
+      setRecurringFormError('Please enter a valid scheduled amount.');
       return;
     }
 
@@ -396,6 +448,8 @@ export default function ExpensesManagement({
     onSaveRecurringExpense(rule);
     setIsRecurringModalOpen(false);
     setEditingRecurring(null);
+    setRecurringFormError(null);
+    showToast(editingRecurring ? `Updated recurring schedule "${rule.name}"` : `Created recurring schedule "${rule.name}"`, 'success');
   };
 
   const handleGenerateExpenseFromRecurring = (rule: RecurringExpense) => {
@@ -418,7 +472,7 @@ export default function ExpensesManagement({
     };
 
     onSaveExpense(newExpense);
-    alert(`Logged monthly expense voucher for "${rule.name}" (${currencySymbol} ${rule.amount.toLocaleString()}). You can find it in the Expense Records tab.`);
+    showToast(`Logged monthly voucher for "${rule.name}" (${currencySymbol} ${rule.amount.toLocaleString()}) to Expense Records`, 'success');
   };
 
   // ----------------------------------------------------
@@ -430,7 +484,7 @@ export default function ExpensesManagement({
 
     const exists = expenseCategories.some(c => c.name.toLowerCase() === newCatName.trim().toLowerCase());
     if (exists) {
-      alert('A category with this name already exists.');
+      setCatFormError('A category with this name already exists.');
       return;
     }
 
@@ -446,6 +500,8 @@ export default function ExpensesManagement({
     onSaveExpenseCategories([...expenseCategories, newCat]);
     setNewCatName('');
     setNewCatDesc('');
+    setCatFormError(null);
+    showToast(`Added expense category "${newCat.name}"`, 'success');
   };
 
   const handleToggleCategoryActive = (catId: string) => {
@@ -770,11 +826,8 @@ export default function ExpensesManagement({
                             {onDeleteExpense && (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  if (window.confirm(`Are you sure you want to delete expense ${item.name} (${item.id})?`)) {
-                                    onDeleteExpense(item.id);
-                                  }
-                                }}
+                                id={`btn-delete-expense-${item.id}`}
+                                onClick={() => setExpenseToDelete(item)}
                                 className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                                 title="Delete Expense"
                               >
@@ -915,11 +968,8 @@ export default function ExpensesManagement({
                         {onDeleteRecurringExpense && (
                           <button
                             type="button"
-                            onClick={() => {
-                              if (window.confirm(`Delete recurring schedule ${rule.name}?`)) {
-                                onDeleteRecurringExpense(rule.id);
-                              }
-                            }}
+                            id={`btn-delete-recurring-${rule.id}`}
+                            onClick={() => setRecurringToDelete(rule)}
                             className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
                             title="Delete Schedule"
                           >
@@ -1053,6 +1103,13 @@ export default function ExpensesManagement({
               </button>
             </div>
 
+            {expenseFormError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-red-700 text-xs font-mono">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{expenseFormError}</span>
+              </div>
+            )}
+
             <form onSubmit={handleSaveExpenseSubmit} className="space-y-4 text-xs font-sans">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1 sm:col-span-2">
@@ -1176,20 +1233,40 @@ export default function ExpensesManagement({
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => setIsExpenseModalOpen(false)}
-                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-100 font-bold uppercase text-xs"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 bg-black hover:bg-neutral-800 text-white rounded-xl font-bold uppercase text-xs shadow-xs"
-                >
-                  {editingExpense ? 'Update Expense' : 'Save Expense'}
-                </button>
+              <div className="flex items-center justify-between gap-3 pt-3 border-t border-gray-100">
+                {editingExpense && onDeleteExpense ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const exp = editingExpense;
+                      setIsExpenseModalOpen(false);
+                      setExpenseToDelete(exp);
+                    }}
+                    className="px-3 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-xl font-bold uppercase text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                    id="btn-delete-from-expense-modal"
+                    title="Delete this expense record"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                ) : (
+                  <div />
+                )}
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsExpenseModalOpen(false)}
+                    className="px-4 py-2.5 border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-100 font-bold uppercase text-xs cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-black hover:bg-neutral-800 text-white rounded-xl font-bold uppercase text-xs shadow-xs cursor-pointer"
+                  >
+                    {editingExpense ? 'Update Expense' : 'Save Expense'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -1215,6 +1292,13 @@ export default function ExpensesManagement({
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {recurringFormError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-red-700 text-xs font-mono">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{recurringFormError}</span>
+              </div>
+            )}
 
             <form onSubmit={handleSaveRecurringSubmit} className="space-y-4 text-xs font-sans">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1392,22 +1476,233 @@ export default function ExpensesManagement({
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => setIsRecurringModalOpen(false)}
-                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-100 font-bold uppercase text-xs"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 bg-black hover:bg-neutral-800 text-white rounded-xl font-bold uppercase text-xs shadow-xs"
-                >
-                  {editingRecurring ? 'Update Schedule' : 'Save Schedule'}
-                </button>
+              <div className="flex items-center justify-between gap-3 pt-3 border-t border-gray-100">
+                {editingRecurring && onDeleteRecurringExpense ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rule = editingRecurring;
+                      setIsRecurringModalOpen(false);
+                      setRecurringToDelete(rule);
+                    }}
+                    className="px-3 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-xl font-bold uppercase text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                    id="btn-delete-from-recurring-modal"
+                    title="Delete this recurring schedule"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                ) : (
+                  <div />
+                )}
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsRecurringModalOpen(false)}
+                    className="px-4 py-2.5 border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-100 font-bold uppercase text-xs cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-black hover:bg-neutral-800 text-white rounded-xl font-bold uppercase text-xs shadow-xs cursor-pointer"
+                  >
+                    {editingRecurring ? 'Update Schedule' : 'Save Schedule'}
+                  </button>
+                </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* IN-APP CONFIRMATION MODAL: DELETE EXPENSE RECORD     */}
+      {/* ---------------------------------------------------- */}
+      {expenseToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div
+            className="bg-white border-2 border-black rounded-2xl p-6 shadow-2xl max-w-md w-full space-y-4 animate-in fade-in zoom-in-95 duration-150"
+            id="modal-confirm-delete-expense"
+          >
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-red-50 border border-red-200 text-red-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-sans text-base font-black text-black">Delete Expense Record?</h3>
+                <p className="font-mono text-xs text-gray-600 mt-0.5">
+                  Are you sure you want to remove this expense entry?
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 space-y-2 font-mono text-xs">
+              <div className="flex justify-between items-start gap-2">
+                <span className="text-gray-500 shrink-0">Expense Title:</span>
+                <span className="font-bold text-black text-right truncate">{expenseToDelete.name}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Record ID:</span>
+                <span className="font-bold text-gray-700">{expenseToDelete.id}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Amount:</span>
+                <span className="font-extrabold text-black text-sm">
+                  {currencySymbol} {expenseToDelete.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Category:</span>
+                <span className="text-gray-800">{expenseToDelete.category}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Date:</span>
+                <span className="text-gray-800">{expenseToDelete.expenseDate}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Payment Status:</span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${
+                  expenseToDelete.paymentStatus === 'Paid'
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                    : 'bg-amber-100 text-amber-800 border-amber-300'
+                }`}>
+                  {expenseToDelete.paymentStatus}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[11px] font-mono text-red-600 font-medium">
+              This action cannot be undone. The record will be permanently deleted from your expense ledger.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setExpenseToDelete(null)}
+                className="px-4 py-2 rounded-xl border border-gray-300 hover:border-black font-mono text-xs font-bold text-gray-700 hover:text-black transition-colors cursor-pointer"
+                id="btn-cancel-delete-expense"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteExpense}
+                className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-mono text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                id="btn-confirm-delete-expense"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete Expense
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* IN-APP CONFIRMATION MODAL: DELETE RECURRING SCHEDULE */}
+      {/* ---------------------------------------------------- */}
+      {recurringToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div
+            className="bg-white border-2 border-black rounded-2xl p-6 shadow-2xl max-w-md w-full space-y-4 animate-in fade-in zoom-in-95 duration-150"
+            id="modal-confirm-delete-recurring"
+          >
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-xl bg-red-50 border border-red-200 text-red-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-sans text-base font-black text-black">Delete Recurring Schedule?</h3>
+                <p className="font-mono text-xs text-gray-600 mt-0.5">
+                  Are you sure you want to delete this recurring commitment rule?
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 space-y-2 font-mono text-xs">
+              <div className="flex justify-between items-start gap-2">
+                <span className="text-gray-500 shrink-0">Schedule:</span>
+                <span className="font-bold text-black text-right truncate">{recurringToDelete.name}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Schedule ID:</span>
+                <span className="font-bold text-gray-700">{recurringToDelete.id}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Scheduled Amount:</span>
+                <span className="font-extrabold text-black text-sm">
+                  {currencySymbol} {recurringToDelete.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Frequency:</span>
+                <span className="font-bold text-gray-800">{recurringToDelete.frequency}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Category:</span>
+                <span className="text-gray-800">{recurringToDelete.category}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Schedule Window:</span>
+                <span className="text-gray-800 font-medium">
+                  {recurringToDelete.startDate} → {recurringToDelete.endDate || 'Ongoing'}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-[11px] font-mono text-gray-600">
+              Note: Deleting this recurring rule removes future forecast entries. Previously logged actual expense records are retained.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setRecurringToDelete(null)}
+                className="px-4 py-2 rounded-xl border border-gray-300 hover:border-black font-mono text-xs font-bold text-gray-700 hover:text-black transition-colors cursor-pointer"
+                id="btn-cancel-delete-recurring"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteRecurring}
+                className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-mono text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                id="btn-confirm-delete-recurring"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete Schedule
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* IN-APP TOAST NOTIFICATIONS                           */}
+      {/* ---------------------------------------------------- */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <div className={`flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-2xl border text-xs font-mono font-bold ${
+            toastMessage.type === 'error'
+              ? 'bg-red-600 text-white border-red-700'
+              : toastMessage.type === 'info'
+              ? 'bg-blue-600 text-white border-blue-700'
+              : 'bg-black text-white border-neutral-800'
+          }`}>
+            {toastMessage.type === 'error' ? (
+              <AlertCircle className="w-4 h-4 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            )}
+            <span>{toastMessage.message}</span>
+            <button
+              type="button"
+              onClick={() => setToastMessage(null)}
+              className="ml-2 text-gray-300 hover:text-white p-0.5 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       )}

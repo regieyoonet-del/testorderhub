@@ -1218,6 +1218,8 @@ export default function App() {
   const [hasInitialSynced, setHasInitialSynced] = useState(false);
   const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
   const isSyncingRef = React.useRef(false);
+  const deletedExpenseIdsRef = React.useRef<Set<string>>(new Set());
+  const deletedRecurringExpenseIdsRef = React.useRef<Set<string>>(new Set());
 
   const syncWithSheets = async (isBackground = false) => {
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
@@ -1669,11 +1671,13 @@ export default function App() {
             const prevIds = new Set(prevExpenses.map(e => e.id));
             const newServerExpenses = fetchedExpenses.filter(e => !prevIds.has(e.id));
             const activeExisting = mergedExisting.filter(e => {
+              if (deletedExpenseIdsRef.current.has(e.id)) return false;
               if (fetchedIds.has(e.id)) return true;
               const createdTimestamp = new Date(e.createdAt || 0).getTime();
               return !isNaN(createdTimestamp) && (now - createdTimestamp < 60000);
             });
-            const merged = [...activeExisting, ...newServerExpenses];
+            const filteredNew = newServerExpenses.filter(e => !deletedExpenseIdsRef.current.has(e.id));
+            const merged = [...activeExisting, ...filteredNew];
             const seen = new Set<string>();
             return merged.filter(e => {
               if (seen.has(e.id)) return false;
@@ -1716,11 +1720,13 @@ export default function App() {
             const prevIds = new Set(prevRules.map(r => r.id));
             const newServerRules = cleanFetched.filter(r => !prevIds.has(r.id));
             const activeExisting = mergedExisting.filter(r => {
+              if (deletedRecurringExpenseIdsRef.current.has(r.id)) return false;
               if (fetchedIds.has(r.id)) return true;
               const createdTimestamp = new Date(r.createdAt || 0).getTime();
               return !isNaN(createdTimestamp) && (now - createdTimestamp < 60000);
             });
-            const merged = [...activeExisting, ...newServerRules];
+            const filteredNewRules = newServerRules.filter(r => !deletedRecurringExpenseIdsRef.current.has(r.id));
+            const merged = [...activeExisting, ...filteredNewRules];
             return deduplicateRecurringExpenses(merged);
           });
         }
@@ -2484,6 +2490,9 @@ export default function App() {
       ...expense,
       updatedAt: new Date().toISOString()
     };
+    if (updated.id) {
+      deletedExpenseIdsRef.current.delete(updated.id);
+    }
     setExpenses(prev => {
       const exists = prev.some(e => e.id === updated.id);
       if (exists) {
@@ -2497,6 +2506,9 @@ export default function App() {
   };
 
   const handleSaveExpensesBatch = (expensesList: ExpenseRecord[]) => {
+    for (const e of expensesList) {
+      if (e.id) deletedExpenseIdsRef.current.delete(e.id);
+    }
     setExpenses(expensesList);
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
       sheetsService.saveExpensesBatch(appsScriptConfig.webAppUrl, expensesList).catch(err => console.warn('Save expenses batch sync notice:', err));
@@ -2504,6 +2516,7 @@ export default function App() {
   };
 
   const handleDeleteExpense = (expenseId: string) => {
+    deletedExpenseIdsRef.current.add(expenseId);
     setExpenses(prev => prev.filter(e => e.id !== expenseId));
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
       sheetsService.deleteExpense(appsScriptConfig.webAppUrl, expenseId).catch(err => console.warn('Delete expense sync notice:', err));
@@ -2516,6 +2529,9 @@ export default function App() {
       ...rule,
       updatedAt: new Date().toISOString()
     };
+    if (updated.id) {
+      deletedRecurringExpenseIdsRef.current.delete(updated.id);
+    }
     setRecurringExpenses(prev => {
       const normName = updated.name.toLowerCase().trim();
       const normCat = updated.category.toLowerCase().trim();
@@ -2542,6 +2558,9 @@ export default function App() {
   };
 
   const handleSaveRecurringExpensesBatch = (rulesList: RecurringExpenseRule[]) => {
+    for (const r of rulesList) {
+      if (r.id) deletedRecurringExpenseIdsRef.current.delete(r.id);
+    }
     const cleanList = deduplicateRecurringExpenses(rulesList);
     setRecurringExpenses(cleanList);
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
@@ -2550,6 +2569,7 @@ export default function App() {
   };
 
   const handleDeleteRecurringExpense = (ruleId: string) => {
+    deletedRecurringExpenseIdsRef.current.add(ruleId);
     setRecurringExpenses(prev => prev.filter(r => r.id !== ruleId));
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
       sheetsService.deleteRecurringExpense(appsScriptConfig.webAppUrl, ruleId).catch(err => console.warn('Delete recurring expense sync notice:', err));

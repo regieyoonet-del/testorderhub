@@ -2334,11 +2334,38 @@ export const sheetsService = {
     if (!url) return false;
     const cleanedUrl = resolveUrl(url);
     try {
+      const payloadExpense = {
+        ...expense,
+        id: expense.id || `EXP-${Date.now()}`,
+        name: expense.name,
+        expenseName: expense.name,
+        category: expense.category || 'Miscellaneous',
+        amount: Number(expense.amount || 0),
+        date: expense.date || expense.expenseDate || new Date().toISOString().split('T')[0],
+        expenseDate: expense.expenseDate || expense.date || new Date().toISOString().split('T')[0],
+        type: expense.type || expense.expenseType || 'One-Time',
+        expenseType: expense.expenseType || expense.type || 'One-Time',
+        status: expense.status || expense.paymentStatus || 'Paid',
+        paymentStatus: expense.paymentStatus || expense.status || 'Paid',
+        paymentDate: expense.paymentDate || '',
+        vendor: expense.vendor || '',
+        referenceNumber: expense.referenceNumber || '',
+        notes: expense.notes || '',
+        recurringExpenseId: expense.recurringExpenseId || '',
+        payrollId: expense.payrollId || '',
+        createdAt: expense.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
       await fetch(cleanedUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'saveExpense', expense })
+        body: JSON.stringify({
+          action: 'saveExpense',
+          expense: payloadExpense,
+          record: payloadExpense
+        })
       });
       return true;
     } catch (error) {
@@ -2354,11 +2381,38 @@ export const sheetsService = {
     if (!url) return false;
     const cleanedUrl = resolveUrl(url);
     try {
+      const normalizedExpenses = expenses.map(e => ({
+        ...e,
+        id: e.id || `EXP-${Date.now()}`,
+        name: e.name,
+        expenseName: e.name,
+        category: e.category || 'Miscellaneous',
+        amount: Number(e.amount || 0),
+        date: e.date || e.expenseDate || new Date().toISOString().split('T')[0],
+        expenseDate: e.expenseDate || e.date || new Date().toISOString().split('T')[0],
+        type: e.type || e.expenseType || 'One-Time',
+        expenseType: e.expenseType || e.type || 'One-Time',
+        status: e.status || e.paymentStatus || 'Paid',
+        paymentStatus: e.paymentStatus || e.status || 'Paid',
+        paymentDate: e.paymentDate || '',
+        vendor: e.vendor || '',
+        referenceNumber: e.referenceNumber || '',
+        notes: e.notes || '',
+        recurringExpenseId: e.recurringExpenseId || '',
+        payrollId: e.payrollId || '',
+        createdAt: e.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }));
+
       await fetch(cleanedUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'saveExpensesBatch', expenses })
+        body: JSON.stringify({
+          action: 'saveExpensesBatch',
+          expenses: normalizedExpenses,
+          records: normalizedExpenses
+        })
       });
       return true;
     } catch (error) {
@@ -2378,7 +2432,11 @@ export const sheetsService = {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'deleteExpense', expenseId })
+        body: JSON.stringify({
+          action: 'deleteExpense',
+          expenseId,
+          id: expenseId
+        })
       });
       return true;
     } catch (error) {
@@ -2504,11 +2562,36 @@ export const sheetsService = {
     if (!url) return false;
     const cleanedUrl = resolveUrl(url);
     try {
+      const payloadRule = {
+        ...rule,
+        id: rule.id || `REC-EXP-${Date.now()}`,
+        name: rule.name,
+        expenseName: rule.name,
+        category: rule.category || 'Miscellaneous',
+        amount: Number(rule.amount || 0),
+        frequency: rule.frequency || 'Monthly',
+        startDate: rule.startDate || new Date().toISOString().split('T')[0],
+        endDate: rule.endDate || '',
+        durationMonths: rule.durationMonths,
+        paymentsPerYear: rule.paymentsPerYear || 12,
+        specificMonths: rule.specificMonths,
+        status: rule.status || 'Active',
+        notes: rule.notes || '',
+        createdAt: rule.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
       await fetch(cleanedUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'saveRecurringExpense', rule })
+        body: JSON.stringify({
+          action: 'saveRecurringExpense',
+          rule: payloadRule,
+          recurring: payloadRule,
+          recurringExpense: payloadRule,
+          expense: payloadRule
+        })
       });
       return true;
     } catch (error) {
@@ -2524,11 +2607,35 @@ export const sheetsService = {
     if (!url) return false;
     const cleanedUrl = resolveUrl(url);
     try {
+      const normalizedRules = rules.map(rule => ({
+        ...rule,
+        id: rule.id || `REC-EXP-${Date.now()}`,
+        name: rule.name,
+        expenseName: rule.name,
+        category: rule.category || 'Miscellaneous',
+        amount: Number(rule.amount || 0),
+        frequency: rule.frequency || 'Monthly',
+        startDate: rule.startDate || new Date().toISOString().split('T')[0],
+        endDate: rule.endDate || '',
+        durationMonths: rule.durationMonths,
+        paymentsPerYear: rule.paymentsPerYear || 12,
+        specificMonths: rule.specificMonths,
+        status: rule.status || 'Active',
+        notes: rule.notes || '',
+        createdAt: rule.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }));
+
       await fetch(cleanedUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'saveRecurringExpensesBatch', rules })
+        body: JSON.stringify({
+          action: 'saveRecurringExpensesBatch',
+          rules: normalizedRules,
+          recurringExpenses: normalizedRules,
+          list: normalizedRules
+        })
       });
       return true;
     } catch (error) {
@@ -2548,7 +2655,13 @@ export const sheetsService = {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'deleteRecurringExpense', ruleId })
+        body: JSON.stringify({
+          action: 'deleteRecurringExpense',
+          ruleId,
+          recurringId: ruleId,
+          recurringExpenseId: ruleId,
+          id: ruleId
+        })
       });
       return true;
     } catch (error) {

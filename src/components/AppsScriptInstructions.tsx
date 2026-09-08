@@ -316,15 +316,18 @@ function doPost(e) {
   }
 
   if (payload.action === "saveExpense") {
-    return getJsonOutput(saveExpense(sheet, payload.expense));
+    var exp = payload.expense || payload.record;
+    return getJsonOutput(saveExpense(sheet, exp));
   }
 
   if (payload.action === "saveExpensesBatch") {
-    return getJsonOutput(saveExpensesBatch(sheet, payload.expenses));
+    var exps = payload.expenses || payload.records;
+    return getJsonOutput(saveExpensesBatch(sheet, exps));
   }
 
   if (payload.action === "deleteExpense") {
-    return getJsonOutput(deleteRowById(sheet, "Expenses", "Expense ID", payload.expenseId));
+    var eId = payload.expenseId || payload.id;
+    return getJsonOutput(deleteRowById(sheet, "Expenses", "Expense ID", eId));
   }
 
   if (payload.action === "saveExpenseCategories") {
@@ -332,15 +335,18 @@ function doPost(e) {
   }
 
   if (payload.action === "saveRecurringExpense") {
-    return getJsonOutput(saveRecurringExpense(sheet, payload.rule));
+    var r = payload.rule || payload.recurring || payload.recurringExpense || payload.expense;
+    return getJsonOutput(saveRecurringExpense(sheet, r));
   }
 
   if (payload.action === "saveRecurringExpensesBatch") {
-    return getJsonOutput(saveRecurringExpensesBatch(sheet, payload.rules));
+    var rulesList = payload.rules || payload.recurringExpenses || payload.list;
+    return getJsonOutput(saveRecurringExpensesBatch(sheet, rulesList));
   }
 
   if (payload.action === "deleteRecurringExpense") {
-    return getJsonOutput(deleteRowById(sheet, "RecurringExpenses", "Recurring Expense ID", payload.ruleId));
+    var rId = payload.ruleId || payload.recurringId || payload.recurringExpenseId || payload.id;
+    return getJsonOutput(deleteRowById(sheet, "RecurringExpenses", "Recurring Expense ID", rId));
   }
   
   return getJsonOutput({ status: "error", message: "Unknown action" });
@@ -1006,7 +1012,9 @@ function savePortal(ss, portal) {
 
 function deleteRowById(ss, sheetName, colHeader, targetId) {
   var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return { status: "success", id: targetId, deleted: false, message: "Sheet not found" };
   var data = sheet.getDataRange().getValues();
+  if (!data || data.length <= 1) return { status: "success", id: targetId, deleted: false };
   var headers = data[0];
   
   var colIndex = -1;
@@ -1017,15 +1025,27 @@ function deleteRowById(ss, sheetName, colHeader, targetId) {
       break;
     }
   }
-  if (colIndex === -1) colIndex = 0;
-  
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][colIndex]).trim() === String(targetId).trim()) {
-      sheet.deleteRow(i + 1);
-      return { status: "success", id: targetId, deleted: true };
+  if (colIndex === -1) {
+    for (var c = 0; c < headers.length; c++) {
+      var nh = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (nh.indexOf("id") !== -1) {
+        colIndex = c;
+        break;
+      }
     }
   }
-  return { status: "success", id: targetId, deleted: false };
+  if (colIndex === -1) colIndex = 0;
+  
+  var targetStr = String(targetId).trim().toLowerCase();
+  var deletedCount = 0;
+  for (var i = data.length - 1; i >= 1; i--) {
+    var cellVal = String(data[i][colIndex]).trim().toLowerCase();
+    if (cellVal === targetStr) {
+      sheet.deleteRow(i + 1);
+      deletedCount++;
+    }
+  }
+  return { status: "success", id: targetId, deleted: deletedCount > 0, count: deletedCount };
 }
 
 function deleteOrder(ss, orderId) {
@@ -1852,14 +1872,18 @@ function savePayrollBatch(ss, records) {
 }
 
 function saveExpense(ss, expense) {
-  var sheet = ss.getSheetByName("Expenses");
   var expectedHeaders = ["Expense ID", "Expense Name", "Category", "Expense Type", "Amount", "Expense Date", "Payment Status", "Payment Date", "Vendor", "Reference Number", "Notes", "Recurring Expense ID", "Payroll ID", "Created At", "Updated At"];
+  var sheet = ss.getSheetByName("Expenses");
+  if (!sheet) {
+    sheet = ss.insertSheet("Expenses");
+    sheet.appendRow(expectedHeaders);
+    sheet.getRange(1, 1, 1, expectedHeaders.length).setFontWeight("bold").setBackground("#f3f4f6");
+  }
   var data = ensureHeaders(sheet, expectedHeaders);
   var headers = data[0];
 
   if (!expense) return { status: "error", message: "Missing expense data" };
-  var targetId = String(expense.id || expense["Expense ID"] || "").trim();
-  if (!targetId) return { status: "error", message: "Missing expense ID" };
+  var targetId = String(expense.id || expense["Expense ID"] || expense.expenseId || ("EXP-" + new Date().getTime())).trim();
 
   var idIndex = 0;
   for (var c = 0; c < headers.length; c++) {
@@ -1885,7 +1909,7 @@ function saveExpense(ss, expense) {
     "Expense Type": expense.expenseType || expense.type || "One-Time",
     "Amount": expense.amount !== undefined ? Number(expense.amount) : 0,
     "Expense Date": expense.expenseDate || expense.date || "",
-    "Payment Status": expense.paymentStatus || "Paid",
+    "Payment Status": expense.paymentStatus || expense.status || "Paid",
     "Payment Date": expense.paymentDate || "",
     "Vendor": expense.vendor || "",
     "Reference Number": expense.referenceNumber || "",
@@ -1919,8 +1943,13 @@ function saveExpensesBatch(ss, expenses) {
 }
 
 function saveExpenseCategories(ss, categories) {
-  var sheet = ss.getSheetByName("ExpenseCategories");
   var expectedHeaders = ["Category ID", "Name", "Is System", "Status"];
+  var sheet = ss.getSheetByName("ExpenseCategories");
+  if (!sheet) {
+    sheet = ss.insertSheet("ExpenseCategories");
+    sheet.appendRow(expectedHeaders);
+    sheet.getRange(1, 1, 1, expectedHeaders.length).setFontWeight("bold").setBackground("#f3f4f6");
+  }
   var data = ensureHeaders(sheet, expectedHeaders);
   var headers = data[0];
 
@@ -1974,14 +2003,18 @@ function saveExpenseCategories(ss, categories) {
 }
 
 function saveRecurringExpense(ss, rule) {
-  var sheet = ss.getSheetByName("RecurringExpenses");
   var expectedHeaders = ["Recurring Expense ID", "Expense Name", "Category", "Amount", "Frequency", "Start Date", "End Date", "Payments Per Year", "Specific Months JSON", "Status", "Notes", "Created At", "Updated At"];
+  var sheet = ss.getSheetByName("RecurringExpenses");
+  if (!sheet) {
+    sheet = ss.insertSheet("RecurringExpenses");
+    sheet.appendRow(expectedHeaders);
+    sheet.getRange(1, 1, 1, expectedHeaders.length).setFontWeight("bold").setBackground("#f3f4f6");
+  }
   var data = ensureHeaders(sheet, expectedHeaders);
   var headers = data[0];
 
   if (!rule) return { status: "error", message: "Missing recurring expense data" };
-  var targetId = String(rule.id || rule["Recurring Expense ID"] || "").trim();
-  if (!targetId) return { status: "error", message: "Missing recurring expense ID" };
+  var targetId = String(rule.id || rule["Recurring Expense ID"] || rule.recurringExpenseId || ("REC-EXP-" + new Date().getTime())).trim();
 
   var idIndex = 0;
   for (var c = 0; c < headers.length; c++) {
