@@ -2302,23 +2302,33 @@ export const sheetsService = {
       if (!response.ok) return null;
       const rawData = await response.json();
       if (Array.isArray(rawData)) {
-        return rawData.map(item => ({
-          id: String(getProp(item, ['ExpenseID', 'expenseId', 'id', 'Expense ID']) || `EXP-${Date.now()}`),
-          name: String(getProp(item, ['ExpenseName', 'expenseName', 'Name', 'name', 'Expense Name', 'Description']) || ''),
-          category: String(getProp(item, ['Category', 'category']) || 'Miscellaneous'),
-          type: (getProp(item, ['ExpenseType', 'expenseType', 'Type', 'type', 'Expense Type']) || 'Variable') as any,
-          amount: Number(getProp(item, ['Amount', 'amount', 'Cost', 'Total']) || 0),
-          date: String(getProp(item, ['ExpenseDate', 'expenseDate', 'Date', 'date', 'Expense Date']) || new Date().toISOString().split('T')[0]),
-          status: (getProp(item, ['PaymentStatus', 'paymentStatus', 'Status', 'status', 'Payment Status']) || 'Pending') as any,
-          paymentDate: getProp(item, ['PaymentDate', 'paymentDate', 'Payment Date']) ? String(getProp(item, ['PaymentDate', 'paymentDate', 'Payment Date'])) : undefined,
-          vendor: getProp(item, ['Vendor', 'vendor', 'Payee', 'payee', 'Supplier']) ? String(getProp(item, ['Vendor', 'vendor', 'Payee', 'payee', 'Supplier'])) : undefined,
-          referenceNumber: getProp(item, ['ReferenceNumber', 'referenceNumber', 'Ref #', 'Reference Number', 'ReceiptNo', 'InvoiceNo']) ? String(getProp(item, ['ReferenceNumber', 'referenceNumber', 'Ref #', 'Reference Number', 'ReceiptNo', 'InvoiceNo'])) : undefined,
-          notes: String(getProp(item, ['Notes', 'notes', 'Remarks']) || ''),
-          recurringExpenseId: getProp(item, ['RecurringExpenseID', 'recurringExpenseId', 'Recurring Expense ID']) ? String(getProp(item, ['RecurringExpenseID', 'recurringExpenseId', 'Recurring Expense ID'])) : undefined,
-          payrollId: getProp(item, ['PayrollID', 'payrollId', 'Payroll ID']) ? String(getProp(item, ['PayrollID', 'payrollId', 'Payroll ID'])) : undefined,
-          createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
-          updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
-        }));
+        return rawData.map(item => {
+          const dateVal = String(getProp(item, ['ExpenseDate', 'expenseDate', 'Date', 'date', 'Expense Date']) || new Date().toISOString().split('T')[0]);
+          const statusVal = (getProp(item, ['PaymentStatus', 'paymentStatus', 'Status', 'status', 'Payment Status']) || 'Pending') as any;
+          const typeVal = (getProp(item, ['ExpenseType', 'expenseType', 'Type', 'type', 'Expense Type']) || 'Variable') as any;
+          const nameVal = String(getProp(item, ['ExpenseName', 'expenseName', 'Name', 'name', 'Expense Name', 'Description']) || '');
+          return {
+            id: String(getProp(item, ['ExpenseID', 'expenseId', 'id', 'Expense ID']) || `EXP-${Date.now()}`),
+            name: nameVal,
+            expenseName: nameVal,
+            category: String(getProp(item, ['Category', 'category']) || 'Miscellaneous'),
+            type: typeVal,
+            expenseType: typeVal,
+            amount: Number(getProp(item, ['Amount', 'amount', 'Cost', 'Total']) || 0),
+            date: dateVal,
+            expenseDate: dateVal,
+            status: statusVal,
+            paymentStatus: statusVal,
+            paymentDate: getProp(item, ['PaymentDate', 'paymentDate', 'Payment Date']) ? String(getProp(item, ['PaymentDate', 'paymentDate', 'Payment Date'])) : undefined,
+            vendor: getProp(item, ['Vendor', 'vendor', 'Payee', 'payee', 'Supplier']) ? String(getProp(item, ['Vendor', 'vendor', 'Payee', 'payee', 'Supplier'])) : undefined,
+            referenceNumber: getProp(item, ['ReferenceNumber', 'referenceNumber', 'Ref #', 'Reference Number', 'ReceiptNo', 'InvoiceNo']) ? String(getProp(item, ['ReferenceNumber', 'referenceNumber', 'Ref #', 'Reference Number', 'ReceiptNo', 'InvoiceNo'])) : undefined,
+            notes: String(getProp(item, ['Notes', 'notes', 'Remarks']) || ''),
+            recurringExpenseId: getProp(item, ['RecurringExpenseID', 'recurringExpenseId', 'Recurring Expense ID']) ? String(getProp(item, ['RecurringExpenseID', 'recurringExpenseId', 'Recurring Expense ID'])) : undefined,
+            payrollId: getProp(item, ['PayrollID', 'payrollId', 'Payroll ID']) ? String(getProp(item, ['PayrollID', 'payrollId', 'Payroll ID'])) : undefined,
+            createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
+            updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
+          };
+        });
       }
       return null;
     } catch (error) {
@@ -3162,23 +3172,33 @@ export const sheetsService = {
       // Extract Expenses
       let expenses: ExpenseRecord[] | null = null;
       if (Array.isArray(raw.expenses)) {
-        expenses = raw.expenses.map((item: any) => ({
-          id: String(getProp(item, ['ExpenseID', 'expenseId', 'id', 'Expense ID']) || `EXP-${Date.now()}`),
-          name: String(getProp(item, ['ExpenseName', 'expenseName', 'Name', 'name', 'Expense Name', 'Description']) || ''),
-          category: String(getProp(item, ['Category', 'category']) || 'Miscellaneous'),
-          type: (getProp(item, ['ExpenseType', 'expenseType', 'Type', 'type', 'Expense Type']) || 'Variable') as any,
-          amount: Number(getProp(item, ['Amount', 'amount', 'Cost', 'Total']) || 0),
-          date: String(getProp(item, ['ExpenseDate', 'expenseDate', 'Date', 'date', 'Expense Date']) || new Date().toISOString().split('T')[0]),
-          status: (getProp(item, ['PaymentStatus', 'paymentStatus', 'Status', 'status', 'Payment Status']) || 'Pending') as any,
-          paymentDate: getProp(item, ['PaymentDate', 'paymentDate', 'Payment Date']) ? String(getProp(item, ['PaymentDate', 'paymentDate', 'Payment Date'])) : undefined,
-          vendor: getProp(item, ['Vendor', 'vendor', 'Payee', 'payee', 'Supplier']) ? String(getProp(item, ['Vendor', 'vendor', 'Payee', 'payee', 'Supplier'])) : undefined,
-          referenceNumber: getProp(item, ['ReferenceNumber', 'referenceNumber', 'Ref #', 'Reference Number', 'ReceiptNo', 'InvoiceNo']) ? String(getProp(item, ['ReferenceNumber', 'referenceNumber', 'Ref #', 'Reference Number', 'ReceiptNo', 'InvoiceNo'])) : undefined,
-          notes: String(getProp(item, ['Notes', 'notes', 'Remarks']) || ''),
-          recurringExpenseId: getProp(item, ['RecurringExpenseID', 'recurringExpenseId', 'Recurring Expense ID']) ? String(getProp(item, ['RecurringExpenseID', 'recurringExpenseId', 'Recurring Expense ID'])) : undefined,
-          payrollId: getProp(item, ['PayrollID', 'payrollId', 'Payroll ID']) ? String(getProp(item, ['PayrollID', 'payrollId', 'Payroll ID'])) : undefined,
-          createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
-          updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
-        }));
+        expenses = raw.expenses.map((item: any) => {
+          const dateVal = String(getProp(item, ['ExpenseDate', 'expenseDate', 'Date', 'date', 'Expense Date']) || new Date().toISOString().split('T')[0]);
+          const statusVal = (getProp(item, ['PaymentStatus', 'paymentStatus', 'Status', 'status', 'Payment Status']) || 'Pending') as any;
+          const typeVal = (getProp(item, ['ExpenseType', 'expenseType', 'Type', 'type', 'Expense Type']) || 'Variable') as any;
+          const nameVal = String(getProp(item, ['ExpenseName', 'expenseName', 'Name', 'name', 'Expense Name', 'Description']) || '');
+          return {
+            id: String(getProp(item, ['ExpenseID', 'expenseId', 'id', 'Expense ID']) || `EXP-${Date.now()}`),
+            name: nameVal,
+            expenseName: nameVal,
+            category: String(getProp(item, ['Category', 'category']) || 'Miscellaneous'),
+            type: typeVal,
+            expenseType: typeVal,
+            amount: Number(getProp(item, ['Amount', 'amount', 'Cost', 'Total']) || 0),
+            date: dateVal,
+            expenseDate: dateVal,
+            status: statusVal,
+            paymentStatus: statusVal,
+            paymentDate: getProp(item, ['PaymentDate', 'paymentDate', 'Payment Date']) ? String(getProp(item, ['PaymentDate', 'paymentDate', 'Payment Date'])) : undefined,
+            vendor: getProp(item, ['Vendor', 'vendor', 'Payee', 'payee', 'Supplier']) ? String(getProp(item, ['Vendor', 'vendor', 'Payee', 'payee', 'Supplier'])) : undefined,
+            referenceNumber: getProp(item, ['ReferenceNumber', 'referenceNumber', 'Ref #', 'Reference Number', 'ReceiptNo', 'InvoiceNo']) ? String(getProp(item, ['ReferenceNumber', 'referenceNumber', 'Ref #', 'Reference Number', 'ReceiptNo', 'InvoiceNo'])) : undefined,
+            notes: String(getProp(item, ['Notes', 'notes', 'Remarks']) || ''),
+            recurringExpenseId: getProp(item, ['RecurringExpenseID', 'recurringExpenseId', 'Recurring Expense ID']) ? String(getProp(item, ['RecurringExpenseID', 'recurringExpenseId', 'Recurring Expense ID'])) : undefined,
+            payrollId: getProp(item, ['PayrollID', 'payrollId', 'Payroll ID']) ? String(getProp(item, ['PayrollID', 'payrollId', 'Payroll ID'])) : undefined,
+            createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
+            updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
+          };
+        });
       }
 
       // Extract Expense Categories

@@ -113,6 +113,28 @@ export const isDirectCompanyOrder = (order: Order): boolean => {
   return !isStorefrontOrder(order);
 };
 
+// Helper utilities to extract clean expense fields with all possible aliases & fallbacks
+export const getExpenseDateStr = (e: ExpenseRecord): string => {
+  return String(e.expenseDate || e.date || e.createdAt || '').trim();
+};
+
+export const getExpenseStatusStr = (e: ExpenseRecord): string => {
+  return String(e.paymentStatus || e.status || 'Paid').trim();
+};
+
+export const getExpenseAmountNum = (e: ExpenseRecord): number => {
+  const amt = Number(e.amount ?? (e as any).cost);
+  return !isNaN(amt) && amt > 0 ? amt : 0;
+};
+
+export const getExpenseCategoryStr = (e: ExpenseRecord): string => {
+  return String(e.category || (e as any).Category || 'Miscellaneous').trim() || 'Miscellaneous';
+};
+
+export const getExpenseIdStr = (e: ExpenseRecord): string => {
+  return String(e.id || (e as any).ExpenseID || (e as any).expenseId || '').trim();
+};
+
 export default function AnalyticsDashboard({
   orders = [],
   companies = [],
@@ -178,7 +200,7 @@ export default function AnalyticsDashboard({
     });
 
     (expenses || []).forEach(e => {
-      const p = parseYearMonth(e.expenseDate);
+      const p = parseYearMonth(getExpenseDateStr(e));
       if (p) yearsSet.add(String(p.year));
     });
 
@@ -260,10 +282,42 @@ export default function AnalyticsDashboard({
     return manualOnly.filter(j => isItemInPeriod(getJobDateStr(j)));
   }, [jobs, orders, selectedYear, selectedMonth, filterDateCutoff]);
 
+  // Deduplicate expenses to guarantee each record is counted exactly once,
+  // preventing double-counting from local state + Google Sheets or sync duplicates
+  const uniqueExpenses = useMemo(() => {
+    if (!Array.isArray(expenses)) return [];
+    const seenIds = new Set<string>();
+    const seenSignatures = new Set<string>();
+    const result: ExpenseRecord[] = [];
+
+    for (const exp of expenses) {
+      if (!exp) continue;
+      const id = getExpenseIdStr(exp);
+      if (id && seenIds.has(id.toLowerCase())) {
+        continue;
+      }
+
+      const normName = String(exp.name || (exp as any).expenseName || '').trim().toLowerCase();
+      const normCat = getExpenseCategoryStr(exp).toLowerCase();
+      const amt = getExpenseAmountNum(exp);
+      const dateStr = getExpenseDateStr(exp).slice(0, 10);
+      const signature = `${normName}|${normCat}|${amt}|${dateStr}`;
+
+      if (seenSignatures.has(signature) && (!id || id.startsWith('EXP-') || id.includes('tmp'))) {
+        continue;
+      }
+
+      if (id) seenIds.add(id.toLowerCase());
+      if (signature !== '||0|') seenSignatures.add(signature);
+      result.push(exp);
+    }
+    return result;
+  }, [expenses]);
+
   // Scoped Expenses & Payroll
   const scopedExpenses = useMemo(() => {
-    return expenses.filter(e => isItemInPeriod(e.expenseDate));
-  }, [expenses, selectedYear, selectedMonth, filterDateCutoff]);
+    return uniqueExpenses.filter(e => isItemInPeriod(getExpenseDateStr(e)));
+  }, [uniqueExpenses, selectedYear, selectedMonth, filterDateCutoff]);
 
   const scopedPayroll = useMemo(() => {
     return payroll.filter(p => isItemInPeriod(p.payDate || p.payPeriodEnd || p.createdAt));
@@ -437,18 +491,27 @@ export default function AnalyticsDashboard({
     const totalSalesCount = validOrders.length + validManualJobs.length;
     const aov = totalSalesCount > 0 ? totalGrossRevenue / totalSalesCount : 0;
 
-    // 5. Expenses Calculations
-    const totalExpenses = scopedExpenses
-      .filter(e => e.paymentStatus !== 'Voided')
-      .reduce((sum, e) => sum + (e.amount || 0), 0);
+    // 5. Expenses Calculations (Strictly including all valid non-voided normal expenses)
+    const validScopedExpenses = scopedExpenses.filter(e => {
+      const s = getExpenseStatusStr(e).toLowerCase();
+      return s !== 'voided' && s !== 'cancelled' && s !== 'canceled';
+    });
 
-    const paidExpenses = scopedExpenses
-      .filter(e => e.paymentStatus === 'Paid')
-      .reduce((sum, e) => sum + (e.amount || 0), 0);
+    const totalExpenses = validScopedExpenses.reduce((sum, e) => sum + getExpenseAmountNum(e), 0);
 
-    const pendingExpenses = scopedExpenses
-      .filter(e => e.paymentStatus === 'Pending')
-      .reduce((sum, e) => sum + (e.amount || 0), 0);
+    const paidExpenses = validScopedExpenses
+      .filter(e => {
+        const s = getExpenseStatusStr(e).toLowerCase();
+        return s === 'paid' || s === 'completed' || s === 'settled';
+      })
+      .reduce((sum, e) => sum + getExpenseAmountNum(e), 0);
+
+    const pendingExpenses = validScopedExpenses
+      .filter(e => {
+        const s = getExpenseStatusStr(e).toLowerCase();
+        return s === 'pending' || s === 'unpaid' || s === 'due';
+      })
+      .reduce((sum, e) => sum + getExpenseAmountNum(e), 0);
 
     // 6. Payroll Calculations
     const totalPayrollGross = scopedPayroll
@@ -578,9 +641,10 @@ export default function AnalyticsDashboard({
       });
 
       scopedExpenses.forEach(e => {
-        if (e.paymentStatus === 'Voided') return;
-        const b = getBucket(e.expenseDate);
-        if (b) b.expenses += (e.amount || 0);
+        const s = getExpenseStatusStr(e).toLowerCase();
+        if (s === 'voided' || s === 'cancelled' || s === 'canceled') return;
+        const b = getBucket(getExpenseDateStr(e));
+        if (b) b.expenses += getExpenseAmountNum(e);
       });
 
       scopedPayroll.forEach(p => {
@@ -619,9 +683,12 @@ export default function AnalyticsDashboard({
       });
 
       scopedExpenses.forEach(e => {
-        if (e.paymentStatus === 'Voided') return;
-        const key = (e.expenseDate || '').slice(0, 7);
-        if (monthBuckets[key]) monthBuckets[key].expenses += (e.amount || 0);
+        const s = getExpenseStatusStr(e).toLowerCase();
+        if (s === 'voided' || s === 'cancelled' || s === 'canceled') return;
+        const p = parseYearMonth(getExpenseDateStr(e));
+        if (!p) return;
+        const key = `${p.year}-${String(p.month).padStart(2, '0')}`;
+        if (monthBuckets[key]) monthBuckets[key].expenses += getExpenseAmountNum(e);
       });
 
       scopedPayroll.forEach(p => {
@@ -668,10 +735,13 @@ export default function AnalyticsDashboard({
 
     // Tally Expenses
     scopedExpenses.forEach(e => {
-      if (e.paymentStatus === 'Voided') return;
-      const key = (e.expenseDate || '').slice(0, 7);
+      const s = getExpenseStatusStr(e).toLowerCase();
+      if (s === 'voided' || s === 'cancelled' || s === 'canceled') return;
+      const p = parseYearMonth(getExpenseDateStr(e));
+      if (!p) return;
+      const key = `${p.year}-${String(p.month).padStart(2, '0')}`;
       if (monthMap[key]) {
-        monthMap[key].expenses += (e.amount || 0);
+        monthMap[key].expenses += getExpenseAmountNum(e);
       }
     });
 
@@ -697,8 +767,10 @@ export default function AnalyticsDashboard({
   const expenseCategoryBreakdown = useMemo(() => {
     const map: Record<string, number> = {};
     scopedExpenses.forEach(e => {
-      if (e.paymentStatus !== 'Voided') {
-        map[e.category] = (map[e.category] || 0) + (e.amount || 0);
+      const s = getExpenseStatusStr(e).toLowerCase();
+      if (s !== 'voided' && s !== 'cancelled' && s !== 'canceled') {
+        const cat = getExpenseCategoryStr(e);
+        map[cat] = (map[cat] || 0) + getExpenseAmountNum(e);
       }
     });
 
@@ -948,7 +1020,7 @@ export default function AnalyticsDashboard({
               {currencySymbol} {metrics.totalCosts.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h4>
             <p className="mt-1 text-[10px] text-gray-500 font-mono">
-              Expenses ({currencySymbol} {metrics.totalExpenses.toLocaleString()}) + Payroll ({currencySymbol} {metrics.totalPayrollGross.toLocaleString()})
+              Expenses ({currencySymbol} {metrics.totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) + Payroll ({currencySymbol} {metrics.totalPayrollGross.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
             </p>
           </div>
         </div>
