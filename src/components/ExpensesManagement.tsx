@@ -422,21 +422,36 @@ export default function ExpensesManagement({
       ppy = recurringFormData.specificMonths.length;
     }
 
-    const existingMatch = !editingRecurring ? recurringExpenses.find(r => 
-      r.name.trim().toLowerCase() === recurringFormData.name.trim().toLowerCase() &&
-      r.category.trim().toLowerCase() === recurringFormData.category.trim().toLowerCase() &&
-      (r.startDate || '').slice(0, 7) === (recurringFormData.startDate || '').slice(0, 7)
-    ) : undefined;
+    let durationMonths = recurringFormData.durationMonths ? Number(recurringFormData.durationMonths) : undefined;
+    let endDate = recurringFormData.endDate?.trim() ? recurringFormData.endDate.trim() : undefined;
+
+    if (!durationMonths && recurringFormData.startDate && endDate) {
+      const s = parseYearMonth(recurringFormData.startDate);
+      const e = parseYearMonth(endDate);
+      if (s && e) {
+        const diff = (e.year * 12 + e.month - 1) - (s.year * 12 + s.month - 1) + 1;
+        if (diff > 0) durationMonths = diff;
+      }
+    } else if (durationMonths && recurringFormData.startDate && !endDate) {
+      const s = parseYearMonth(recurringFormData.startDate);
+      if (s) {
+        const endTotal = (s.year * 12 + s.month - 1) + (durationMonths - 1);
+        const ey = Math.floor(endTotal / 12);
+        const em = (endTotal % 12) + 1;
+        const daysInM = new Date(ey, em, 0).getDate();
+        endDate = `${ey}-${String(em).padStart(2, '0')}-${String(daysInM).padStart(2, '0')}`;
+      }
+    }
 
     const rule: RecurringExpense = {
-      id: editingRecurring ? editingRecurring.id : (existingMatch?.id || generateRecurringExpenseId(recurringExpenses)),
+      id: editingRecurring ? editingRecurring.id : generateRecurringExpenseId(recurringExpenses),
       name: recurringFormData.name.trim(),
       category: recurringFormData.category,
       amount: Number(recurringFormData.amount) || 0,
       frequency: recurringFormData.frequency,
       startDate: recurringFormData.startDate,
-      endDate: recurringFormData.endDate?.trim() ? recurringFormData.endDate.trim() : undefined,
-      durationMonths: recurringFormData.durationMonths ? Number(recurringFormData.durationMonths) : undefined,
+      endDate: endDate,
+      durationMonths: durationMonths,
       paymentsPerYear: ppy,
       specificMonths: recurringFormData.specificMonths,
       status: recurringFormData.status,
@@ -921,12 +936,18 @@ export default function ExpensesManagement({
                             <span className="text-[10px] text-gray-400 font-normal"> / {rule.frequency.toLowerCase()}</span>
                           </span>
                         </div>
-                        {rule.durationMonths && (
+                        {(rule.durationMonths || rule.startDate || rule.endDate) && (
                           <div className="flex justify-between items-baseline text-[10px] text-gray-500 pt-1 border-t border-gray-200">
                             <span>Duration / Term:</span>
                             <span className="font-bold text-gray-800">
-                              {rule.durationMonths} months
-                              {rule.startDate ? ` (${rule.startDate.slice(0, 7)}${rule.endDate ? ` to ${rule.endDate.slice(0, 7)}` : ''})` : ''}
+                              {rule.durationMonths ? `${rule.durationMonths} months` : ''}
+                              {rule.startDate && rule.endDate
+                                ? ` (${rule.startDate} to ${rule.endDate})`
+                                : rule.startDate
+                                ? ` (Starts: ${rule.startDate})`
+                                : rule.endDate
+                                ? ` (Ends: ${rule.endDate})`
+                                : ''}
                             </span>
                           </div>
                         )}

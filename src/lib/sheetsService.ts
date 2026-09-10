@@ -10,6 +10,35 @@ import { normalizeAttendanceDate, cleanClockOut, cleanClockIn, calculateHoursWor
 import { DEFAULT_QUOTE_NOTES } from '../constants/quoteDefaults';
 import { EMBEDDED_APPS_SCRIPT_URL } from '../config';
 import { deduplicateRecurringExpenses } from '../utils/financeCalculations';
+import { parseYearMonth } from '../utils/financeFilters';
+
+function normalizeDateStr(raw?: any): string | undefined {
+  if (!raw) return undefined;
+  const str = String(raw).trim();
+  if (!str) return undefined;
+
+  // Check YYYY-MM-DD
+  const isoMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${String(isoMatch[2]).padStart(2, '0')}-${String(isoMatch[3]).padStart(2, '0')}`;
+  }
+
+  // Check MM/DD/YYYY
+  const usMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (usMatch) {
+    return `${usMatch[3]}-${String(usMatch[1]).padStart(2, '0')}-${String(usMatch[2]).padStart(2, '0')}`;
+  }
+
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  return str;
+}
 
 export { parseColorList, resolveColorHex };
 
@@ -2535,7 +2564,22 @@ export const sheetsService = {
           const rawName = String(getProp(item, ['ExpenseName', 'expenseName', 'Name', 'name', 'Expense Name', 'Description']) || '').trim();
           const rawCat = String(getProp(item, ['Category', 'category']) || 'Miscellaneous').trim();
           const rawAmt = Number(getProp(item, ['Amount', 'amount', 'Cost']) || 0);
-          const rawStart = String(getProp(item, ['StartDate', 'startDate', 'Start Date']) || new Date().toISOString().split('T')[0]).trim();
+          const rawStart = normalizeDateStr(getProp(item, ['StartDate', 'startDate', 'Start Date'])) || new Date().toISOString().split('T')[0];
+          const rawEnd = normalizeDateStr(getProp(item, ['EndDate', 'endDate', 'End Date']));
+          
+          let durationMonths = getProp(item, ['DurationMonths', 'durationMonths', 'Duration', 'Duration (Months)', 'duration']) 
+            ? Number(getProp(item, ['DurationMonths', 'durationMonths', 'Duration', 'Duration (Months)', 'duration'])) 
+            : undefined;
+
+          if ((durationMonths === undefined || isNaN(durationMonths) || durationMonths <= 0) && rawStart && rawEnd) {
+            const pStart = parseYearMonth(rawStart);
+            const pEnd = parseYearMonth(rawEnd);
+            if (pStart && pEnd) {
+              const diff = (pEnd.year * 12 + pEnd.month - 1) - (pStart.year * 12 + pStart.month - 1) + 1;
+              if (diff > 0) durationMonths = diff;
+            }
+          }
+
           const stableFallbackId = `REC-EXP-${rawName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'item'}-${rawAmt}-${rawStart.slice(0, 7)}`;
           const id = String(rawId || stableFallbackId);
 
@@ -2546,8 +2590,8 @@ export const sheetsService = {
             amount: rawAmt,
             frequency: (getProp(item, ['Frequency', 'frequency']) || 'Monthly') as any,
             startDate: rawStart,
-            endDate: getProp(item, ['EndDate', 'endDate', 'End Date']) ? String(getProp(item, ['EndDate', 'endDate', 'End Date'])) : undefined,
-            durationMonths: getProp(item, ['DurationMonths', 'durationMonths', 'Duration', 'Duration (Months)']) ? Number(getProp(item, ['DurationMonths', 'durationMonths', 'Duration', 'Duration (Months)'])) : undefined,
+            endDate: rawEnd,
+            durationMonths,
             paymentsPerYear: Number(getProp(item, ['PaymentsPerYear', 'paymentsPerYear', 'Payments Per Year']) || 12),
             specificMonths,
             status: (getProp(item, ['Status', 'status']) || 'Active') as any,
@@ -3233,7 +3277,22 @@ export const sheetsService = {
           const rawName = String(getProp(item, ['ExpenseName', 'expenseName', 'Name', 'name', 'Expense Name', 'Description']) || '').trim();
           const rawCat = String(getProp(item, ['Category', 'category']) || 'Miscellaneous').trim();
           const rawAmt = Number(getProp(item, ['Amount', 'amount', 'Cost']) || 0);
-          const rawStart = String(getProp(item, ['StartDate', 'startDate', 'Start Date']) || new Date().toISOString().split('T')[0]).trim();
+          const rawStart = normalizeDateStr(getProp(item, ['StartDate', 'startDate', 'Start Date'])) || new Date().toISOString().split('T')[0];
+          const rawEnd = normalizeDateStr(getProp(item, ['EndDate', 'endDate', 'End Date']));
+          
+          let durationMonths = getProp(item, ['DurationMonths', 'durationMonths', 'Duration', 'Duration (Months)', 'duration']) 
+            ? Number(getProp(item, ['DurationMonths', 'durationMonths', 'Duration', 'Duration (Months)', 'duration'])) 
+            : undefined;
+
+          if ((durationMonths === undefined || isNaN(durationMonths) || durationMonths <= 0) && rawStart && rawEnd) {
+            const pStart = parseYearMonth(rawStart);
+            const pEnd = parseYearMonth(rawEnd);
+            if (pStart && pEnd) {
+              const diff = (pEnd.year * 12 + pEnd.month - 1) - (pStart.year * 12 + pStart.month - 1) + 1;
+              if (diff > 0) durationMonths = diff;
+            }
+          }
+
           const stableFallbackId = `REC-EXP-${rawName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'item'}-${rawAmt}-${rawStart.slice(0, 7)}`;
           const id = String(rawId || stableFallbackId);
 
@@ -3244,8 +3303,8 @@ export const sheetsService = {
             amount: rawAmt,
             frequency: (getProp(item, ['Frequency', 'frequency']) || 'Monthly') as any,
             startDate: rawStart,
-            endDate: getProp(item, ['EndDate', 'endDate', 'End Date']) ? String(getProp(item, ['EndDate', 'endDate', 'End Date'])) : undefined,
-            durationMonths: getProp(item, ['DurationMonths', 'durationMonths', 'Duration', 'Duration (Months)']) ? Number(getProp(item, ['DurationMonths', 'durationMonths', 'Duration', 'Duration (Months)'])) : undefined,
+            endDate: rawEnd,
+            durationMonths,
             paymentsPerYear: Number(getProp(item, ['PaymentsPerYear', 'paymentsPerYear', 'Payments Per Year']) || 12),
             specificMonths,
             status: (getProp(item, ['Status', 'status']) || 'Active') as any,

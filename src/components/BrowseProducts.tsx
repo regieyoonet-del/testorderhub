@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import { CatalogProduct, CompanyProfile, QuoteEnquiry } from '../types';
 import { sanitizeCatalogProduct } from '../data/initialCatalog';
 import ProductImageCarousel from './ProductImageCarousel';
+import { useProductImageViewer } from './ProductImageViewer';
 import {
   Search,
   Filter,
@@ -27,7 +28,8 @@ import {
   SlidersHorizontal,
   RotateCcw,
   Check,
-  Clock
+  Clock,
+  Maximize2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -59,6 +61,7 @@ export default function BrowseProducts({
   const [selectedColor, setSelectedColor] = useState<string>('All');
   const [sortBy, setSortBy] = useState<'a-z' | 'z-a' | 'moq-asc' | 'moq-desc'>('a-z');
   const [cardColors, setCardColors] = useState<Record<string, string>>({});
+  const { openViewer } = useProductImageViewer();
 
   // Modal States
   const [selectedProduct, setSelectedProduct] = useState<CatalogProduct | null>(null);
@@ -568,14 +571,47 @@ export default function BrowseProducts({
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
                 {/* Image Gallery */}
                 <div className="lg:col-span-5 space-y-4">
-                  <div className="aspect-square border border-gray-200 bg-white rounded-3xl overflow-hidden relative shadow-sm flex items-center justify-center">
+                  <div
+                    onClick={() => {
+                      if (productGallery.length > 0) {
+                        openViewer({
+                          images: productGallery,
+                          currentIndex: activeImageIdx,
+                          title: selectedProduct.name,
+                          subtitle: selectedProduct.category
+                        });
+                      }
+                    }}
+                    className="aspect-square border border-gray-200 bg-white rounded-3xl overflow-hidden relative shadow-sm flex items-center justify-center cursor-pointer group"
+                    title="Click to view larger image"
+                  >
                     {productGallery.length > 0 ? (
-                      <img
-                        src={productGallery[activeImageIdx] || productGallery[0]}
-                        alt={selectedProduct.name}
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
+                      <>
+                        <img
+                          src={productGallery[activeImageIdx] || productGallery[0]}
+                          alt={selectedProduct.name}
+                          className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-300"
+                          referrerPolicy="no-referrer"
+                        />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openViewer({
+                              images: productGallery,
+                              currentIndex: activeImageIdx,
+                              title: selectedProduct.name,
+                              subtitle: selectedProduct.category
+                            });
+                          }}
+                          className="absolute bottom-4 right-4 bg-black/75 hover:bg-black text-white p-2.5 rounded-full shadow-lg transition-all hover:scale-110 active:scale-95 cursor-pointer backdrop-blur-xs flex items-center justify-center"
+                          title="View larger image"
+                          aria-label="View larger image"
+                          id="browse-modal-zoom-btn"
+                        >
+                          <Maximize2 className="w-4 h-4" />
+                        </button>
+                      </>
                     ) : (
                       <div className="text-6xl text-gray-300 select-none">📦</div>
                     )}
@@ -732,7 +768,16 @@ export default function BrowseProducts({
                         <img
                           src={rel.imageUrl}
                           alt={rel.name}
-                          className="w-16 h-16 object-cover rounded-xl border border-gray-200 shrink-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openViewer({
+                              src: rel.imageUrl,
+                              title: rel.name,
+                              subtitle: rel.category
+                            });
+                          }}
+                          className="w-16 h-16 object-cover rounded-xl border border-gray-200 shrink-0 hover:scale-105 transition-transform"
+                          title="Click to view larger image"
                           referrerPolicy="no-referrer"
                         />
                         <div className="overflow-hidden">
@@ -828,7 +873,13 @@ export default function BrowseProducts({
                     <img
                       src={selectedProduct.imageUrl}
                       alt={selectedProduct.name}
-                      className="w-12 h-12 object-cover border border-gray-200 rounded-xl shrink-0"
+                      onClick={() => openViewer({
+                        images: Array.from(new Set([selectedProduct.imageUrl, ...(selectedProduct.imageUrls || [])].filter(Boolean))),
+                        title: selectedProduct.name,
+                        subtitle: selectedProduct.category
+                      })}
+                      className="w-12 h-12 object-cover border border-gray-200 rounded-xl shrink-0 cursor-pointer hover:scale-105 transition-transform"
+                      title="Click to view larger image"
                       referrerPolicy="no-referrer"
                     />
                     <div>

@@ -1715,7 +1715,14 @@ export default function App() {
               if (!isNaN(localUpdated) && (now - localUpdated < 20000) && localUpdated > serverUpdated) {
                 return localRule;
               }
-              return serverRule;
+              return {
+                ...serverRule,
+                startDate: serverRule.startDate || localRule.startDate,
+                endDate: serverRule.endDate || localRule.endDate,
+                durationMonths: (serverRule.durationMonths !== undefined && !isNaN(serverRule.durationMonths))
+                  ? serverRule.durationMonths
+                  : localRule.durationMonths
+              };
             });
             const prevIds = new Set(prevRules.map(r => r.id));
             const newServerRules = cleanFetched.filter(r => !prevIds.has(r.id));
@@ -2539,14 +2546,15 @@ export default function App() {
 
       const existsIndex = prev.findIndex(r =>
         r.id === updated.id ||
-        (r.name.toLowerCase().trim() === normName &&
+        (!updated.id &&
+         r.name.toLowerCase().trim() === normName &&
          r.category.toLowerCase().trim() === normCat &&
          (r.startDate || '').slice(0, 7) === startYm)
       );
 
       let nextList: RecurringExpenseRule[];
       if (existsIndex >= 0) {
-        nextList = prev.map((r, idx) => idx === existsIndex ? updated : r);
+        nextList = prev.map((r, idx) => idx === existsIndex ? { ...r, ...updated } : r);
       } else {
         nextList = [updated, ...prev];
       }

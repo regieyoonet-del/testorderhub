@@ -23,6 +23,7 @@ import { CompanyProfile, Order, Product, ProductAddOn, getDisplayPurchaserName }
 import { INITIAL_PRODUCTS } from '../data/mockData';
 import ProductDetailsPage from './ProductDetailsPage';
 import ProductImageCarousel from './ProductImageCarousel';
+import { useProductImageViewer } from './ProductImageViewer';
 import {
   X,
   Building2,
@@ -124,6 +125,8 @@ export default function ClientDashboardModal({
   onUpdateOrderStatus,
   onSimulateClient
 }: ClientDashboardModalProps) {
+  const { openViewer } = useProductImageViewer();
+
   // Modal internal active tabs
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'analytics' | 'products' | 'orders'>('overview');
   const [productViewMode, setProductViewMode] = useState<'carousel' | 'compact'>('carousel');
@@ -1099,7 +1102,14 @@ export default function ClientDashboardModal({
                         <img
                           src={analyticsData.topSellingItem.imageUrl}
                           alt={analyticsData.topSellingItem.name}
-                          className="w-full h-full object-cover"
+                          onClick={() => openViewer({
+                            src: analyticsData.topSellingItem.imageUrl,
+                            title: analyticsData.topSellingItem.name,
+                            subtitle: 'Top-Selling Item'
+                          })}
+                          className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
+                          title="Click to view larger image"
+                          referrerPolicy="no-referrer"
                           onError={(e) => {
                             (e.target as HTMLElement).style.display = 'none';
                           }}
@@ -1397,7 +1407,18 @@ export default function ClientDashboardModal({
                               <div className="flex items-center gap-2.5">
                                 <div className="w-8 h-8 rounded-lg bg-gray-100 overflow-hidden shrink-0 border border-gray-200 flex items-center justify-center">
                                   {item.imageUrl ? (
-                                    <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                                    <img
+                                      src={item.imageUrl}
+                                      alt={item.name}
+                                      onClick={() => openViewer({
+                                        src: item.imageUrl,
+                                        title: item.name,
+                                        subtitle: item.category
+                                      })}
+                                      className="w-full h-full object-cover cursor-pointer hover:scale-110 transition-transform"
+                                      title="Click to view larger image"
+                                      referrerPolicy="no-referrer"
+                                    />
                                   ) : (
                                     <Package className="w-4 h-4 text-gray-400" />
                                   )}
@@ -2496,7 +2517,21 @@ export default function ClientDashboardModal({
                           <div className="flex items-start space-x-3.5 mb-3">
                             <div className="w-12 h-12 bg-white rounded-xl border border-gray-100 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
                               {p.imageUrl.startsWith('http') ? (
-                                <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                <img
+                                  src={p.imageUrl}
+                                  alt={p.name}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openViewer({
+                                      images: Array.from(new Set([p.imageUrl, ...(p.imageUrls || [])].filter(Boolean))),
+                                      title: p.name,
+                                      subtitle: p.category
+                                    });
+                                  }}
+                                  className="w-full h-full object-cover cursor-pointer hover:scale-110 transition-transform"
+                                  title="Click to view larger image"
+                                  referrerPolicy="no-referrer"
+                                />
                               ) : (
                                 <div className="text-2xl">{p.imageUrl}</div>
                               )}
@@ -2776,7 +2811,18 @@ export default function ClientDashboardModal({
                                         <div className="flex items-center space-x-2.5 min-w-0">
                                           <div className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
                                             {it.imageUrl?.startsWith('http') ? (
-                                              <img src={it.imageUrl} alt={it.productName} className="w-full h-full object-cover" />
+                                              <img
+                                                src={it.imageUrl}
+                                                alt={it.productName}
+                                                onClick={() => openViewer({
+                                                  src: it.imageUrl,
+                                                  title: it.productName,
+                                                  subtitle: it.selectedColor ? `Color: ${it.selectedColor}` : undefined
+                                                })}
+                                                className="w-full h-full object-cover cursor-pointer hover:scale-110 transition-transform"
+                                                title="Click to view larger image"
+                                                referrerPolicy="no-referrer"
+                                              />
                                             ) : (
                                               <div className="text-base">{it.imageUrl || '📦'}</div>
                                             )}
@@ -2832,7 +2878,18 @@ export default function ClientDashboardModal({
                                             <div className="flex items-center space-x-2.5 min-w-0">
                                               <div className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
                                                 {it.imageUrl?.startsWith('http') ? (
-                                                  <img src={it.imageUrl} alt={it.productName} className="w-full h-full object-cover" />
+                                                  <img
+                                                    src={it.imageUrl}
+                                                    alt={it.productName}
+                                                    onClick={() => openViewer({
+                                                      src: it.imageUrl,
+                                                      title: it.productName,
+                                                      subtitle: it.selectedColor ? `Color: ${it.selectedColor}` : undefined
+                                                    })}
+                                                    className="w-full h-full object-cover cursor-pointer hover:scale-110 transition-transform"
+                                                    title="Click to view larger image"
+                                                    referrerPolicy="no-referrer"
+                                                  />
                                                 ) : (
                                                   <div className="text-xs">{it.imageUrl || '📦'}</div>
                                                 )}

@@ -8,6 +8,7 @@ import { OrderPortal, Product, CompanyProfile, Order, OrderItem, SystemSettings,
 import { getProductUnitPrice, getAddOnUnitPrice } from '../utils/pricing';
 import { getItemColorImage } from '../utils/colorUtils';
 import ProductImageCarousel from './ProductImageCarousel';
+import { useProductImageViewer } from './ProductImageViewer';
 import {
   ShoppingBag,
   CheckCircle,
@@ -63,6 +64,8 @@ export default function PublicOrderPortal({
   onClosePublicView,
   isLoggedIn = false
 }: PublicOrderPortalProps) {
+  const { openViewer } = useProductImageViewer();
+
   // Filter products strictly assigned to this portal / company profile
   const portalProducts = useMemo(() => {
     const hasExplicitCompanyList = Array.isArray(company?.enabledProductIds);
@@ -608,7 +611,17 @@ export default function PublicOrderPortal({
                               <img
                                 src={addOn.imageUrl}
                                 alt={addOn.name}
-                                className="w-8 h-8 rounded-lg border border-gray-200 object-cover shrink-0 mt-0.5"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  openViewer({
+                                    src: addOn.imageUrl,
+                                    title: addOn.name,
+                                    subtitle: 'Item Add-On'
+                                  });
+                                }}
+                                className="w-8 h-8 rounded-lg border border-gray-200 object-cover shrink-0 mt-0.5 cursor-pointer hover:scale-110 transition-transform"
+                                title="Click to view larger image"
                               />
                             )}
                             <div className="flex-1 text-xs">
@@ -978,7 +991,17 @@ export default function PublicOrderPortal({
                                     <img
                                       src={addOn.imageUrl}
                                       alt={addOn.name}
-                                      className="w-7 h-7 rounded border border-gray-200 object-cover shrink-0 mt-0.5"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        openViewer({
+                                          src: addOn.imageUrl,
+                                          title: addOn.name,
+                                          subtitle: 'Product Add-On'
+                                        });
+                                      }}
+                                      className="w-7 h-7 rounded border border-gray-200 object-cover shrink-0 mt-0.5 cursor-pointer hover:scale-110 transition-transform"
+                                      title="Click to view larger image"
                                     />
                                   )}
                                   <div className="flex-1 text-[10px] leading-snug">
@@ -1118,7 +1141,13 @@ export default function PublicOrderPortal({
                           <img
                             src={getItemColorImage(item.product, item.selectedColor)}
                             alt={item.product.name}
-                            className="w-10 h-10 rounded-lg object-cover border border-gray-200 shrink-0"
+                            onClick={() => openViewer({
+                              src: getItemColorImage(item.product, item.selectedColor),
+                              title: item.product.name,
+                              subtitle: item.selectedColor ? `Color: ${item.selectedColor}` : item.product.category
+                            })}
+                            className="w-10 h-10 rounded-lg object-cover border border-gray-200 shrink-0 cursor-pointer hover:scale-110 transition-transform"
+                            title="Click to view larger image"
                             referrerPolicy="no-referrer"
                           />
                         ) : (

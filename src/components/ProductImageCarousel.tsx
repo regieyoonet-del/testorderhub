@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Product, CatalogProduct } from '../types';
-import { ChevronLeft, ChevronRight, Heart } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Heart, Maximize2 } from 'lucide-react';
+import { useProductImageViewer } from './ProductImageViewer';
 
 interface ProductImageCarouselProps {
   product: Product | CatalogProduct | {
@@ -73,9 +74,24 @@ export default function ProductImageCarousel({
 
   const currentImage = images[activeIdx] || product.imageUrl;
 
+  const { openViewer } = useProductImageViewer();
+
+  const handleContainerClick = () => {
+    if (onImageClick) {
+      onImageClick();
+    } else if (currentImage && currentImage.startsWith('http')) {
+      openViewer({
+        images,
+        currentIndex: activeIdx,
+        title: product.name,
+        subtitle: (product as any).category
+      });
+    }
+  };
+
   return (
     <div
-      onClick={onImageClick}
+      onClick={handleContainerClick}
       className={`bg-[#edf0f3] rounded-[22px] relative flex items-center justify-center overflow-hidden transition-all group-hover:bg-[#e4e7ea] cursor-pointer ${aspectClass} ${className}`}
     >
       {currentImage && currentImage.startsWith('http') ? (
@@ -94,6 +110,30 @@ export default function ProductImageCarousel({
         <span className="absolute top-3 left-3 bg-black text-white text-[9px] font-mono font-bold tracking-widest px-2.5 py-0.5 rounded-full uppercase z-10 shadow-sm">
           B2B Best-Seller
         </span>
+      )}
+
+      {/* Global Image Viewer Zoom / Expand Button */}
+      {currentImage && currentImage.startsWith('http') && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            openViewer({
+              images,
+              currentIndex: activeIdx,
+              title: product.name,
+              subtitle: (product as any).category
+            });
+          }}
+          className={`absolute top-3 ${
+            showFavoriteButton && onToggleFavorite ? 'right-12' : 'right-3'
+          } bg-white/90 hover:bg-white text-gray-700 hover:text-black rounded-full p-2 shadow-md hover:scale-110 active:scale-95 transition-all cursor-pointer z-10 flex items-center justify-center border border-gray-100 opacity-90 sm:opacity-0 group-hover:opacity-100`}
+          aria-label="View larger image"
+          title="View larger image"
+          id={`zoom-btn-${product.id}`}
+        >
+          <Maximize2 className="w-4 h-4" />
+        </button>
       )}
 
       {/* Favorite Heart Button */}

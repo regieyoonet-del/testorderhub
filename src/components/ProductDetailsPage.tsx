@@ -6,8 +6,9 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { X, Check, Plus, ArrowLeft, HelpCircle, Layers, Tag, Edit, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react';
+import { X, Check, Plus, ArrowLeft, HelpCircle, Layers, Tag, Edit, ChevronLeft, ChevronRight, Image as ImageIcon, Maximize2 } from 'lucide-react';
 import { Product } from '../types';
+import { useProductImageViewer } from './ProductImageViewer';
 
 interface ProductDetailsPageProps {
   product: Product;
@@ -32,6 +33,8 @@ const getColorHex = (colorName: string): string => {
 };
 
 export default function ProductDetailsPage({ product, onClose, onEdit, editLabel = 'Edit Specs' }: ProductDetailsPageProps) {
+  const { openViewer } = useProductImageViewer();
+
   // Calculate savings percentage
   const retailPrice = product.originalPrice || product.basePrice * 1.8;
   const savingsPercent = Math.round(((retailPrice - product.basePrice) / retailPrice) * 100);
@@ -124,14 +127,47 @@ export default function ProductDetailsPage({ product, onClose, onEdit, editLabel
         >
           {/* Left Side: Product Media Container */}
           <div className="lg:col-span-5 space-y-4">
-            <div className="bg-[#edf0f3] aspect-square rounded-[2rem] relative flex items-center justify-center overflow-hidden border border-gray-200 shadow-sm group">
+            <div
+              onClick={() => {
+                if (activeImg && activeImg.startsWith('http')) {
+                  openViewer({
+                    images: allImages,
+                    currentIndex: currentImageIdx,
+                    title: product.name,
+                    subtitle: product.category
+                  });
+                }
+              }}
+              className="bg-[#edf0f3] aspect-square rounded-[2rem] relative flex items-center justify-center overflow-hidden border border-gray-200 shadow-sm group cursor-pointer"
+              title="Click to view larger image"
+            >
               {activeImg && activeImg.startsWith('http') ? (
-                <img
-                  src={activeImg}
-                  alt={product.name}
-                  className="w-full h-full object-cover transition-all duration-300"
-                  referrerPolicy="no-referrer"
-                />
+                <>
+                  <img
+                    src={activeImg}
+                    alt={product.name}
+                    className="w-full h-full object-cover transition-all duration-300 group-hover:scale-102"
+                    referrerPolicy="no-referrer"
+                  />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openViewer({
+                        images: allImages,
+                        currentIndex: currentImageIdx,
+                        title: product.name,
+                        subtitle: product.category
+                      });
+                    }}
+                    className="absolute top-4 right-4 bg-white/90 hover:bg-white text-gray-700 hover:text-black rounded-full p-2.5 shadow-md hover:scale-110 active:scale-95 transition-all cursor-pointer z-20 flex items-center justify-center border border-gray-100"
+                    title="View larger image"
+                    aria-label="View larger image"
+                    id="details-page-zoom-btn"
+                  >
+                    <Maximize2 className="w-4 h-4" />
+                  </button>
+                </>
               ) : (
                 <div className="text-8xl select-none">{activeImg || product.imageUrl}</div>
               )}
@@ -359,7 +395,16 @@ export default function ProductDetailsPage({ product, onClose, onEdit, editLabel
                           <img
                             src={a.imageUrl}
                             alt={a.name}
-                            className="w-9 h-9 rounded-xl border border-emerald-200/80 object-cover shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openViewer({
+                                src: a.imageUrl,
+                                title: a.name,
+                                subtitle: 'Item Add-On'
+                              });
+                            }}
+                            className="w-9 h-9 rounded-xl border border-emerald-200/80 object-cover shrink-0 cursor-pointer hover:scale-110 transition-transform"
+                            title="Click to view larger image"
                           />
                         )}
                         <div>

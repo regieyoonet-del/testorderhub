@@ -9,6 +9,7 @@ import { getProductUnitPrice } from '../utils/pricing';
 import { Check, Plus, AlertCircle, Sparkles, ChevronDown, Heart, Clock, Truck, Edit3, X, Save } from 'lucide-react';
 import ProductDetailsPage from './ProductDetailsPage';
 import ProductImageCarousel from './ProductImageCarousel';
+import { useProductImageViewer } from './ProductImageViewer';
 import { sheetsService } from '../lib/sheetsService';
 
 interface ProductCatalogProps {
@@ -20,6 +21,7 @@ interface ProductCatalogProps {
 }
 
 export default function ProductCatalog({ products, onAddToCart, onUpdateProduct, appsScriptUrl, userRole = 'client' }: ProductCatalogProps) {
+  const { openViewer } = useProductImageViewer();
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [configuringId, setConfiguringId] = useState<string | null>(null);
   const [selectedProductForDetails, setSelectedProductForDetails] = useState<Product | null>(null);
@@ -492,7 +494,17 @@ export default function ProductCatalog({ products, onAddToCart, onUpdateProduct,
                                     <img
                                       src={addOn.imageUrl}
                                       alt={addOn.name}
-                                      className="w-7 h-7 rounded border border-gray-200 object-cover shrink-0 mt-0.5"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        openViewer({
+                                          src: addOn.imageUrl,
+                                          title: addOn.name,
+                                          subtitle: 'Product Add-On'
+                                        });
+                                      }}
+                                      className="w-7 h-7 rounded border border-gray-200 object-cover shrink-0 mt-0.5 cursor-pointer hover:scale-110 transition-transform"
+                                      title="Click to view larger image"
                                     />
                                   )}
                                   <div className="flex-1 text-[10px] leading-tight">

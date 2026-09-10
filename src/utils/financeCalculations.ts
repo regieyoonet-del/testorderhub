@@ -278,7 +278,7 @@ export function deduplicateRecurringExpenses(
 ): RecurringExpense[] {
   if (!Array.isArray(rules)) return [];
 
-  const seenIds = new Set<string>();
+  const byId = new Map<string, RecurringExpense>();
   const seenSignatures = new Set<string>();
   const result: RecurringExpense[] = [];
 
@@ -286,7 +286,21 @@ export function deduplicateRecurringExpenses(
     if (!rule) continue;
 
     const id = String(rule.id || '').trim();
-    if (id && seenIds.has(id)) {
+    if (id) {
+      if (byId.has(id)) {
+        // Merge so we never lose dates or duration
+        const existing = byId.get(id)!;
+        byId.set(id, {
+          ...rule,
+          startDate: rule.startDate || existing.startDate,
+          endDate: rule.endDate || existing.endDate,
+          durationMonths: (rule.durationMonths !== undefined && !isNaN(rule.durationMonths)) ? rule.durationMonths : existing.durationMonths,
+          notes: rule.notes || existing.notes
+        });
+        continue;
+      }
+      byId.set(id, rule);
+      result.push(rule);
       continue;
     }
 
@@ -301,12 +315,11 @@ export function deduplicateRecurringExpenses(
       continue;
     }
 
-    if (id) seenIds.add(id);
     seenSignatures.add(signature);
     result.push(rule);
   }
 
-  return result;
+  return result.map(r => (r.id ? (byId.get(r.id) || r) : r));
 }
 
 export interface RecurringExpenseMonthSummary {

@@ -457,7 +457,7 @@ function initSheets(ss) {
     "Payroll": ["Payroll ID", "Staff ID", "Staff Name", "Position", "Department", "Pay Period Start", "Pay Period End", "Pay Date", "Basic Pay", "Allowances", "Other Earnings", "Gross Pay", "Deductions", "Itemized Deductions JSON", "Total Deductions", "Net Pay", "Status", "Notes", "Created At", "Updated At"],
     "Expenses": ["Expense ID", "Expense Name", "Category", "Expense Type", "Amount", "Expense Date", "Payment Status", "Payment Date", "Vendor", "Reference Number", "Notes", "Recurring Expense ID", "Payroll ID", "Created At", "Updated At"],
     "ExpenseCategories": ["Category ID", "Name", "Is System", "Status"],
-    "RecurringExpenses": ["Recurring Expense ID", "Expense Name", "Category", "Amount", "Frequency", "Start Date", "End Date", "Payments Per Year", "Specific Months JSON", "Status", "Notes", "Created At", "Updated At"]
+    "RecurringExpenses": ["Recurring Expense ID", "Expense Name", "Category", "Amount", "Frequency", "Start Date", "End Date", "Duration Months", "Payments Per Year", "Specific Months JSON", "Status", "Notes", "Created At", "Updated At"]
   };
   
   for (var i = 0; i < sheets.length; i++) {
@@ -2003,7 +2003,7 @@ function saveExpenseCategories(ss, categories) {
 }
 
 function saveRecurringExpense(ss, rule) {
-  var expectedHeaders = ["Recurring Expense ID", "Expense Name", "Category", "Amount", "Frequency", "Start Date", "End Date", "Payments Per Year", "Specific Months JSON", "Status", "Notes", "Created At", "Updated At"];
+  var expectedHeaders = ["Recurring Expense ID", "Expense Name", "Category", "Amount", "Frequency", "Start Date", "End Date", "Duration Months", "Payments Per Year", "Specific Months JSON", "Status", "Notes", "Created At", "Updated At"];
   var sheet = ss.getSheetByName("RecurringExpenses");
   if (!sheet) {
     sheet = ss.insertSheet("RecurringExpenses");
@@ -2033,8 +2033,8 @@ function saveRecurringExpense(ss, rule) {
     }
   }
 
-  // If not found by targetId, check if an existing row matches by Name and Start Date
-  if (rowIndex === -1) {
+  // Only if targetId is an unassigned temporary fallback ID and not found, check existing by exact name and start date
+  if (rowIndex === -1 && targetId.indexOf("REC-EXP-fallback") === 0) {
     var nameIdx = -1;
     var startIdx = -1;
     for (var c = 0; c < headers.length; c++) {
@@ -2045,12 +2045,14 @@ function saveRecurringExpense(ss, rule) {
     if (nameIdx !== -1) {
       var sName = String(rule.name || rule.expenseName || "").trim().toLowerCase();
       var sStart = String(rule.startDate || "").slice(0, 7);
-      for (var i = 1; i < data.length; i++) {
-        var rowName = String(data[i][nameIdx] || "").trim().toLowerCase();
-        var rowStart = startIdx !== -1 ? String(data[i][startIdx] || "").slice(0, 7) : "";
-        if (rowName === sName && (!sStart || !rowStart || rowStart === sStart)) {
-          rowIndex = i + 1;
-          break;
+      if (sName && sStart) {
+        for (var i = 1; i < data.length; i++) {
+          var rowName = String(data[i][nameIdx] || "").trim().toLowerCase();
+          var rowStart = startIdx !== -1 ? String(data[i][startIdx] || "").slice(0, 7) : "";
+          if (rowName === sName && rowStart === sStart) {
+            rowIndex = i + 1;
+            break;
+          }
         }
       }
     }
@@ -2069,6 +2071,7 @@ function saveRecurringExpense(ss, rule) {
     "Frequency": rule.frequency || "Monthly",
     "Start Date": rule.startDate || "",
     "End Date": rule.endDate || "",
+    "Duration Months": (rule.durationMonths !== undefined && rule.durationMonths !== null && rule.durationMonths !== "") ? Number(rule.durationMonths) : "",
     "Payments Per Year": rule.paymentsPerYear !== undefined ? Number(rule.paymentsPerYear) : 12,
     "Specific Months JSON": specificMonthsJson,
     "Status": rule.status || "Active",
@@ -2609,7 +2612,7 @@ function getJsonOutput(obj) {
               <div className="space-y-1">
                 <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
                 <div className="flex flex-wrap gap-1">
-                  {["Recurring Expense ID", "Expense Name", "Category", "Amount", "Frequency", "Start Date", "End Date", "Payments Per Year", "Specific Months JSON", "Status", "Notes", "Created At", "Updated At"].map(col => (
+                  {["Recurring Expense ID", "Expense Name", "Category", "Amount", "Frequency", "Start Date", "End Date", "Duration Months", "Payments Per Year", "Specific Months JSON", "Status", "Notes", "Created At", "Updated At"].map(col => (
                     <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
                       {col}
                     </span>

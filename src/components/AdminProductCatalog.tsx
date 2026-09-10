@@ -6,6 +6,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { CatalogProduct, ColorOption, QuoteEnquiry, Product } from '../types';
 import { sanitizeCatalogProduct } from '../data/initialCatalog';
+import { useProductImageViewer } from './ProductImageViewer';
 import {
   Plus,
   Edit2,
@@ -116,6 +117,7 @@ export default function AdminProductCatalog({
   companyAddress,
   taxId
 }: AdminProductCatalogProps) {
+  const { openViewer } = useProductImageViewer();
   const [activeSection, setActiveSection] = useState<'catalog' | 'enquiries'>(initialSection || 'catalog');
 
   useEffect(() => {
@@ -541,11 +543,20 @@ export default function AdminProductCatalog({
                             <img
                               src={p.imageUrl}
                               alt={p.name}
-                              className="w-12 h-12 object-cover border border-gray-200 rounded-xl shrink-0 bg-gray-100"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openViewer({
+                                  images: Array.from(new Set([p.imageUrl, ...(p.imageUrls || [])].filter(Boolean))),
+                                  title: p.name,
+                                  subtitle: p.category
+                                });
+                              }}
+                              className="w-12 h-12 object-cover border border-gray-200 rounded-xl shrink-0 bg-gray-100 cursor-pointer hover:ring-2 hover:ring-black hover:scale-105 transition-all shadow-2xs"
+                              title="Click to view larger image"
                               referrerPolicy="no-referrer"
                             />
                           ) : (
-                            <div className="w-12 h-12 border border-gray-200 rounded-xl bg-gray-100 flex items-center justify-center shrink-0 text-lg">
+                            <div className="w-12 h-12 border border-gray-200 rounded-xl bg-gray-100 flex items-center justify-center shrink-0 text-lg select-none">
                               📦
                             </div>
                           )}
@@ -1403,7 +1414,12 @@ export default function AdminProductCatalog({
                                 <img
                                   src={linkedImg}
                                   alt={col.name}
-                                  className="w-7 h-7 rounded-lg object-cover border border-gray-300 shadow-2xs shrink-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openViewer({ src: linkedImg, title: col.name, subtitle: 'Color Variant Preview' });
+                                  }}
+                                  className="w-7 h-7 rounded-lg object-cover border border-gray-300 shadow-2xs shrink-0 cursor-pointer hover:scale-110 transition-transform"
+                                  title="Click to view larger image"
                                   referrerPolicy="no-referrer"
                                 />
                               )}

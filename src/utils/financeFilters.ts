@@ -43,6 +43,16 @@ export function parseYearMonth(dateStr?: string | null): { year: number; month: 
     }
   }
 
+  // Check for MM/DD/YYYY or M/D/YYYY prefix
+  const usMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (usMatch) {
+    const month = parseInt(usMatch[1], 10);
+    const year = parseInt(usMatch[3], 10);
+    if (!isNaN(year) && !isNaN(month) && month >= 1 && month <= 12) {
+      return { year, month };
+    }
+  }
+
   // Fallback to Date object parsing
   const d = new Date(str);
   if (!isNaN(d.getTime())) {
