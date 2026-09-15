@@ -9,6 +9,55 @@
 @theme {
   --font-sans: "Poppins", system-ui, -apple-system, sans-serif;
   --font-heading: "Poppins", system-ui, -apple-system, sans-serif;
+
+  --text-xs: 0.71875rem;
+  --text-xs--line-height: 0.95rem;
+
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.2rem;
+
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.45rem;
+
+  --text-lg: 1.0625rem;
+  --text-lg--line-height: 1.65rem;
+
+  --text-xl: 1.1875rem;
+  --text-xl--line-height: 1.65rem;
+
+  --text-2xl: 1.375rem;
+  --text-2xl--line-height: 1.85rem;
+
+  --text-3xl: 1.6875rem;
+  --text-3xl--line-height: 2.1rem;
+
+  --text-4xl: 2.05rem;
+  --text-4xl--line-height: 2.35rem;
+
+  --text-5xl: 2.625rem;
+  --text-5xl--line-height: 1.05;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    letter-spacing: -0.011em;
+  }
+
+  /* Optical letter-spacing refinement for Poppins headings */
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.02em;
+  }
+
+  /* Crisp baseline for inputs and interactive controls */
+  input, select, textarea, button {
+    letter-spacing: -0.005em;
+  }
 }
 
 @layer utilities {

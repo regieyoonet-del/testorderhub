@@ -11,10 +11,13 @@ import {
   ExpenseRecord,
   PayrollRecord,
   RecurringExpense,
-  SystemSettings
+  SystemSettings,
+  SalesGoalRecord
 } from '../types';
 import { isDirectCompanyOrder } from './AnalyticsDashboard';
 import { parseYearMonth, MONTH_OPTIONS } from '../utils/financeFilters';
+import { calculateYearSalesMetrics } from '../utils/salesGoalCalculations';
+import SalesPaceBadge from './SalesPaceBadge';
 import {
   getJobRevenue,
   getJobDateStr,
@@ -57,6 +60,8 @@ interface FinancialOverviewProps {
   systemSettings: SystemSettings;
   onUpdateSystemSettings?: (settings: SystemSettings) => void;
   currencySymbol?: string;
+  salesGoals?: SalesGoalRecord[];
+  onOpenSalesGoalsSettings?: (year?: number) => void;
 }
 
 export interface MonthlyFinancialRow {
@@ -87,7 +92,9 @@ export default function FinancialOverview({
   recurringExpenses = [],
   systemSettings,
   onUpdateSystemSettings,
-  currencySymbol = '₱'
+  currencySymbol = '₱',
+  salesGoals = [],
+  onOpenSalesGoalsSettings
 }: FinancialOverviewProps) {
   // Current calendar date
   const now = new Date();
@@ -147,6 +154,10 @@ export default function FinancialOverview({
     (expenses || []).forEach(e => {
       const p = parseYearMonth(e.expenseDate || e.date || e.createdAt);
       if (p) years.add(p.year);
+    });
+
+    (salesGoals || []).forEach(g => {
+      if (g.year) years.add(g.year);
     });
 
     (payroll || []).forEach(pRec => {
@@ -801,6 +812,194 @@ export default function FinancialOverview({
           </div>
         </div>
       </div>
+
+      {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
+      {/* MANAGEMENT SALES GOALS BENCHMARK (Section 2B) */}
+      {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
+      {(() => {
+        const activeSalesGoal = (salesGoals || []).find(g => g.year === selectedYear);
+        if (activeSalesGoal) {
+          const metrics = calculateYearSalesMetrics(
+            selectedYear,
+            activeSalesGoal,
+            orders,
+            jobs,
+            jobItemColumns
+          );
+          const percentMet = metrics.annualGoalProgress;
+          const timePercent = metrics.annualTimeProgress;
+          const isTargetAchieved = metrics.salesAchieved >= metrics.annualGoal;
+
+          return (
+            <div className="bg-white border-2 border-black rounded-3xl p-6 md:p-8 shadow-sm space-y-6" id="management-sales-goals-benchmark-card">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-100 pb-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-black text-white flex items-center justify-center">
+                      <Target className="w-4 h-4" />
+                    </div>
+                    <h3 className="text-base md:text-lg font-extrabold uppercase tracking-tight text-black flex items-center gap-2">
+                      <span>Management Sales Goals vs. Actuals</span>
+                      <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 font-bold border border-gray-300">
+                        {selectedYear}
+                      </span>
+                    </h3>
+                  </div>
+                  <p className="text-xs text-gray-500 font-mono">
+                    Leadership top-down growth target pacing against recognized corporate orders &amp; jobs. Separate from expense break-even quota.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <SalesPaceBadge pace={metrics.annualPaceStatus} />
+                  {onOpenSalesGoalsSettings && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenSalesGoalsSettings(selectedYear)}
+                      className="px-3 py-1.5 bg-gray-100 hover:bg-black hover:text-white border border-gray-200 text-gray-800 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Settings2 className="w-3.5 h-3.5" />
+                      <span>Configure Goals</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 4 Metric Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 font-mono">
+                {/* 1. Annual Goal */}
+                <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4.5">
+                  <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-gray-500 block mb-1">
+                    Annual Sales Goal
+                  </span>
+                  <div className="text-xl font-bold text-black truncate" title={formatCurrency(metrics.annualGoal, currencySymbol)}>
+                    {formatCurrency(metrics.annualGoal, currencySymbol)}
+                  </div>
+                  <span className="text-[10px] text-gray-500 block mt-1">
+                    Executive Target ({selectedYear})
+                  </span>
+                </div>
+
+                {/* 2. Sales Achieved */}
+                <div className="bg-emerald-50/60 border border-emerald-200 rounded-2xl p-4.5">
+                  <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-emerald-800 block mb-1">
+                    Sales Achieved
+                  </span>
+                  <div className="text-xl font-bold text-emerald-900 truncate" title={formatCurrency(metrics.salesAchieved, currencySymbol)}>
+                    {formatCurrency(metrics.salesAchieved, currencySymbol)}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] text-emerald-700 font-bold mt-1">
+                    <span>{percentMet.toFixed(1)}% Goal Progress</span>
+                  </div>
+                </div>
+
+                {/* 3. Sales Still Needed */}
+                <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4.5">
+                  <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-gray-500 block mb-1">
+                    Sales Still Needed
+                  </span>
+                  <div className={`text-xl font-bold truncate ${isTargetAchieved ? 'text-emerald-700' : 'text-black'}`} title={formatCurrency(metrics.salesStillNeeded, currencySymbol)}>
+                    {isTargetAchieved ? 'Goal Met!' : formatCurrency(metrics.salesStillNeeded, currencySymbol)}
+                  </div>
+                  <span className="text-[10px] text-gray-500 block mt-1">
+                    {isTargetAchieved ? 'Target fully surpassed' : 'To hit annual goal'}
+                  </span>
+                </div>
+
+                {/* 4. Sales Pace & Daily Run Rate */}
+                <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4.5">
+                  <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-gray-500 block mb-1">
+                    Required Daily Sales
+                  </span>
+                  <div className="text-xl font-bold text-black truncate" title={formatCurrency(metrics.annualRequiredDailySales, currencySymbol)}>
+                    {formatCurrency(metrics.annualRequiredDailySales, currencySymbol)}
+                  </div>
+                  <div className="text-[10px] text-gray-600 mt-1 flex items-center justify-between">
+                    <span>Pace Variance:</span>
+                    <span className={`font-bold ${metrics.annualPaceVariance >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {metrics.annualPaceVariance >= 0 ? '+' : ''}{formatCurrency(metrics.annualPaceVariance, currencySymbol)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress Visualizer: Goal vs Time */}
+              <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-3 font-mono">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-gray-700">Goal Progress vs. Calendar Time Passed</span>
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1 text-[11px] text-emerald-800 font-bold">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block" />
+                      Sales: {percentMet.toFixed(1)}%
+                    </span>
+                    <span className="flex items-center gap-1 text-[11px] text-gray-600 font-bold">
+                      <span className="w-2.5 h-2.5 rounded-full bg-black inline-block" />
+                      Time: {timePercent.toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+
+                <div className="relative w-full bg-gray-200 h-3 rounded-full overflow-hidden">
+                  {/* Sales achieved progress */}
+                  <div
+                    className={`h-full transition-all duration-500 ${
+                      percentMet >= 100
+                        ? 'bg-emerald-600'
+                        : percentMet >= timePercent
+                        ? 'bg-emerald-500'
+                        : 'bg-amber-500'
+                    }`}
+                    style={{ width: `${Math.min(percentMet, 100)}%` }}
+                  />
+                  {/* Time marker indicator */}
+                  {timePercent > 0 && timePercent < 100 && (
+                    <div
+                      className="absolute top-0 bottom-0 w-1 bg-black z-10"
+                      style={{ left: `${timePercent}%` }}
+                      title={`Time elapsed: ${timePercent.toFixed(1)}%`}
+                    />
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-gray-500">
+                  <span>
+                    Current Quarter: <strong className="text-black">Q{metrics.currentQuarter}</strong> • Achieved: {formatCurrency(metrics.quarterSalesAchieved, currencySymbol)} of {formatCurrency(metrics.currentQuarterGoal, currencySymbol)}
+                  </span>
+                  <span className="text-gray-400">
+                    Dual Architecture: Operating quota ensures break-even; Management sales goals drive strategic growth.
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div className="bg-gray-50 border border-dashed border-gray-300 rounded-3xl p-6 text-center space-y-3" id="sales-goals-unconfigured-card">
+            <div className="w-10 h-10 rounded-2xl bg-white border border-gray-200 text-gray-400 mx-auto flex items-center justify-center shadow-2xs">
+              <Target className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold text-gray-800 uppercase tracking-tight">
+                No Management Sales Goal Set for {selectedYear}
+              </h4>
+              <p className="text-xs text-gray-500 font-mono max-w-md mx-auto">
+                Set an executive sales target for {selectedYear} to track annual &amp; quarterly sales pacing, sales still needed, and required daily sales.
+              </p>
+            </div>
+            {onOpenSalesGoalsSettings && (
+              <button
+                type="button"
+                onClick={() => onOpenSalesGoalsSettings(selectedYear)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-black text-white hover:bg-gray-800 text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+              >
+                <Target className="w-3.5 h-3.5" />
+                <span>Configure {selectedYear} Sales Goal</span>
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
       {/* MONTHLY FINANCIAL TABLE (Section 3) */}

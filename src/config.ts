@@ -1,1 +1,1 @@
-export const EMBEDDED_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwEh417KVuUpqw4X1Xx5Lg3XGcTIPJhM79rINM9mnPTWakSsYkp1eWgJa--7DJ_6J-G6A/exec';
+export const EMBEDDED_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzO5yEvRtj7mCJtbSsHvacfsndSuk5oXX_xl75Hr5r-Dm1t35JAPR9RckCGNyXG7VE_hQ/exec';

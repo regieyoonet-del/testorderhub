@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Order, Product, CompanyProfile, CatalogProduct, QuoteEnquiry, ColorOption, OrderPortal, OrderItem, AppNotification, Job, JobColumn, JobItem, JobItemColumn, JobActivity, JobComment, StaffMember, StaffAccount, AttendanceRecord, PayrollRecord, ExpenseRecord, ExpenseCategory, RecurringExpenseRule } from '../types';
+import { Order, Product, CompanyProfile, CatalogProduct, QuoteEnquiry, ColorOption, OrderPortal, OrderItem, AppNotification, Job, JobColumn, JobItem, JobItemColumn, JobActivity, JobComment, StaffMember, StaffAccount, AttendanceRecord, PayrollRecord, ExpenseRecord, ExpenseCategory, RecurringExpenseRule, SalesGoalRecord } from '../types';
 import { INITIAL_CATALOG_PRODUCTS } from '../data/initialCatalog';
 import { parseColorList, resolveColorHex } from '../utils/colorUtils';
 import { normalizeAttendanceDate, cleanClockOut, cleanClockIn, calculateHoursWorked } from '../utils/attendanceUtils';
@@ -64,6 +64,7 @@ export interface AllSheetsData {
   expenses: ExpenseRecord[] | null;
   expenseCategories: ExpenseCategory[] | null;
   recurringExpenses: RecurringExpenseRule[] | null;
+  salesGoals: SalesGoalRecord[] | null;
 }
 
 function parseArrayProp(val: any): string[] | undefined {
@@ -319,6 +320,48 @@ function getProp(obj: any, key: string | string[]): any {
 function resolveUrl(url?: string): string {
   const cleaned = (url || '').trim();
   return cleaned || EMBEDDED_APPS_SCRIPT_URL;
+}
+
+export function deduplicateSalesGoals(goals: SalesGoalRecord[]): SalesGoalRecord[] {
+  if (!Array.isArray(goals)) return [];
+  const map = new Map<number, SalesGoalRecord>();
+  for (const g of goals) {
+    if (!g || !g.year) continue;
+    map.set(Number(g.year), g);
+  }
+  return Array.from(map.values()).sort((a, b) => b.year - a.year);
+}
+
+function parseSalesGoalRecord(item: any): SalesGoalRecord | null {
+  if (!item) return null;
+  const rawYear = getProp(item, ['Year', 'year', 'YEAR']);
+  const year = Number(rawYear);
+  if (!year || isNaN(year)) return null;
+
+  const annualGoal = Number(getProp(item, ['Annual Goal', 'annualGoal', 'AnnualGoal', 'Goal', 'Target']) || 0);
+  const q1Goal = Number(getProp(item, ['Q1 Goal', 'q1Goal', 'Q1Goal', 'Q1', 'Quarter 1']) || 0);
+  const q2Goal = Number(getProp(item, ['Q2 Goal', 'q2Goal', 'Q2Goal', 'Q2', 'Quarter 2']) || 0);
+  const q3Goal = Number(getProp(item, ['Q3 Goal', 'q3Goal', 'Q3Goal', 'Q3', 'Quarter 3']) || 0);
+  const q4Goal = Number(getProp(item, ['Q4 Goal', 'q4Goal', 'Q4Goal', 'Q4', 'Quarter 4']) || 0);
+  const notes = String(getProp(item, ['Notes', 'notes', 'Remarks', 'Description']) || '');
+  const createdAt = String(getProp(item, ['Created At', 'createdAt', 'CreatedAt']) || new Date().toISOString());
+  const updatedAt = String(getProp(item, ['Updated At', 'updatedAt', 'UpdatedAt']) || new Date().toISOString());
+  const updatedBy = String(getProp(item, ['Updated By', 'updatedBy', 'UpdatedBy']) || 'Admin');
+  const id = String(getProp(item, ['ID', 'id', 'Goal ID']) || `SG-${year}`);
+
+  return {
+    id,
+    year,
+    annualGoal,
+    q1Goal,
+    q2Goal,
+    q3Goal,
+    q4Goal,
+    notes,
+    createdAt,
+    updatedAt,
+    updatedBy
+  };
 }
 
 /**
@@ -2725,6 +2768,134 @@ export const sheetsService = {
   },
 
   /**
+   * Fetch Management Sales Goals from Google Sheets.
+   */
+  async fetchSalesGoals(url: string): Promise<SalesGoalRecord[] | null> {
+    if (!url) return null;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      const response = await fetch(`${cleanedUrl}?action=getSalesGoals`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) return null;
+      const rawData = await response.json();
+      if (Array.isArray(rawData)) {
+        const goals = rawData.map(parseSalesGoalRecord).filter((g): g is SalesGoalRecord => g !== null);
+        return deduplicateSalesGoals(goals);
+      }
+      return null;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (fetchSalesGoals):', error);
+      return null;
+    }
+  },
+
+  /**
+   * Save a single Sales Goal to Google Sheets.
+   */
+  async saveSalesGoal(url: string, goal: SalesGoalRecord): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      const payloadGoal = {
+        ...goal,
+        id: goal.id || `SG-${goal.year}`,
+        year: Number(goal.year),
+        annualGoal: Number(goal.annualGoal || 0),
+        q1Goal: Number(goal.q1Goal || 0),
+        q2Goal: Number(goal.q2Goal || 0),
+        q3Goal: Number(goal.q3Goal || 0),
+        q4Goal: Number(goal.q4Goal || 0),
+        notes: goal.notes || '',
+        createdAt: goal.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        updatedBy: goal.updatedBy || 'Admin'
+      };
+
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'saveSalesGoal',
+          salesGoal: payloadGoal,
+          goal: payloadGoal,
+          record: payloadGoal
+        })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveSalesGoal):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Save batch of Sales Goals to Google Sheets.
+   */
+  async saveSalesGoalsBatch(url: string, goals: SalesGoalRecord[]): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      const normalizedGoals = goals.map(goal => ({
+        ...goal,
+        id: goal.id || `SG-${goal.year}`,
+        year: Number(goal.year),
+        annualGoal: Number(goal.annualGoal || 0),
+        q1Goal: Number(goal.q1Goal || 0),
+        q2Goal: Number(goal.q2Goal || 0),
+        q3Goal: Number(goal.q3Goal || 0),
+        q4Goal: Number(goal.q4Goal || 0),
+        notes: goal.notes || '',
+        createdAt: goal.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        updatedBy: goal.updatedBy || 'Admin'
+      }));
+
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'saveSalesGoalsBatch',
+          salesGoals: normalizedGoals,
+          goals: normalizedGoals,
+          list: normalizedGoals
+        })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveSalesGoalsBatch):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Delete a Sales Goal by year from Google Sheets.
+   */
+  async deleteSalesGoal(url: string, year: number): Promise<boolean> {
+    if (!url) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'deleteSalesGoal',
+          year: Number(year),
+          targetYear: Number(year)
+        })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (deleteSalesGoal):', error);
+      return false;
+    }
+  },
+
+  /**
    * Single-roundtrip bulk fetch of all database tables from Apps Script for fast sign-in & initial load sync.
    */
   async fetchAllData(url: string): Promise<AllSheetsData | null> {
@@ -3316,6 +3487,16 @@ export const sheetsService = {
         recurringExpenses = deduplicateRecurringExpenses(recurringExpenses);
       }
 
+      // Extract Sales Goals
+      let salesGoals: SalesGoalRecord[] | null = null;
+      const rawSalesGoals = raw.salesGoals || raw.SalesGoals;
+      if (Array.isArray(rawSalesGoals)) {
+        salesGoals = rawSalesGoals
+          .map(parseSalesGoalRecord)
+          .filter((g): g is SalesGoalRecord => g !== null);
+        salesGoals = deduplicateSalesGoals(salesGoals);
+      }
+
       return {
         products,
         companies,
@@ -3337,7 +3518,8 @@ export const sheetsService = {
         payroll,
         expenses,
         expenseCategories,
-        recurringExpenses
+        recurringExpenses,
+        salesGoals
       };
     } catch (err) {
       console.warn('Google Sheets fetchAllData notice:', err);

@@ -55,7 +55,8 @@ function doGet(e) {
       payroll: getTableData(sheet, "Payroll"),
       expenses: getTableData(sheet, "Expenses"),
       expenseCategories: getTableData(sheet, "ExpenseCategories"),
-      recurringExpenses: getTableData(sheet, "RecurringExpenses")
+      recurringExpenses: getTableData(sheet, "RecurringExpenses"),
+      salesGoals: getTableData(sheet, "SalesGoals")
     });
   }
 
@@ -134,6 +135,10 @@ function doGet(e) {
 
   if (action === "getRecurringExpenses") {
     return getJsonOutput(getTableData(sheet, "RecurringExpenses"));
+  }
+
+  if (action === "getSalesGoals") {
+    return getJsonOutput(getTableData(sheet, "SalesGoals"));
   }
   
   return getJsonOutput({ status: "success", message: "ARH Print Apps Script is active" });
@@ -348,6 +353,21 @@ function doPost(e) {
     var rId = payload.ruleId || payload.recurringId || payload.recurringExpenseId || payload.id;
     return getJsonOutput(deleteRowById(sheet, "RecurringExpenses", "Recurring Expense ID", rId));
   }
+
+  if (payload.action === "saveSalesGoal") {
+    var sg = payload.salesGoal || payload.goal || payload.record;
+    return getJsonOutput(saveSalesGoal(sheet, sg));
+  }
+
+  if (payload.action === "saveSalesGoalsBatch") {
+    var sgs = payload.salesGoals || payload.goals || payload.list;
+    return getJsonOutput(saveSalesGoalsBatch(sheet, sgs));
+  }
+
+  if (payload.action === "deleteSalesGoal") {
+    var sgYear = payload.year || (payload.goal && payload.goal.year);
+    return getJsonOutput(deleteRowById(sheet, "SalesGoals", "Year", sgYear));
+  }
   
   return getJsonOutput({ status: "error", message: "Unknown action" });
 }
@@ -434,7 +454,7 @@ function getMapValueByHeader(map, header) {
 }
 
 function initSheets(ss) {
-  var sheets = ["Orders", "OrderItems", "Products", "CatalogProducts", "Companies", "Portals", "Admin", "Quotes", "Notifications", "Jobs", "JobColumns", "JobItemColumns", "JobComments", "Staff", "StaffAccounts", "Attendance", "Payroll", "Expenses", "ExpenseCategories", "RecurringExpenses"];
+  var sheets = ["Orders", "OrderItems", "Products", "CatalogProducts", "Companies", "Portals", "Admin", "Quotes", "Notifications", "Jobs", "JobColumns", "JobItemColumns", "JobComments", "Staff", "StaffAccounts", "Attendance", "Payroll", "Expenses", "ExpenseCategories", "RecurringExpenses", "SalesGoals"];
   
   // Headers definitions
   var headers = {
@@ -457,7 +477,8 @@ function initSheets(ss) {
     "Payroll": ["Payroll ID", "Staff ID", "Staff Name", "Position", "Department", "Pay Period Start", "Pay Period End", "Pay Date", "Basic Pay", "Allowances", "Other Earnings", "Gross Pay", "Deductions", "Itemized Deductions JSON", "Total Deductions", "Net Pay", "Status", "Notes", "Created At", "Updated At"],
     "Expenses": ["Expense ID", "Expense Name", "Category", "Expense Type", "Amount", "Expense Date", "Payment Status", "Payment Date", "Vendor", "Reference Number", "Notes", "Recurring Expense ID", "Payroll ID", "Created At", "Updated At"],
     "ExpenseCategories": ["Category ID", "Name", "Is System", "Status"],
-    "RecurringExpenses": ["Recurring Expense ID", "Expense Name", "Category", "Amount", "Frequency", "Start Date", "End Date", "Duration Months", "Payments Per Year", "Specific Months JSON", "Status", "Notes", "Created At", "Updated At"]
+    "RecurringExpenses": ["Recurring Expense ID", "Expense Name", "Category", "Amount", "Frequency", "Start Date", "End Date", "Duration Months", "Payments Per Year", "Specific Months JSON", "Status", "Notes", "Created At", "Updated At"],
+    "SalesGoals": ["Year", "Annual Goal", "Q1 Goal", "Q2 Goal", "Q3 Goal", "Q4 Goal", "Notes", "Created At", "Updated At", "Updated By"]
   };
   
   for (var i = 0; i < sheets.length; i++) {
@@ -590,7 +611,7 @@ function seedDefaultJobColumns(ss) {
     { id: "col-date-added", name: "Date Added", type: "date", position: 4, required: false, isSystemField: false, isHidden: false, options: [], createdDate: "2026-08-01T00:00:00.000Z" },
     { id: "col-in-hand-date", name: "In-Hand Date", type: "date", position: 5, required: false, isSystemField: false, isHidden: false, options: [], createdDate: "2026-08-01T00:00:00.000Z" },
     { id: "col-artwork-link", name: "Artwork Link", type: "link", position: 6, required: false, isSystemField: false, isHidden: false, options: [], createdDate: "2026-08-01T00:00:00.000Z" },
-    { id: "col-designer", name: "Designer", type: "person", position: 7, required: false, isSystemField: false, isHidden: false, options: ["Regie", "Alex M.", "Sarah K.", "Production Team"], createdDate: "2026-08-01T00:00:00.000Z" },
+    { id: "col-designer", name: "Account Manager", type: "person", position: 7, required: false, isSystemField: false, isHidden: false, options: [], createdDate: "2026-08-01T00:00:00.000Z" },
     { id: "col-priority", name: "Priority", type: "dropdown", position: 8, required: false, isSystemField: false, isHidden: false, options: ["Urgent", "High", "Normal", "Low"], createdDate: "2026-08-01T00:00:00.000Z" },
     { id: "col-notes", name: "Notes", type: "long_text", position: 9, required: false, isSystemField: false, isHidden: false, options: [], createdDate: "2026-08-01T00:00:00.000Z" }
   ];
@@ -2102,6 +2123,74 @@ function saveRecurringExpensesBatch(ss, rules) {
   return { status: "success", count: rules.length };
 }
 
+function saveSalesGoal(ss, goal) {
+  var sheet = ss.getSheetByName("SalesGoals");
+  var expectedHeaders = ["Year", "Annual Goal", "Q1 Goal", "Q2 Goal", "Q3 Goal", "Q4 Goal", "Notes", "Created At", "Updated At", "Updated By"];
+  if (!sheet) {
+    sheet = ss.insertSheet("SalesGoals");
+    sheet.appendRow(expectedHeaders);
+    sheet.getRange(1, 1, 1, expectedHeaders.length).setFontWeight("bold").setBackground("#f3f4f6");
+  }
+  var data = ensureHeaders(sheet, expectedHeaders);
+  var headers = data[0];
+
+  if (!goal) return { status: "error", message: "Missing sales goal data" };
+  var targetYear = Number(goal.year !== undefined ? goal.year : (goal.Year ? Number(goal.Year) : 0));
+  if (!targetYear || isNaN(targetYear)) return { status: "error", message: "Invalid year" };
+
+  var yearIndex = -1;
+  for (var c = 0; c < headers.length; c++) {
+    var normH = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (normH === "year") {
+      yearIndex = c;
+      break;
+    }
+  }
+  if (yearIndex === -1) yearIndex = 0;
+
+  var rowIndex = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (Number(data[i][yearIndex]) === targetYear) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+
+  var goalMap = {
+    "Year": targetYear,
+    "Annual Goal": Number(goal.annualGoal !== undefined ? goal.annualGoal : (goal["Annual Goal"] || 0)),
+    "Q1 Goal": Number(goal.q1Goal !== undefined ? goal.q1Goal : (goal["Q1 Goal"] || 0)),
+    "Q2 Goal": Number(goal.q2Goal !== undefined ? goal.q2Goal : (goal["Q2 Goal"] || 0)),
+    "Q3 Goal": Number(goal.q3Goal !== undefined ? goal.q3Goal : (goal["Q3 Goal"] || 0)),
+    "Q4 Goal": Number(goal.q4Goal !== undefined ? goal.q4Goal : (goal["Q4 Goal"] || 0)),
+    "Notes": String(goal.notes || goal.Notes || ""),
+    "Created At": goal.createdAt || goal["Created At"] || new Date().toISOString(),
+    "Updated At": new Date().toISOString(),
+    "Updated By": String(goal.updatedBy || goal["Updated By"] || "Admin")
+  };
+
+  var row = [];
+  for (var c = 0; c < headers.length; c++) {
+    row.push(getMapValueByHeader(goalMap, headers[c]));
+  }
+
+  if (rowIndex !== -1) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  } else {
+    sheet.appendRow(row);
+  }
+
+  return { status: "success", year: targetYear };
+}
+
+function saveSalesGoalsBatch(ss, goals) {
+  if (!Array.isArray(goals)) return { status: "error", message: "Invalid array" };
+  goals.forEach(function(g) {
+    saveSalesGoal(ss, g);
+  });
+  return { status: "success", count: goals.length };
+}
+
 function saveStaffAccount(ss, account) {
   var sheet = ss.getSheetByName("StaffAccounts");
   var expectedHeaders = ["Account ID", "Staff ID", "Name", "Username", "Passcode", "Role", "Status", "Email", "Phone", "Avatar URL", "Last Login", "Created At", "Updated At"];
@@ -2653,6 +2742,26 @@ function getJsonOutput(obj) {
                 <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
                 <div className="flex flex-wrap gap-1">
                   {["Attendance ID", "Staff ID", "Staff Name", "Date", "Clock In", "Clock Out", "Total Hours", "Status", "Notes", "Created At", "Updated At"].map(col => (
+                    <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
+                      {col}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sheet 18: SalesGoals */}
+            <div className="border border-gray-200 bg-gray-50 p-3 space-y-2 rounded-xl">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                <span className="font-mono text-[11px] font-bold text-black bg-white px-2 py-0.5 border border-black rounded-md">
+                  🎯 Tab 18: SalesGoals
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono">Management annual &amp; quarterly sales goals &amp; pacing</span>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
+                <div className="flex flex-wrap gap-1">
+                  {["Year", "Annual Goal", "Q1 Goal", "Q2 Goal", "Q3 Goal", "Q4 Goal", "Notes", "Created At", "Updated At", "Updated By"].map(col => (
                     <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
                       {col}
                     </span>

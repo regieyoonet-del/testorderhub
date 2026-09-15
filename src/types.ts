@@ -606,3 +606,19 @@ export interface AuthUser {
   email?: string;
 }
 
+export type SalesPaceStatus = 'Ahead of Pace' | 'On Pace' | 'Behind Pace';
+
+export interface SalesGoalRecord {
+  id: string; // e.g. 'SG-2026'
+  year: number; // e.g. 2026
+  annualGoal: number; // e.g. 6000000
+  q1Goal: number; // e.g. 1200000
+  q2Goal: number; // e.g. 1500000
+  q3Goal: number; // e.g. 1800000
+  q4Goal: number; // e.g. 1500000
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+

@@ -15,8 +15,13 @@ import {
   ExpenseCategory,
   SystemSettings,
   Job,
-  JobItemColumn
+  JobItemColumn,
+  SalesGoalRecord
 } from '../types';
+import SalesGoalsSection from './SalesGoalsSection';
+import SalesGoalsSettingsModal from './SalesGoalsSettingsModal';
+import SalesPaceBadge from './SalesPaceBadge';
+import { calculateYearSalesMetrics } from '../utils/salesGoalCalculations';
 import { calculateJobTotals, calculateSubItemTotalQty, calculateSubItemTotalAmount } from '../data/initialJobs';
 import { MONTH_OPTIONS, matchesYearMonth, parseYearMonth, formatPeriodLabel } from '../utils/financeFilters';
 import {
@@ -47,7 +52,8 @@ import {
   FileSpreadsheet,
   Check,
   AlertCircle,
-  Truck
+  Truck,
+  Target
 } from 'lucide-react';
 import {
   BarChart as RechartsBarChart,
@@ -76,6 +82,9 @@ interface AnalyticsDashboardProps {
   expenseCategories?: ExpenseCategory[];
   systemSettings: SystemSettings;
   currencySymbol?: string;
+  salesGoals?: SalesGoalRecord[];
+  onSaveSalesGoal?: (goal: SalesGoalRecord) => Promise<boolean | void>;
+  onDeleteSalesGoal?: (year: number) => Promise<boolean | void>;
 }
 
 export interface SaleRecord {
@@ -147,12 +156,17 @@ export default function AnalyticsDashboard({
   recurringExpenses = [],
   expenseCategories = [],
   systemSettings,
-  currencySymbol = 'Php'
+  currencySymbol = 'Php',
+  salesGoals = [],
+  onSaveSalesGoal,
+  onDeleteSalesGoal
 }: AnalyticsDashboardProps) {
   const [timeRange, setTimeRange] = useState<'all' | '30days' | '90days' | 'this_year'>('all');
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
-  const [analyticsView, setAnalyticsView] = useState<'overview' | 'profit_loss' | 'cash_flow' | 'sales_clients'>('overview');
+  const [analyticsView, setAnalyticsView] = useState<'overview' | 'profit_loss' | 'cash_flow' | 'sales_clients' | 'sales_goals'>('overview');
+  const [showSalesGoalsModal, setShowSalesGoalsModal] = useState(false);
+  const [salesGoalsModalYear, setSalesGoalsModalYear] = useState<number>(new Date().getFullYear());
 
   // Sales History Table Filters
   const [salesSearch, setSalesSearch] = useState<string>('');
@@ -919,6 +933,16 @@ export default function AnalyticsDashboard({
             >
               Sales History
             </button>
+            <button
+              type="button"
+              onClick={() => setAnalyticsView('sales_goals')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 ${
+                analyticsView === 'sales_goals' ? 'bg-black text-white shadow-xs' : 'text-gray-600 hover:text-black'
+              }`}
+            >
+              <Target className="w-3.5 h-3.5" />
+              <span>Sales Goals</span>
+            </button>
           </div>
 
           {/* Dedicated Year and Month Period Filters */}
@@ -1140,6 +1164,50 @@ export default function AnalyticsDashboard({
       {/* ---------------------------------------------------- */}
       {/* VIEW: OVERVIEW / MAIN CHARTS                         */}
       {/* ---------------------------------------------------- */}
+      {analyticsView === 'overview' && (() => {
+        const targetYear = selectedYear !== 'all' ? parseInt(selectedYear, 10) : new Date().getFullYear();
+        const goalRec = (salesGoals || []).find(g => g.year === targetYear);
+        if (goalRec) {
+          const metrics = calculateYearSalesMetrics(targetYear, goalRec, orders, jobs, jobItemColumns);
+          return (
+            <div className="bg-white border-2 border-black rounded-3xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 font-mono">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-black text-white flex items-center justify-center">
+                    <Target className="w-4 h-4" />
+                  </div>
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-black font-mono">
+                    Management Sales Goal ({targetYear})
+                  </h4>
+                  <SalesPaceBadge pace={metrics.annualPaceStatus} />
+                </div>
+                <div className="text-xs text-gray-500">
+                  Target: <strong className="text-black">{currencySymbol} {metrics.annualGoal.toLocaleString()}</strong> • Achieved: <strong className="text-emerald-700">{currencySymbol} {metrics.salesAchieved.toLocaleString()}</strong> ({metrics.annualGoalProgress.toFixed(1)}%)
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="text-right hidden sm:block">
+                  <div className="text-[10px] text-gray-500 uppercase font-sans font-bold">Required Daily Run Rate</div>
+                  <div className="text-sm font-bold text-black font-mono">
+                    {currencySymbol} {metrics.annualRequiredDailySales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/day
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAnalyticsView('sales_goals')}
+                  className="px-3.5 py-2 bg-black hover:bg-gray-800 text-white rounded-xl text-xs font-bold font-sans cursor-pointer transition-all flex items-center gap-1.5"
+                >
+                  <span>Pacing Analysis</span>
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
+
       {(analyticsView === 'overview' || analyticsView === 'profit_loss') && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Revenue vs Expenses Trend Chart */}
@@ -1565,6 +1633,38 @@ export default function AnalyticsDashboard({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* VIEW: MANAGEMENT SALES GOALS & PACING                */}
+      {/* ---------------------------------------------------- */}
+      {analyticsView === 'sales_goals' && (
+        <div className="space-y-6">
+          <SalesGoalsSection
+            orders={orders}
+            jobs={jobs}
+            jobItemColumns={jobItemColumns}
+            salesGoals={salesGoals}
+            currencySymbol={currencySymbol}
+            onOpenSettings={(year) => {
+              setSalesGoalsModalYear(year || new Date().getFullYear());
+              setShowSalesGoalsModal(true);
+            }}
+          />
+        </div>
+      )}
+
+      {/* Sales Goals Settings Modal from Analytics */}
+      {showSalesGoalsModal && onSaveSalesGoal && onDeleteSalesGoal && (
+        <SalesGoalsSettingsModal
+          isOpen={showSalesGoalsModal}
+          onClose={() => setShowSalesGoalsModal(false)}
+          salesGoals={salesGoals}
+          onSaveSalesGoal={onSaveSalesGoal}
+          onDeleteSalesGoal={onDeleteSalesGoal}
+          currencySymbol={currencySymbol}
+          initialYear={salesGoalsModalYear}
+        />
       )}
     </div>
   );

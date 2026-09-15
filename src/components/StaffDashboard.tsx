@@ -90,6 +90,8 @@ interface StaffDashboardProps {
   currentUser: AuthUser;
   staffMember?: StaffMember;
   staffAccount?: StaffAccount;
+  staff?: StaffMember[];
+  staffAccounts?: StaffAccount[];
   attendanceRecords: AttendanceRecord[];
   payrollRecords: PayrollRecord[];
   jobs: Job[];
@@ -129,6 +131,8 @@ export default function StaffDashboard({
   currentUser,
   staffMember,
   staffAccount,
+  staff = [],
+  staffAccounts = [],
   attendanceRecords = [],
   payrollRecords = [],
   jobs = [],
@@ -894,6 +898,8 @@ export default function StaffDashboard({
                 jobItemColumns={jobItemColumns}
                 companies={companies}
                 orders={orders}
+                staff={staff}
+                staffAccounts={staffAccounts}
                 onSaveJob={onSaveJob || (() => {})}
                 onUpdateJobStatus={onUpdateJobStatus || (() => {})}
                 onDeleteJob={onDeleteJob || (() => {})}

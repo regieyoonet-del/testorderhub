@@ -15,7 +15,9 @@ import {
   JobActivity,
   JobFieldType,
   AuthUser,
-  JobComment
+  JobComment,
+  StaffMember,
+  StaffAccount
 } from '../types';
 import {
   DEFAULT_JOB_COLUMNS,
@@ -78,6 +80,8 @@ interface JobManagementBoardProps {
   highlightJobId?: string;
   currentUser?: AuthUser;
   appsScriptUrl?: string;
+  staff?: StaffMember[];
+  staffAccounts?: StaffAccount[];
 }
 
 const STATUS_CONFIG: Record<JobStatus, { label: string; color: string; bg: string; border: string; badgeBg: string; textColor: string }> = {
@@ -349,6 +353,7 @@ const BUILT_IN_JOB_COLUMN_IDS = new Set([
   'col-in-hand-date',
   'col-artwork-link',
   'col-designer',
+  'col-account-manager',
   'col-priority',
   'col-notes'
 ]);
@@ -503,7 +508,9 @@ export default function JobManagementBoard({
   currencySymbol = 'Php',
   highlightJobId,
   currentUser,
-  appsScriptUrl
+  appsScriptUrl,
+  staff,
+  staffAccounts
 }: JobManagementBoardProps) {
   // ----------------------------------------------------
   // Local UI State
@@ -512,7 +519,7 @@ export default function JobManagementBoard({
   const [sortBy, setSortBy] = useState<'position' | 'inHand_asc' | 'inHand_desc' | 'name' | 'company' | 'date_added' | 'priority'>('position');
   const [filterCompany, setFilterCompany] = useState<string>('all');
   const [filterJobType, setFilterJobType] = useState<string>('all');
-  const [filterDesigner, setFilterDesigner] = useState<string>('all');
+  const [filterAccountManager, setFilterAccountManager] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterOverdueOnly, setFilterOverdueOnly] = useState(false);
@@ -551,7 +558,10 @@ export default function JobManagementBoard({
   const [currentColumns, setCurrentColumns] = useState<JobColumn[]>(() => {
     const map = new Map<string, JobColumn>();
     for (const c of (jobColumns || [])) {
-      if (c && c.id) map.set(c.id, c);
+      if (c && c.id) {
+        const norm = (c.id === 'col-designer' || c.id === 'col-account-manager') ? { ...c, name: 'Account Manager' } : c;
+        map.set(c.id, norm);
+      }
     }
     return Array.from(map.values());
   });
@@ -570,11 +580,130 @@ export default function JobManagementBoard({
     if (jobColumns && jobColumns.length > 0) {
       const map = new Map<string, JobColumn>();
       for (const c of jobColumns) {
-        if (c && c.id) map.set(c.id, c);
+        if (c && c.id) {
+          const norm = (c.id === 'col-designer' || c.id === 'col-account-manager') ? { ...c, name: 'Account Manager' } : c;
+          map.set(c.id, norm);
+        }
       }
       setCurrentColumns(Array.from(map.values()));
     }
   }, [jobColumns]);
+
+  // ----------------------------------------------------
+  // Dynamic Admin & Staff Account Managers List
+  // Strictly actual configured Admin and Staff users in ARH Print Hub
+  // Excludes hardcoded defaults, placeholder names, demo/sample records, and static fallback options
+  // ----------------------------------------------------
+  const availableAccountManagers = useMemo(() => {
+    // 1. Resolve staff members from props or local cache
+    const staffList: StaffMember[] = (staff && staff.length > 0)
+      ? staff
+      : (() => {
+          try {
+            const cached = localStorage.getItem('rp_staff');
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            }
+          } catch {}
+          return [];
+        })();
+
+    // 2. Resolve staff accounts from props or local cache
+    const accountList: StaffAccount[] = (staffAccounts && staffAccounts.length > 0)
+      ? staffAccounts
+      : (() => {
+          try {
+            const cached = localStorage.getItem('rp_staff_accounts');
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            }
+          } catch {}
+          return [];
+        })();
+
+    const adminOptions: { value: string; label: string }[] = [];
+    const staffOptions: { value: string; label: string }[] = [];
+    const seenNames = new Set<string>();
+
+    // A. Actual configured Admin accounts from staffAccounts
+    accountList.forEach(acc => {
+      if (!acc) return;
+      if (acc.status === 'Suspended' || acc.status === 'Inactive') return;
+      const rawName = (acc.name || '').trim();
+      if (!rawName) return;
+
+      if (acc.role === 'Admin') {
+        const lower = rawName.toLowerCase();
+        if (!seenNames.has(lower)) {
+          adminOptions.push({ value: rawName, label: rawName });
+          seenNames.add(lower);
+        }
+      }
+    });
+
+    // B. Actual configured staff members from staff directory
+    staffList.forEach(member => {
+      if (!member) return;
+      if (member.status === 'Inactive') return;
+      const rawName = (member.fullName || '').trim();
+      if (!rawName) return;
+
+      const lower = rawName.toLowerCase();
+      if (!seenNames.has(lower)) {
+        // Check if member has a linked Admin account in staffAccounts
+        const linkedAccount = accountList.find(a =>
+          a.staffId === member.id ||
+          (a.name && a.name.trim().toLowerCase() === lower)
+        );
+
+        if (
+          linkedAccount &&
+          linkedAccount.role === 'Admin' &&
+          linkedAccount.status !== 'Suspended' &&
+          linkedAccount.status !== 'Inactive'
+        ) {
+          adminOptions.push({ value: rawName, label: rawName });
+        } else {
+          staffOptions.push({ value: rawName, label: rawName });
+        }
+        seenNames.add(lower);
+      }
+    });
+
+    // C. Actual configured Staff accounts from staffAccounts (role: 'Staff' or non-admin)
+    accountList.forEach(acc => {
+      if (!acc) return;
+      if (acc.status === 'Suspended' || acc.status === 'Inactive') return;
+      const rawName = (acc.name || '').trim();
+      if (!rawName) return;
+
+      if (acc.role !== 'Admin') {
+        const lower = rawName.toLowerCase();
+        if (!seenNames.has(lower)) {
+          staffOptions.push({ value: rawName, label: rawName });
+          seenNames.add(lower);
+        }
+      }
+    });
+
+    // D. If current logged-in user is an admin with an identifiable name not yet included
+    if (currentUser?.role === 'admin' && currentUser.name && currentUser.name.trim()) {
+      const adminName = currentUser.name.trim();
+      const lower = adminName.toLowerCase();
+      if (!seenNames.has(lower)) {
+        adminOptions.push({ value: adminName, label: adminName });
+        seenNames.add(lower);
+      }
+    }
+
+    return {
+      admins: adminOptions,
+      staff: staffOptions,
+      allValues: Array.from(seenNames)
+    };
+  }, [staff, staffAccounts, currentUser]);
 
   React.useEffect(() => {
     if (jobItemColumns && jobItemColumns.length > 0) {
@@ -625,13 +754,13 @@ export default function JobManagementBoard({
         const matchesName = (job.values['col-job-name'] || '').toLowerCase().includes(q);
         const matchesOrderNo = (job.orderNumber || '').toLowerCase().includes(q);
         const matchesJobType = (job.values['col-job-type'] || '').toLowerCase().includes(q);
-        const matchesDesigner = (job.values['col-designer'] || '').toLowerCase().includes(q);
+        const matchesAccountManager = (job.values['col-account-manager'] || job.values['col-designer'] || '').toLowerCase().includes(q);
         const matchesNotes = (job.values['col-notes'] || '').toLowerCase().includes(q);
         const matchesSubitems = (job.items || []).some(it =>
           Object.values(it.values || {}).some(val => String(val).toLowerCase().includes(q))
         );
 
-        if (!matchesId && !matchesCompany && !matchesName && !matchesOrderNo && !matchesJobType && !matchesDesigner && !matchesNotes && !matchesSubitems) {
+        if (!matchesId && !matchesCompany && !matchesName && !matchesOrderNo && !matchesJobType && !matchesAccountManager && !matchesNotes && !matchesSubitems) {
           return false;
         }
       }
@@ -653,10 +782,10 @@ export default function JobManagementBoard({
         if ((jType || '').toLowerCase() !== filterJobType.toLowerCase()) return false;
       }
 
-      // 5. Designer Filter
-      if (filterDesigner !== 'all') {
-        const designer = job.values['col-designer'];
-        if ((designer || '').toLowerCase() !== filterDesigner.toLowerCase()) return false;
+      // 5. Account Manager Filter
+      if (filterAccountManager !== 'all') {
+        const accountManager = job.values['col-account-manager'] || job.values['col-designer'];
+        if ((accountManager || '').toLowerCase() !== filterAccountManager.toLowerCase()) return false;
       }
 
       // 6. Priority Filter
@@ -672,7 +801,7 @@ export default function JobManagementBoard({
 
       return true;
     });
-  }, [jobs, searchQuery, filterStatus, filterCompany, filterJobType, filterDesigner, filterPriority, filterOverdueOnly]);
+  }, [jobs, searchQuery, filterStatus, filterCompany, filterJobType, filterAccountManager, filterPriority, filterOverdueOnly]);
 
   // Sort grouped jobs
   const sortedJobsByGroup = useMemo(() => {
@@ -733,12 +862,12 @@ export default function JobManagementBoard({
     let c = 0;
     if (filterCompany !== 'all') c++;
     if (filterJobType !== 'all') c++;
-    if (filterDesigner !== 'all') c++;
+    if (filterAccountManager !== 'all') c++;
     if (filterPriority !== 'all') c++;
     if (filterStatus !== 'all') c++;
     if (filterOverdueOnly) c++;
     return c;
-  }, [filterCompany, filterJobType, filterDesigner, filterPriority, filterStatus, filterOverdueOnly]);
+  }, [filterCompany, filterJobType, filterAccountManager, filterPriority, filterStatus, filterOverdueOnly]);
 
   // ----------------------------------------------------
   // Handlers for Job & Sub-item Actions
@@ -760,17 +889,25 @@ export default function JobManagementBoard({
   };
 
   const handleCellChange = (job: Job, columnId: string, value: any, immediate: boolean = false) => {
-    const oldVal = job.values[columnId];
+    const oldVal = job.values[columnId] ?? job.values['col-account-manager'] ?? job.values['col-designer'];
     if (oldVal === value) return;
 
     const updatedValues = { ...job.values, [columnId]: value };
+    if (columnId === 'col-designer' || columnId === 'col-account-manager') {
+      updatedValues['col-designer'] = value;
+      updatedValues['col-account-manager'] = value;
+    }
     const now = new Date().toISOString();
+
+    const colName = (columnId === 'col-designer' || columnId === 'col-account-manager')
+      ? 'Account Manager'
+      : (currentColumns.find(c => c.id === columnId)?.name || columnId);
 
     const activity: JobActivity = {
       id: `act-${Date.now()}`,
       jobId: job.id,
-      user: 'Admin',
-      action: `Edited ${currentColumns.find(c => c.id === columnId)?.name || columnId}`,
+      user: currentUser?.name || 'Admin',
+      action: `Edited ${colName}`,
       oldValue: String(oldVal || ''),
       newValue: String(value || ''),
       timestamp: now
@@ -996,7 +1133,7 @@ export default function JobManagementBoard({
     status: 'Pending' as JobStatus,
     inHandDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     artworkLink: '',
-    designer: 'Regie',
+    accountManager: '',
     priority: 'Normal',
     notes: ''
   });
@@ -1021,7 +1158,8 @@ export default function JobManagementBoard({
       'col-date-added': today,
       'col-in-hand-date': newJobForm.inHandDate,
       'col-artwork-link': newJobForm.artworkLink.trim(),
-      'col-designer': newJobForm.designer,
+      'col-designer': newJobForm.accountManager,
+      'col-account-manager': newJobForm.accountManager,
       'col-priority': newJobForm.priority,
       'col-notes': newJobForm.notes.trim()
     };
@@ -1093,7 +1231,7 @@ export default function JobManagementBoard({
       status: 'Pending',
       inHandDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       artworkLink: '',
-      designer: 'Regie',
+      accountManager: '',
       priority: 'Normal',
       notes: ''
     });
@@ -1293,7 +1431,7 @@ export default function JobManagementBoard({
                         onClick={() => {
                           setFilterCompany('all');
                           setFilterJobType('all');
-                          setFilterDesigner('all');
+                          setFilterAccountManager('all');
                           setFilterPriority('all');
                           setFilterStatus('all');
                           setFilterOverdueOnly(false);
@@ -1316,6 +1454,26 @@ export default function JobManagementBoard({
                       <option value="all">All Statuses</option>
                       {ALL_STATUSES.map(st => (
                         <option key={st} value={st}>{st}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Account Manager */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-mono uppercase font-bold text-gray-500">Account Manager</label>
+                    <select
+                      value={filterAccountManager}
+                      onChange={e => setFilterAccountManager(e.target.value)}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl p-2 text-xs focus:outline-none focus:border-black font-semibold text-black"
+                      id="filter-account-manager-select"
+                    >
+                      <option value="all">All Account Managers</option>
+                      {Array.from(new Set([
+                        ...availableAccountManagers.admins.map(a => a.value),
+                        ...availableAccountManagers.staff.map(s => s.value),
+                        ...jobs.map(j => j.values['col-account-manager'] || j.values['col-designer']).filter(Boolean)
+                      ])).map(name => (
+                        <option key={name} value={name}>{name}</option>
                       ))}
                     </select>
                   </div>
@@ -1530,7 +1688,7 @@ export default function JobManagementBoard({
                           <th className="py-2.5 px-3 min-w-[120px]">Status</th>
                           <th className="py-2.5 px-3 min-w-[100px]">In-Hand Date</th>
                           <th className="py-2.5 px-3 min-w-[90px]">Priority</th>
-                          <th className="py-2.5 px-3 min-w-[90px]">Designer</th>
+                          <th className="py-2.5 px-3 min-w-[130px]">Account Manager</th>
                           <th className="py-2.5 px-3 min-w-[90px]">Artwork</th>
                           {/* Dynamic Custom Job Columns */}
                           {customJobColumns.map(col => (
@@ -1793,15 +1951,55 @@ export default function JobManagementBoard({
                                   </select>
                                 </td>
 
-                                {/* Designer */}
-                                <td className="py-3 px-3">
-                                  <InlineCellInput
-                                    value={job.values['col-designer']}
-                                    onCommit={(val, immediate) => handleCellChange(job, 'col-designer', val, immediate)}
-                                    placeholder="Designer..."
-                                    className="w-full bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-gray-200 focus:border-black rounded-lg px-1.5 py-0.5 font-mono text-[11px] text-gray-800 focus:outline-none"
-                                    id={`input-designer-${job.id}`}
-                                  />
+                                {/* Account Manager */}
+                                <td className="py-3 px-3 min-w-[130px]">
+                                  {(() => {
+                                    const currentAM = job.values['col-account-manager'] || job.values['col-designer'] || '';
+                                    const hasCurrentInOptions = Boolean(
+                                      currentAM &&
+                                      (availableAccountManagers.admins.some(a => a.value.toLowerCase() === currentAM.toLowerCase()) ||
+                                       availableAccountManagers.staff.some(s => s.value.toLowerCase() === currentAM.toLowerCase()))
+                                    );
+
+                                    return (
+                                      <select
+                                        value={currentAM}
+                                        onChange={e => {
+                                          const val = e.target.value;
+                                          handleCellChange(job, 'col-designer', val, true);
+                                        }}
+                                        className="w-full bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-gray-200 focus:border-black rounded-lg px-1.5 py-1 font-mono text-[11px] text-gray-800 focus:outline-none transition-colors cursor-pointer truncate"
+                                        id={`select-account-manager-${job.id}`}
+                                      >
+                                        <option value="">Select Account Manager</option>
+                                        {availableAccountManagers.admins.length > 0 && (
+                                          <optgroup label="Admin">
+                                            {availableAccountManagers.admins.map(am => (
+                                              <option key={am.value} value={am.value}>
+                                                {am.label}
+                                              </option>
+                                            ))}
+                                          </optgroup>
+                                        )}
+                                        {availableAccountManagers.staff.length > 0 && (
+                                          <optgroup label="Staff">
+                                            {availableAccountManagers.staff.map(am => (
+                                              <option key={am.value} value={am.value}>
+                                                {am.label}
+                                              </option>
+                                            ))}
+                                          </optgroup>
+                                        )}
+                                        {currentAM && !hasCurrentInOptions && (
+                                          <optgroup label="Current Value">
+                                            <option value={currentAM}>
+                                              {currentAM}
+                                            </option>
+                                          </optgroup>
+                                        )}
+                                      </select>
+                                    );
+                                  })()}
                                 </td>
 
                                 {/* Artwork Link */}
@@ -2407,14 +2605,42 @@ export default function JobManagementBoard({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="block font-mono uppercase font-bold text-[10px] text-gray-600">Designer / Operator</label>
-                    <input
-                      type="text"
-                      value={newJobForm.designer}
-                      onChange={e => setNewJobForm({ ...newJobForm, designer: e.target.value })}
-                      placeholder="e.g. Regie"
-                      className="w-full bg-gray-50 border border-gray-200 focus:border-black rounded-xl p-2.5 text-xs text-black font-semibold focus:outline-none"
-                    />
+                    <label className="block font-mono uppercase font-bold text-[10px] text-gray-600">Account Manager</label>
+                    <select
+                      value={newJobForm.accountManager}
+                      onChange={e => setNewJobForm({ ...newJobForm, accountManager: e.target.value })}
+                      className="w-full bg-gray-50 border border-gray-200 focus:border-black rounded-xl p-2.5 text-xs text-black font-semibold focus:outline-none cursor-pointer"
+                      id="select-modal-account-manager"
+                    >
+                      <option value="">Select Account Manager</option>
+                      {availableAccountManagers.admins.length > 0 && (
+                        <optgroup label="Admin">
+                          {availableAccountManagers.admins.map(am => (
+                            <option key={am.value} value={am.value}>
+                              {am.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {availableAccountManagers.staff.length > 0 && (
+                        <optgroup label="Staff">
+                          {availableAccountManagers.staff.map(am => (
+                            <option key={am.value} value={am.value}>
+                              {am.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {newJobForm.accountManager &&
+                        !availableAccountManagers.admins.some(a => a.value.toLowerCase() === newJobForm.accountManager.toLowerCase()) &&
+                        !availableAccountManagers.staff.some(s => s.value.toLowerCase() === newJobForm.accountManager.toLowerCase()) && (
+                          <optgroup label="Current Value">
+                            <option value={newJobForm.accountManager}>
+                              {newJobForm.accountManager}
+                            </option>
+                          </optgroup>
+                      )}
+                    </select>
                   </div>
 
                   <div className="space-y-1 md:col-span-2">

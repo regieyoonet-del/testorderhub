@@ -520,8 +520,9 @@ export default function AdminProductCatalog({
             </div>
           ) : (
             <div className="bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-xs">
-              <table className="w-full text-left text-xs font-sans border-collapse">
-                <thead>
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full text-left text-xs font-sans border-collapse min-w-[800px]">
+                  <thead>
                   <tr className="bg-gray-50 text-gray-700 font-mono text-[11px] uppercase tracking-wider border-b border-gray-200">
                     <th className="p-3">Product</th>
                     <th className="p-3">Category</th>
@@ -684,7 +685,8 @@ export default function AdminProductCatalog({
                 </tbody>
               </table>
             </div>
-          )}
+          </div>
+        )}
         </div>
       )}
 

@@ -89,13 +89,13 @@ export const DEFAULT_JOB_COLUMNS: JobColumn[] = [
   },
   {
     id: 'col-designer',
-    name: 'Designer',
+    name: 'Account Manager',
     type: 'person',
     position: 7,
     required: false,
     isSystemField: false,
     isHidden: false,
-    options: ['Regie', 'Alex M.', 'Sarah K.', 'Production Team'],
+    options: [],
     createdDate: '2026-08-01T00:00:00.000Z'
   },
   {
@@ -302,7 +302,7 @@ export function convertOrderItemToJobItem(
 export function createJobFromOrder(
   order: Order,
   existingJobs: Job[] = [],
-  designer: string = 'Regie'
+  accountManager: string = ''
 ): Job {
   const jobId = generateJobId(existingJobs);
   const now = new Date().toISOString();
@@ -336,7 +336,8 @@ export function createJobFromOrder(
     'col-date-added': dateAdded,
     'col-in-hand-date': inHandDate,
     'col-artwork-link': '',
-    'col-designer': designer,
+    'col-designer': accountManager,
+    'col-account-manager': accountManager,
     'col-priority': 'Normal',
     'col-notes': order.notes || `Production job generated from Order ${order.orderNumber}`
   };

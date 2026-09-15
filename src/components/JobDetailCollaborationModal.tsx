@@ -337,8 +337,8 @@ export default function JobDetailCollaborationModal({
                     <strong className="text-black">{job.values['col-priority'] || 'Normal'}</strong>
                   </div>
                   <div className="flex justify-between py-1 border-b border-gray-200">
-                    <span className="text-gray-500">Designer:</span>
-                    <strong className="text-black">{job.values['col-designer'] || 'Unassigned'}</strong>
+                    <span className="text-gray-500">Account Manager:</span>
+                    <strong className="text-black">{job.values['col-account-manager'] || job.values['col-designer'] || 'Unassigned'}</strong>
                   </div>
                   <div className="flex justify-between py-1">
                     <span className="text-gray-500">Target Due Date:</span>

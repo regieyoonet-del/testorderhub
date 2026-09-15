@@ -92,13 +92,17 @@ import {
   ChevronRight,
   Menu,
   LogOut,
-  Kanban
+  Kanban,
+  Target
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ClientDashboardModal from './ClientDashboardModal';
 import ReceiptGenerator from './ReceiptGenerator';
 import QuoteBuilder from './QuoteBuilder';
 import { AdminAppBranding } from './AdminAppBranding';
+import SalesGoalsSection from './SalesGoalsSection';
+import SalesGoalsSettingsModal from './SalesGoalsSettingsModal';
+import { SalesGoalRecord } from '../types';
 
 interface AdminDashboardProps {
   products: Product[];
@@ -137,6 +141,9 @@ interface AdminDashboardProps {
   expenses?: ExpenseRecord[];
   recurringExpenses?: RecurringExpense[];
   expenseCategories?: ExpenseCategory[];
+  salesGoals?: SalesGoalRecord[];
+  onSaveSalesGoal?: (goal: SalesGoalRecord) => Promise<boolean | void>;
+  onDeleteSalesGoal?: (year: number) => Promise<boolean | void>;
   onSaveStaff?: (staff: StaffMember) => void;
   onSaveStaffBatch?: (staffList: StaffMember[]) => void;
   onDeleteStaff?: (staffId: string) => void;
@@ -160,7 +167,7 @@ interface AdminDashboardProps {
   onForceSyncAll: () => Promise<boolean>;
   onPullFromSheets?: () => Promise<void>;
   isSyncingSheets?: boolean;
-  initialTab?: 'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'receipt' | 'quotes' | 'settings' | 'sync';
+  initialTab?: 'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'sales-goals' | 'receipt' | 'quotes' | 'settings' | 'sync';
   initialCatalogSection?: 'catalog' | 'enquiries';
   highlightEnquiryNumber?: string;
   highlightOrderNumber?: string;
@@ -209,6 +216,9 @@ export default function AdminDashboard({
   expenses = [],
   recurringExpenses = [],
   expenseCategories = [],
+  salesGoals = [],
+  onSaveSalesGoal,
+  onDeleteSalesGoal,
   onSaveStaff = () => {},
   onSaveStaffBatch,
   onDeleteStaff,
@@ -243,7 +253,9 @@ export default function AdminDashboard({
   onLogout,
   currentUser
 }: AdminDashboardProps) {
-  const [adminTab, setAdminTab] = useState<'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'receipt' | 'quotes' | 'settings' | 'sync'>(initialTab || 'jobs');
+  const [adminTab, setAdminTab] = useState<'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'sales-goals' | 'receipt' | 'quotes' | 'settings' | 'sync'>(initialTab || 'jobs');
+  const [showSalesGoalsModal, setShowSalesGoalsModal] = useState(false);
+  const [salesGoalsModalYear, setSalesGoalsModalYear] = useState<number>(new Date().getFullYear());
 
   const [internalDrawerOpen, setInternalDrawerOpen] = useState(false);
   const isDrawerOpen = isMobileNavOpen !== undefined ? isMobileNavOpen : internalDrawerOpen;
@@ -787,6 +799,7 @@ export default function AdminDashboard({
     { id: 'expenses', label: 'Expenses & Outflow', icon: Receipt, count: (expenses || []).length },
     { id: 'financial-overview', label: 'Financial Overview', icon: DollarSign, count: null },
     { id: 'analytics', label: 'Financial & Sales Analytics', icon: BarChart3, count: null },
+    { id: 'sales-goals', label: 'Sales Goals', icon: Target, count: (salesGoals || []).length },
     { id: 'receipt', label: 'Receipt Generator', icon: Receipt, count: null },
     { id: 'quotes', label: 'Quote Builder', icon: Calculator, count: null },
     { id: 'settings', label: 'Admin Settings', icon: Settings, count: null },
@@ -925,6 +938,8 @@ export default function AdminDashboard({
           jobItemColumns={jobItemColumns}
           companies={companies}
           orders={orders}
+          staff={staff}
+          staffAccounts={staffAccounts}
           onSaveJob={onSaveJob || (() => {})}
           onUpdateJobStatus={onUpdateJobStatus || (() => {})}
           onDeleteJob={onDeleteJob || (() => {})}
@@ -1723,6 +1738,11 @@ export default function AdminDashboard({
           systemSettings={systemSettings}
           onUpdateSystemSettings={onUpdateSystemSettings}
           currencySymbol={currencySymbol}
+          salesGoals={salesGoals}
+          onOpenSalesGoalsSettings={(year) => {
+            setSalesGoalsModalYear(year || new Date().getFullYear());
+            setShowSalesGoalsModal(true);
+          }}
         />
       )}
 
@@ -1743,7 +1763,29 @@ export default function AdminDashboard({
           expenseCategories={expenseCategories}
           systemSettings={systemSettings}
           currencySymbol={currencySymbol}
+          salesGoals={salesGoals}
+          onSaveSalesGoal={onSaveSalesGoal}
+          onDeleteSalesGoal={onDeleteSalesGoal}
         />
+      )}
+
+      {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
+      {/* MANAGEMENT SALES GOALS PANEL */}
+      {/* ------------------------------------------------------------------------------------------------------------------------------------------------------ */}
+      {adminTab === 'sales-goals' && (
+        <div className="space-y-6">
+          <SalesGoalsSection
+            orders={directCompanyOrders}
+            jobs={jobs}
+            jobItemColumns={jobItemColumns}
+            salesGoals={salesGoals}
+            currencySymbol={currencySymbol}
+            onOpenSettings={(year) => {
+              setSalesGoalsModalYear(year || new Date().getFullYear());
+              setShowSalesGoalsModal(true);
+            }}
+          />
+        </div>
       )}
 
       {adminTab === 'settings' && (
@@ -2628,6 +2670,19 @@ export default function AdminDashboard({
           onUpdateProducts={onUpdateProducts}
           onUpdateOrderStatus={handleUpdateOrderStatus}
           onSimulateClient={onSimulateClient}
+        />
+      )}
+
+      {/* Management Sales Goals Settings Modal */}
+      {showSalesGoalsModal && onSaveSalesGoal && onDeleteSalesGoal && (
+        <SalesGoalsSettingsModal
+          isOpen={showSalesGoalsModal}
+          onClose={() => setShowSalesGoalsModal(false)}
+          salesGoals={salesGoals}
+          onSaveSalesGoal={onSaveSalesGoal}
+          onDeleteSalesGoal={onDeleteSalesGoal}
+          currencySymbol={currencySymbol}
+          initialYear={salesGoalsModalYear}
         />
       )}
 
