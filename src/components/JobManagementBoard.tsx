@@ -62,6 +62,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import JobCommentsSection from './JobCommentsSection';
 import JobDetailCollaborationModal from './JobDetailCollaborationModal';
+import UserAvatar from './UserAvatar';
 
 interface JobManagementBoardProps {
   jobs: Job[];
@@ -623,8 +624,8 @@ export default function JobManagementBoard({
           return [];
         })();
 
-    const adminOptions: { value: string; label: string }[] = [];
-    const staffOptions: { value: string; label: string }[] = [];
+    const adminOptions: { value: string; label: string; profilePictureUrl?: string }[] = [];
+    const staffOptions: { value: string; label: string; profilePictureUrl?: string }[] = [];
     const seenNames = new Set<string>();
 
     // A. Actual configured Admin accounts from staffAccounts
@@ -637,7 +638,9 @@ export default function JobManagementBoard({
       if (acc.role === 'Admin') {
         const lower = rawName.toLowerCase();
         if (!seenNames.has(lower)) {
-          adminOptions.push({ value: rawName, label: rawName });
+          const staffMatch = staffList.find(s => s.id === acc.staffId || (s.fullName || '').trim().toLowerCase() === lower);
+          const pic = acc.profilePictureUrl || acc.avatarUrl || staffMatch?.profilePictureUrl || staffMatch?.avatarUrl;
+          adminOptions.push({ value: rawName, label: rawName, profilePictureUrl: pic });
           seenNames.add(lower);
         }
       }
@@ -657,6 +660,7 @@ export default function JobManagementBoard({
           a.staffId === member.id ||
           (a.name && a.name.trim().toLowerCase() === lower)
         );
+        const pic = member.profilePictureUrl || member.avatarUrl || linkedAccount?.profilePictureUrl || linkedAccount?.avatarUrl;
 
         if (
           linkedAccount &&
@@ -664,9 +668,9 @@ export default function JobManagementBoard({
           linkedAccount.status !== 'Suspended' &&
           linkedAccount.status !== 'Inactive'
         ) {
-          adminOptions.push({ value: rawName, label: rawName });
+          adminOptions.push({ value: rawName, label: rawName, profilePictureUrl: pic });
         } else {
-          staffOptions.push({ value: rawName, label: rawName });
+          staffOptions.push({ value: rawName, label: rawName, profilePictureUrl: pic });
         }
         seenNames.add(lower);
       }
@@ -682,7 +686,9 @@ export default function JobManagementBoard({
       if (acc.role !== 'Admin') {
         const lower = rawName.toLowerCase();
         if (!seenNames.has(lower)) {
-          staffOptions.push({ value: rawName, label: rawName });
+          const staffMatch = staffList.find(s => s.id === acc.staffId || (s.fullName || '').trim().toLowerCase() === lower);
+          const pic = acc.profilePictureUrl || acc.avatarUrl || staffMatch?.profilePictureUrl || staffMatch?.avatarUrl;
+          staffOptions.push({ value: rawName, label: rawName, profilePictureUrl: pic });
           seenNames.add(lower);
         }
       }
@@ -693,7 +699,8 @@ export default function JobManagementBoard({
       const adminName = currentUser.name.trim();
       const lower = adminName.toLowerCase();
       if (!seenNames.has(lower)) {
-        adminOptions.push({ value: adminName, label: adminName });
+        const pic = currentUser.profilePictureUrl || currentUser.avatarUrl;
+        adminOptions.push({ value: adminName, label: adminName, profilePictureUrl: pic });
         seenNames.add(lower);
       }
     }
@@ -704,6 +711,25 @@ export default function JobManagementBoard({
       allValues: Array.from(seenNames)
     };
   }, [staff, staffAccounts, currentUser]);
+
+  const getAccountManagerAvatar = (name?: string): string | undefined => {
+    if (!name || !name.trim()) return undefined;
+    const lower = name.trim().toLowerCase();
+    const fromAdmins = availableAccountManagers.admins.find(a => a.value.toLowerCase() === lower);
+    if (fromAdmins?.profilePictureUrl) return fromAdmins.profilePictureUrl;
+    const fromStaff = availableAccountManagers.staff.find(s => s.value.toLowerCase() === lower);
+    if (fromStaff?.profilePictureUrl) return fromStaff.profilePictureUrl;
+
+    const matchedStaff = (staff || []).find(s => (s.fullName || '').trim().toLowerCase() === lower);
+    if (matchedStaff?.profilePictureUrl || matchedStaff?.avatarUrl) {
+      return matchedStaff.profilePictureUrl || matchedStaff.avatarUrl;
+    }
+    const matchedAcc = (staffAccounts || []).find(a => (a.name || '').trim().toLowerCase() === lower);
+    if (matchedAcc?.profilePictureUrl || matchedAcc?.avatarUrl) {
+      return matchedAcc.profilePictureUrl || matchedAcc.avatarUrl;
+    }
+    return undefined;
+  };
 
   React.useEffect(() => {
     if (jobItemColumns && jobItemColumns.length > 0) {
@@ -1952,7 +1978,7 @@ export default function JobManagementBoard({
                                 </td>
 
                                 {/* Account Manager */}
-                                <td className="py-3 px-3 min-w-[130px]">
+                                <td className="py-3 px-3 min-w-[170px]">
                                   {(() => {
                                     const currentAM = job.values['col-account-manager'] || job.values['col-designer'] || '';
                                     const hasCurrentInOptions = Boolean(
@@ -1960,44 +1986,52 @@ export default function JobManagementBoard({
                                       (availableAccountManagers.admins.some(a => a.value.toLowerCase() === currentAM.toLowerCase()) ||
                                        availableAccountManagers.staff.some(s => s.value.toLowerCase() === currentAM.toLowerCase()))
                                     );
+                                    const avatarUrl = getAccountManagerAvatar(currentAM);
 
                                     return (
-                                      <select
-                                        value={currentAM}
-                                        onChange={e => {
-                                          const val = e.target.value;
-                                          handleCellChange(job, 'col-designer', val, true);
-                                        }}
-                                        className="w-full bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-gray-200 focus:border-black rounded-lg px-1.5 py-1 font-mono text-[11px] text-gray-800 focus:outline-none transition-colors cursor-pointer truncate"
-                                        id={`select-account-manager-${job.id}`}
-                                      >
-                                        <option value="">Select Account Manager</option>
-                                        {availableAccountManagers.admins.length > 0 && (
-                                          <optgroup label="Admin">
-                                            {availableAccountManagers.admins.map(am => (
-                                              <option key={am.value} value={am.value}>
-                                                {am.label}
+                                      <div className="flex items-center gap-2">
+                                        <UserAvatar
+                                          name={currentAM}
+                                          profilePictureUrl={avatarUrl}
+                                          size={28}
+                                        />
+                                        <select
+                                          value={currentAM}
+                                          onChange={e => {
+                                            const val = e.target.value;
+                                            handleCellChange(job, 'col-designer', val, true);
+                                          }}
+                                          className="flex-1 min-w-0 bg-transparent hover:bg-white focus:bg-white border border-transparent hover:border-gray-200 focus:border-black rounded-lg px-1.5 py-1 font-mono text-[11px] text-gray-800 focus:outline-none transition-colors cursor-pointer truncate"
+                                          id={`select-account-manager-${job.id}`}
+                                        >
+                                          <option value="">Select Account Manager</option>
+                                          {availableAccountManagers.admins.length > 0 && (
+                                            <optgroup label="Admin">
+                                              {availableAccountManagers.admins.map(am => (
+                                                <option key={am.value} value={am.value}>
+                                                  {am.label}
+                                                </option>
+                                              ))}
+                                            </optgroup>
+                                          )}
+                                          {availableAccountManagers.staff.length > 0 && (
+                                            <optgroup label="Staff">
+                                              {availableAccountManagers.staff.map(am => (
+                                                <option key={am.value} value={am.value}>
+                                                  {am.label}
+                                                </option>
+                                              ))}
+                                            </optgroup>
+                                          )}
+                                          {currentAM && !hasCurrentInOptions && (
+                                            <optgroup label="Current Value">
+                                              <option value={currentAM}>
+                                                {currentAM}
                                               </option>
-                                            ))}
-                                          </optgroup>
-                                        )}
-                                        {availableAccountManagers.staff.length > 0 && (
-                                          <optgroup label="Staff">
-                                            {availableAccountManagers.staff.map(am => (
-                                              <option key={am.value} value={am.value}>
-                                                {am.label}
-                                              </option>
-                                            ))}
-                                          </optgroup>
-                                        )}
-                                        {currentAM && !hasCurrentInOptions && (
-                                          <optgroup label="Current Value">
-                                            <option value={currentAM}>
-                                              {currentAM}
-                                            </option>
-                                          </optgroup>
-                                        )}
-                                      </select>
+                                            </optgroup>
+                                          )}
+                                        </select>
+                                      </div>
                                     );
                                   })()}
                                 </td>
@@ -2606,41 +2640,48 @@ export default function JobManagementBoard({
 
                   <div className="space-y-1">
                     <label className="block font-mono uppercase font-bold text-[10px] text-gray-600">Account Manager</label>
-                    <select
-                      value={newJobForm.accountManager}
-                      onChange={e => setNewJobForm({ ...newJobForm, accountManager: e.target.value })}
-                      className="w-full bg-gray-50 border border-gray-200 focus:border-black rounded-xl p-2.5 text-xs text-black font-semibold focus:outline-none cursor-pointer"
-                      id="select-modal-account-manager"
-                    >
-                      <option value="">Select Account Manager</option>
-                      {availableAccountManagers.admins.length > 0 && (
-                        <optgroup label="Admin">
-                          {availableAccountManagers.admins.map(am => (
-                            <option key={am.value} value={am.value}>
-                              {am.label}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {availableAccountManagers.staff.length > 0 && (
-                        <optgroup label="Staff">
-                          {availableAccountManagers.staff.map(am => (
-                            <option key={am.value} value={am.value}>
-                              {am.label}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {newJobForm.accountManager &&
-                        !availableAccountManagers.admins.some(a => a.value.toLowerCase() === newJobForm.accountManager.toLowerCase()) &&
-                        !availableAccountManagers.staff.some(s => s.value.toLowerCase() === newJobForm.accountManager.toLowerCase()) && (
-                          <optgroup label="Current Value">
-                            <option value={newJobForm.accountManager}>
-                              {newJobForm.accountManager}
-                            </option>
+                    <div className="flex items-center gap-2">
+                      <UserAvatar
+                        name={newJobForm.accountManager}
+                        profilePictureUrl={getAccountManagerAvatar(newJobForm.accountManager)}
+                        size={32}
+                      />
+                      <select
+                        value={newJobForm.accountManager}
+                        onChange={e => setNewJobForm({ ...newJobForm, accountManager: e.target.value })}
+                        className="flex-1 min-w-0 bg-gray-50 border border-gray-200 focus:border-black rounded-xl p-2.5 text-xs text-black font-semibold focus:outline-none cursor-pointer"
+                        id="select-modal-account-manager"
+                      >
+                        <option value="">Select Account Manager</option>
+                        {availableAccountManagers.admins.length > 0 && (
+                          <optgroup label="Admin">
+                            {availableAccountManagers.admins.map(am => (
+                              <option key={am.value} value={am.value}>
+                                {am.label}
+                              </option>
+                            ))}
                           </optgroup>
-                      )}
-                    </select>
+                        )}
+                        {availableAccountManagers.staff.length > 0 && (
+                          <optgroup label="Staff">
+                            {availableAccountManagers.staff.map(am => (
+                              <option key={am.value} value={am.value}>
+                                {am.label}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {newJobForm.accountManager &&
+                          !availableAccountManagers.admins.some(a => a.value.toLowerCase() === newJobForm.accountManager.toLowerCase()) &&
+                          !availableAccountManagers.staff.some(s => s.value.toLowerCase() === newJobForm.accountManager.toLowerCase()) && (
+                            <optgroup label="Current Value">
+                              <option value={newJobForm.accountManager}>
+                                {newJobForm.accountManager}
+                              </option>
+                            </optgroup>
+                        )}
+                      </select>
+                    </div>
                   </div>
 
                   <div className="space-y-1 md:col-span-2">
@@ -2989,6 +3030,8 @@ export default function JobManagementBoard({
           currencySymbol={currencySymbol}
           currentUser={currentUser}
           appsScriptUrl={appsScriptUrl}
+          staff={staff}
+          staffAccounts={staffAccounts}
         />
       )}
     </div>

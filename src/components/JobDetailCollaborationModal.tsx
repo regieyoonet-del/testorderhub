@@ -12,7 +12,9 @@ import {
   Order,
   AuthUser,
   JobColumn,
-  JobItemColumn
+  JobItemColumn,
+  StaffMember,
+  StaffAccount
 } from '../types';
 import {
   X,
@@ -29,6 +31,7 @@ import {
   User
 } from 'lucide-react';
 import JobCommentsSection from './JobCommentsSection';
+import UserAvatar from './UserAvatar';
 
 interface JobDetailCollaborationModalProps {
   job: Job | null;
@@ -42,6 +45,8 @@ interface JobDetailCollaborationModalProps {
   currencySymbol?: string;
   currentUser?: AuthUser;
   appsScriptUrl?: string;
+  staff?: StaffMember[];
+  staffAccounts?: StaffAccount[];
 }
 
 export default function JobDetailCollaborationModal({
@@ -55,7 +60,9 @@ export default function JobDetailCollaborationModal({
   onSelectOrder,
   currencySymbol = '₱',
   currentUser,
-  appsScriptUrl
+  appsScriptUrl,
+  staff,
+  staffAccounts
 }: JobDetailCollaborationModalProps) {
   const [activeTab, setActiveTab] = useState<'comments' | 'items' | 'specs' | 'activity'>('comments');
 
@@ -336,9 +343,28 @@ export default function JobDetailCollaborationModal({
                     <span className="text-gray-500">Priority:</span>
                     <strong className="text-black">{job.values['col-priority'] || 'Normal'}</strong>
                   </div>
-                  <div className="flex justify-between py-1 border-b border-gray-200">
+                  <div className="flex items-center justify-between py-1.5 border-b border-gray-200">
                     <span className="text-gray-500">Account Manager:</span>
-                    <strong className="text-black">{job.values['col-account-manager'] || job.values['col-designer'] || 'Unassigned'}</strong>
+                    {(() => {
+                      const amName = job.values['col-account-manager'] || job.values['col-designer'] || '';
+                      const lower = amName.trim().toLowerCase();
+                      const matchedStaff = (staff || []).find(s => (s.fullName || '').trim().toLowerCase() === lower);
+                      const matchedAcc = (staffAccounts || []).find(a => (a.name || '').trim().toLowerCase() === lower);
+                      const avatarUrl = matchedStaff?.profilePictureUrl || matchedStaff?.avatarUrl || matchedAcc?.profilePictureUrl || matchedAcc?.avatarUrl;
+
+                      return (
+                        <div className="flex items-center gap-2">
+                          {amName && amName !== 'Unassigned' && (
+                            <UserAvatar
+                              name={amName}
+                              profilePictureUrl={avatarUrl}
+                              size={24}
+                            />
+                          )}
+                          <strong className="text-black">{amName || 'Unassigned'}</strong>
+                        </div>
+                      );
+                    })()}
                   </div>
                   <div className="flex justify-between py-1">
                     <span className="text-gray-500">Target Due Date:</span>

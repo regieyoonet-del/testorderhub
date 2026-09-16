@@ -1929,6 +1929,8 @@ export const sheetsService = {
           breakMinutes: getProp(item, ['BreakMinutes', 'breakMinutes', 'Break Minutes', 'BreakDuration']) !== undefined
             ? Number(getProp(item, ['BreakMinutes', 'breakMinutes', 'Break Minutes', 'BreakDuration']))
             : 60,
+          profilePictureUrl: getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL']) ? String(getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL'])).trim() : undefined,
+          avatarUrl: getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL']) ? String(getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL'])).trim() : undefined,
           createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
           updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
         }));
@@ -2030,7 +2032,8 @@ export const sheetsService = {
           temporaryPassword: getProp(item, ['TemporaryPassword', 'temporaryPassword']) ? String(getProp(item, ['TemporaryPassword', 'temporaryPassword'])) : undefined,
           email: getProp(item, ['Email', 'email']) ? String(getProp(item, ['Email', 'email'])) : undefined,
           phone: getProp(item, ['Phone', 'phone', 'ContactNumber']) ? String(getProp(item, ['Phone', 'phone', 'ContactNumber'])) : undefined,
-          avatarUrl: getProp(item, ['AvatarURL', 'avatarUrl', 'ProfileImage']) ? String(getProp(item, ['AvatarURL', 'avatarUrl', 'ProfileImage'])) : undefined,
+          profilePictureUrl: getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL']) ? String(getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL'])).trim() : undefined,
+          avatarUrl: getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL']) ? String(getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL'])).trim() : undefined,
           lastLogin: getProp(item, ['LastLogin', 'lastLogin']) ? String(getProp(item, ['LastLogin', 'lastLogin'])) : undefined,
           createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
           updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
@@ -3283,6 +3286,8 @@ export const sheetsService = {
           breakMinutes: getProp(item, ['BreakMinutes', 'breakMinutes', 'Break Minutes', 'BreakDuration']) !== undefined
             ? Number(getProp(item, ['BreakMinutes', 'breakMinutes', 'Break Minutes', 'BreakDuration']))
             : 60,
+          profilePictureUrl: getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL']) ? String(getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL'])).trim() : undefined,
+          avatarUrl: getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL']) ? String(getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL'])).trim() : undefined,
           createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
           updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
         }));
@@ -3301,7 +3306,8 @@ export const sheetsService = {
           status: (getProp(item, ['Status', 'status']) || 'Active') as any,
           email: getProp(item, ['Email', 'email']) ? String(getProp(item, ['Email', 'email'])) : undefined,
           phone: getProp(item, ['Phone', 'phone', 'ContactNumber']) ? String(getProp(item, ['Phone', 'phone', 'ContactNumber'])) : undefined,
-          avatarUrl: getProp(item, ['AvatarURL', 'avatarUrl', 'ProfileImage']) ? String(getProp(item, ['AvatarURL', 'avatarUrl', 'ProfileImage'])) : undefined,
+          profilePictureUrl: getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL']) ? String(getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL'])).trim() : undefined,
+          avatarUrl: getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL']) ? String(getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL'])).trim() : undefined,
           lastLogin: getProp(item, ['LastLogin', 'lastLogin']) ? String(getProp(item, ['LastLogin', 'lastLogin'])) : undefined,
           createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
           updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())

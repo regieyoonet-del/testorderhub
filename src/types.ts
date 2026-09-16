@@ -413,6 +413,7 @@ export interface StaffMember {
   status: StaffStatus;
   email?: string;
   phone?: string;
+  profilePictureUrl?: string;
   avatarUrl?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -438,6 +439,7 @@ export interface StaffAccount {
   temporaryPassword?: string;
   email?: string;
   phone?: string;
+  profilePictureUrl?: string;
   avatarUrl?: string;
   lastLogin?: string;
   createdAt?: string;
@@ -604,6 +606,8 @@ export interface AuthUser {
   name?: string;
   username?: string;
   email?: string;
+  profilePictureUrl?: string;
+  avatarUrl?: string;
 }
 
 export type SalesPaceStatus = 'Ahead of Pace' | 'On Pace' | 'Behind Pace';

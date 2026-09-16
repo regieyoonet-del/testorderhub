@@ -68,6 +68,7 @@ import {
 import StaffShiftModal from './StaffShiftModal';
 import OvertimeApprovalStation from './OvertimeApprovalStation';
 import PayrollCalculationReview from './PayrollCalculationReview';
+import UserAvatar from './UserAvatar';
 import {
   getStaffShiftConfig,
   calculateShiftAttendancePayroll,
@@ -149,7 +150,8 @@ export default function StaffManagement({
     shiftEndTime: '17:00',
     workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
     gracePeriodMinutes: 15,
-    breakMinutes: 60
+    breakMinutes: 60,
+    profilePictureUrl: ''
   });
 
   // ----------------------------------------------------
@@ -163,7 +165,8 @@ export default function StaffManagement({
     role: 'Staff' as 'Staff' | 'Admin',
     status: 'Active' as StaffAccountStatus,
     temporaryPassword: '',
-    requirePasswordChange: true
+    requirePasswordChange: true,
+    profilePictureUrl: ''
   });
   const [showAccountPassword, setShowAccountPassword] = useState(false);
   const [accountCopiedNotice, setAccountCopiedNotice] = useState(false);
@@ -309,7 +312,8 @@ export default function StaffManagement({
       shiftEndTime: defaultShift.shiftEndTime,
       workingDays: defaultShift.workingDays,
       gracePeriodMinutes: defaultShift.gracePeriodMinutes,
-      breakMinutes: defaultShift.breakMinutes
+      breakMinutes: defaultShift.breakMinutes,
+      profilePictureUrl: ''
     });
     setIsStaffModalOpen(true);
   };
@@ -317,6 +321,7 @@ export default function StaffManagement({
   const handleOpenEditStaff = (member: StaffMember) => {
     setEditingStaff(member);
     const memberShift = getStaffShiftConfig(member);
+    const linkedAcc = findStaffAccount(member.id);
     setStaffFormData({
       fullName: member.fullName,
       position: member.position,
@@ -333,7 +338,8 @@ export default function StaffManagement({
       shiftEndTime: memberShift.shiftEndTime,
       workingDays: memberShift.workingDays,
       gracePeriodMinutes: memberShift.gracePeriodMinutes,
-      breakMinutes: memberShift.breakMinutes
+      breakMinutes: memberShift.breakMinutes,
+      profilePictureUrl: member.profilePictureUrl || member.avatarUrl || linkedAcc?.profilePictureUrl || linkedAcc?.avatarUrl || ''
     });
     setIsStaffModalOpen(true);
   };
@@ -345,6 +351,7 @@ export default function StaffManagement({
       return;
     }
 
+    const cleanPic = staffFormData.profilePictureUrl?.trim() || undefined;
     const newOrUpdated: StaffMember = {
       id: editingStaff ? editingStaff.id : generateStaffId(staff),
       fullName: staffFormData.fullName.trim(),
@@ -358,6 +365,8 @@ export default function StaffManagement({
       otherCompensation: Number(staffFormData.otherCompensation) || 0,
       notes: staffFormData.notes?.trim() || '',
       status: staffFormData.status,
+      profilePictureUrl: cleanPic,
+      avatarUrl: cleanPic,
       shiftStartTime: staffFormData.shiftStartTime || '08:00',
       shiftEndTime: staffFormData.shiftEndTime || '17:00',
       workingDays: staffFormData.workingDays || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
@@ -368,6 +377,18 @@ export default function StaffManagement({
     };
 
     onSaveStaff(newOrUpdated);
+
+    // Keep linked StaffAccount profilePictureUrl synchronized
+    const linkedAcc = findStaffAccount(newOrUpdated.id);
+    if (linkedAcc && onSaveStaffAccount) {
+      onSaveStaffAccount({
+        ...linkedAcc,
+        profilePictureUrl: cleanPic,
+        avatarUrl: cleanPic,
+        updatedAt: new Date().toISOString()
+      });
+    }
+
     setIsStaffModalOpen(false);
     setEditingStaff(null);
   };
@@ -396,6 +417,7 @@ export default function StaffManagement({
     setShowAccountPassword(false);
 
     const existing = findStaffAccount(member.id);
+    const existingPic = existing?.profilePictureUrl || existing?.avatarUrl || member.profilePictureUrl || member.avatarUrl || '';
     if (existing) {
       setAccountFormData({
         username: existing.username || '',
@@ -403,7 +425,8 @@ export default function StaffManagement({
         role: existing.role || 'Staff',
         status: existing.status || 'Active',
         temporaryPassword: existing.temporaryPassword || existing.passcode || '',
-        requirePasswordChange: existing.mustChangePassword ?? false
+        requirePasswordChange: existing.mustChangePassword ?? false,
+        profilePictureUrl: existingPic
       });
     } else {
       // Suggest clean unique username based on full name
@@ -427,7 +450,8 @@ export default function StaffManagement({
         role: 'Staff',
         status: 'Active',
         temporaryPassword: generatedTemp,
-        requirePasswordChange: true
+        requirePasswordChange: true,
+        profilePictureUrl: existingPic
       });
     }
 
@@ -474,6 +498,7 @@ export default function StaffManagement({
       return;
     }
 
+    const cleanPic = accountFormData.profilePictureUrl.trim() || undefined;
     const accountToSave: StaffAccount = {
       id: existingAccount ? existingAccount.id : generateStaffAccountId(staffAccounts),
       staffId: selectedStaffForAccount.id,
@@ -485,6 +510,8 @@ export default function StaffManagement({
       mustChangePassword: accountFormData.requirePasswordChange,
       temporaryPassword: accountFormData.requirePasswordChange ? passcode : undefined,
       email: accountFormData.email.trim() || undefined,
+      profilePictureUrl: cleanPic,
+      avatarUrl: cleanPic,
       createdAt: existingAccount?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       lastLogin: existingAccount?.lastLogin
@@ -493,6 +520,16 @@ export default function StaffManagement({
     if (onSaveStaffAccount) {
       onSaveStaffAccount(accountToSave);
       setAccountSuccessMsg(`Staff account for ${selectedStaffForAccount.fullName} saved successfully.`);
+    }
+
+    // Synchronize profile picture back to staff member record
+    if (selectedStaffForAccount && onSaveStaff) {
+      onSaveStaff({
+        ...selectedStaffForAccount,
+        profilePictureUrl: cleanPic,
+        avatarUrl: cleanPic,
+        updatedAt: new Date().toISOString()
+      });
     }
   };
 
@@ -1579,8 +1616,17 @@ export default function StaffManagement({
                       return (
                         <tr key={member.id} className="hover:bg-gray-50/70 transition-colors">
                           <td className="py-3.5 px-4">
-                            <div className="font-bold text-black text-sm">{member.fullName}</div>
-                            <div className="font-mono text-[10px] text-gray-400">{member.id}</div>
+                            <div className="flex items-center gap-2.5">
+                              <UserAvatar
+                                name={member.fullName}
+                                profilePictureUrl={member.profilePictureUrl || member.avatarUrl || account?.profilePictureUrl || account?.avatarUrl}
+                                size={32}
+                              />
+                              <div>
+                                <div className="font-bold text-black text-sm">{member.fullName}</div>
+                                <div className="font-mono text-[10px] text-gray-400">{member.id}</div>
+                              </div>
+                            </div>
                           </td>
                           <td className="py-3.5 px-4">
                             <div className="font-medium text-gray-900">{member.position}</div>
@@ -2114,6 +2160,44 @@ export default function StaffManagement({
                     placeholder="e.g. Maria Santos"
                     className="w-full p-2.5 border border-gray-200 focus:border-black rounded-xl font-medium focus:outline-none"
                   />
+                </div>
+
+                {/* Profile Picture URL */}
+                <div className="space-y-1.5 sm:col-span-2 bg-gray-50/80 p-3 rounded-2xl border border-gray-200/80">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] uppercase font-mono font-bold text-gray-700">
+                      Profile Picture URL (Optional)
+                    </label>
+                    {staffFormData.profilePictureUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setStaffFormData({ ...staffFormData, profilePictureUrl: '' })}
+                        className="text-[10px] font-mono text-red-600 hover:text-red-800 font-bold cursor-pointer"
+                      >
+                        Clear Picture
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <UserAvatar
+                      name={staffFormData.fullName || 'Employee'}
+                      profilePictureUrl={staffFormData.profilePictureUrl}
+                      size={44}
+                    />
+                    <div className="flex-1">
+                      <input
+                        type="url"
+                        value={staffFormData.profilePictureUrl || ''}
+                        onChange={e => setStaffFormData({ ...staffFormData, profilePictureUrl: e.target.value })}
+                        placeholder="https://images.example.com/avatar.jpg"
+                        className="w-full p-2.5 border border-gray-200 focus:border-black rounded-xl font-mono text-xs focus:outline-none bg-white"
+                        id="input-staff-profile-picture-url"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-gray-400 font-mono">
+                    Direct image link. Displays live preview on left and appears as a circular avatar across Job Management.
+                  </p>
                 </div>
 
                 <div className="space-y-1">
@@ -2919,6 +3003,44 @@ export default function StaffManagement({
                     <option value="Suspended">Suspended (Blocks Portal Login)</option>
                     <option value="Inactive">Inactive</option>
                   </select>
+                </div>
+
+                {/* Profile Picture URL */}
+                <div className="space-y-1.5 sm:col-span-2 bg-gray-50 p-3 rounded-2xl border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] uppercase font-mono font-bold text-gray-700">
+                      Profile Picture URL (Optional)
+                    </label>
+                    {accountFormData.profilePictureUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setAccountFormData({ ...accountFormData, profilePictureUrl: '' })}
+                        className="text-[10px] font-mono text-red-600 hover:text-red-800 font-bold cursor-pointer"
+                      >
+                        Clear Picture
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <UserAvatar
+                      name={selectedStaffForAccount?.fullName || accountFormData.username}
+                      profilePictureUrl={accountFormData.profilePictureUrl}
+                      size={44}
+                    />
+                    <div className="flex-1">
+                      <input
+                        type="url"
+                        value={accountFormData.profilePictureUrl}
+                        onChange={e => setAccountFormData({ ...accountFormData, profilePictureUrl: e.target.value })}
+                        placeholder="https://images.example.com/avatar.jpg"
+                        className="w-full p-2 border border-gray-200 focus:border-black rounded-xl font-mono text-xs focus:outline-none bg-white"
+                        id="input-account-profile-picture-url"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-gray-400 font-mono">
+                    Direct image link. Displays beside this user's name when selected as Account Manager in Job Management.
+                  </p>
                 </div>
               </div>
 
