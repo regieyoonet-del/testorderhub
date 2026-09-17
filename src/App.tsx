@@ -2389,6 +2389,16 @@ export default function App() {
       }
       return [updated, ...prev];
     });
+
+    // Keep logged-in user profile avatar in sync if editing self
+    setLoggedInUser(prev => {
+      if (prev && prev.role === 'staff' && (prev.staffId === updated.id || prev.name?.toLowerCase() === updated.fullName.toLowerCase())) {
+        const pic = updated.profilePictureUrl || updated.avatarUrl;
+        return { ...prev, name: updated.fullName, profilePictureUrl: pic, avatarUrl: pic };
+      }
+      return prev;
+    });
+
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
       sheetsService.saveStaff(appsScriptConfig.webAppUrl, updated).catch(err => console.warn('Save staff sync notice:', err));
     }
@@ -3056,12 +3066,17 @@ export default function App() {
     staffInfo?: { staffId: string; accountId: string; name: string; username: string }
   ) => {
     if (role === 'staff' && staffInfo) {
+      const matchedAcc = staffAccounts.find(a => a.id === staffInfo.accountId || a.username === staffInfo.username);
+      const matchedStaff = staff.find(s => s.id === staffInfo.staffId || s.fullName.toLowerCase() === staffInfo.name.toLowerCase());
+      const pic = matchedStaff?.profilePictureUrl || matchedStaff?.avatarUrl || matchedAcc?.profilePictureUrl || matchedAcc?.avatarUrl;
       setLoggedInUser({
         role: 'staff',
         staffId: staffInfo.staffId,
         accountId: staffInfo.accountId,
         name: staffInfo.name,
-        username: staffInfo.username
+        username: staffInfo.username,
+        profilePictureUrl: pic,
+        avatarUrl: pic
       });
       setActiveTab('dashboard');
     } else {
@@ -3184,6 +3199,28 @@ export default function App() {
       }
       return [account, ...prev];
     });
+
+    // Keep logged-in user profile avatar in sync if editing self
+    setLoggedInUser(prev => {
+      if (
+        prev &&
+        prev.role === 'staff' &&
+        (prev.accountId === account.id ||
+         prev.username?.toLowerCase() === account.username?.toLowerCase() ||
+         (account.staffId && prev.staffId === account.staffId))
+      ) {
+        const pic = account.profilePictureUrl || account.avatarUrl;
+        return {
+          ...prev,
+          name: account.name || prev.name,
+          username: account.username,
+          profilePictureUrl: pic,
+          avatarUrl: pic
+        };
+      }
+      return prev;
+    });
+
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
       sheetsService.saveStaffAccount(appsScriptConfig.webAppUrl, account);
     }

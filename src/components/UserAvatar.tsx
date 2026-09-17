@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { cleanProfilePictureUrl } from '../utils/staffAvatarUtils';
 
 export interface UserAvatarProps {
   name?: string;
@@ -73,12 +74,13 @@ export default function UserAvatar({
 }: UserAvatarProps) {
   const [imageFailed, setImageFailed] = useState(false);
 
-  // Reset error state if the URL prop changes
+  const cleanUrl = useMemo(() => cleanProfilePictureUrl(profilePictureUrl) || '', [profilePictureUrl]);
+
+  // Reset error state if the cleaned URL changes
   useEffect(() => {
     setImageFailed(false);
-  }, [profilePictureUrl]);
+  }, [cleanUrl]);
 
-  const cleanUrl = typeof profilePictureUrl === 'string' ? profilePictureUrl.trim() : '';
   const hasValidUrl = Boolean(cleanUrl && !imageFailed);
   const initials = getInitials(name);
   const theme = getThemeForName(name);
@@ -108,7 +110,6 @@ export default function UserAvatar({
           onError={() => setImageFailed(true)}
           className="w-full h-full object-cover rounded-full"
           referrerPolicy="no-referrer"
-          loading="lazy"
         />
       ) : (
         <span

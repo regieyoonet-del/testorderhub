@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import JobCommentsSection from './JobCommentsSection';
 import UserAvatar from './UserAvatar';
+import { resolveAccountManagerInfo } from '../utils/staffAvatarUtils';
 
 interface JobDetailCollaborationModalProps {
   job: Job | null;
@@ -346,22 +347,19 @@ export default function JobDetailCollaborationModal({
                   <div className="flex items-center justify-between py-1.5 border-b border-gray-200">
                     <span className="text-gray-500">Account Manager:</span>
                     {(() => {
-                      const amName = job.values['col-account-manager'] || job.values['col-designer'] || '';
-                      const lower = amName.trim().toLowerCase();
-                      const matchedStaff = (staff || []).find(s => (s.fullName || '').trim().toLowerCase() === lower);
-                      const matchedAcc = (staffAccounts || []).find(a => (a.name || '').trim().toLowerCase() === lower);
-                      const avatarUrl = matchedStaff?.profilePictureUrl || matchedStaff?.avatarUrl || matchedAcc?.profilePictureUrl || matchedAcc?.avatarUrl;
+                      const rawAm = job.values['col-account-manager'] || job.values['col-designer'] || '';
+                      const resolved = resolveAccountManagerInfo(rawAm, staff, staffAccounts, currentUser);
 
                       return (
                         <div className="flex items-center gap-2">
-                          {amName && amName !== 'Unassigned' && (
+                          {!resolved.isUnassigned && (
                             <UserAvatar
-                              name={amName}
-                              profilePictureUrl={avatarUrl}
+                              name={resolved.displayName}
+                              profilePictureUrl={resolved.profilePictureUrl}
                               size={24}
                             />
                           )}
-                          <strong className="text-black">{amName || 'Unassigned'}</strong>
+                          <strong className="text-black">{resolved.displayName}</strong>
                         </div>
                       );
                     })()}

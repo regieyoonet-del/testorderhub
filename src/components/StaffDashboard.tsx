@@ -36,6 +36,7 @@ import {
 } from '../utils/attendanceUtils';
 import JobManagementBoard from './JobManagementBoard';
 import AdminProductCatalog from './AdminProductCatalog';
+import UserAvatar from './UserAvatar';
 import {
   Clock,
   Calendar,
@@ -481,6 +482,9 @@ export default function StaffDashboard({
   const [confirmPasscode, setConfirmPasscode] = useState('');
   const [profileEmail, setProfileEmail] = useState(staffAccount?.email || staffMember?.email || '');
   const [profilePhone, setProfilePhone] = useState(staffAccount?.phone || staffMember?.phone || '');
+  const [profilePictureUrl, setProfilePictureUrl] = useState(
+    staffAccount?.profilePictureUrl || staffAccount?.avatarUrl || staffMember?.profilePictureUrl || staffMember?.avatarUrl || currentUser.profilePictureUrl || ''
+  );
   const [profileSaveSuccess, setProfileSaveSuccess] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [showPasscodeToggle, setShowPasscodeToggle] = useState(false);
@@ -495,6 +499,8 @@ export default function StaffDashboard({
       return;
     }
 
+    const cleanPic = profilePictureUrl.trim() || undefined;
+
     if (staffAccount && onUpdateStaffAccount) {
       const updatedAccount: StaffAccount = {
         ...staffAccount,
@@ -503,6 +509,8 @@ export default function StaffDashboard({
         temporaryPassword: newPasscode.trim() ? undefined : staffAccount.temporaryPassword,
         email: profileEmail.trim() || undefined,
         phone: profilePhone.trim() || undefined,
+        profilePictureUrl: cleanPic,
+        avatarUrl: cleanPic,
         updatedAt: new Date().toISOString()
       };
       onUpdateStaffAccount(updatedAccount);
@@ -513,6 +521,8 @@ export default function StaffDashboard({
         ...staffMember,
         email: profileEmail.trim() || undefined,
         phone: profilePhone.trim() || undefined,
+        profilePictureUrl: cleanPic,
+        avatarUrl: cleanPic,
         updatedAt: new Date().toISOString()
       };
       onUpdateStaffMember(updatedStaff);
@@ -564,9 +574,18 @@ export default function StaffDashboard({
           <div className="bg-white border-2 border-black rounded-[28px] p-6 sm:p-8 shadow-md">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-black text-white flex items-center justify-center font-mono text-2xl font-black shadow-inner shrink-0">
-                  {(currentUser.name || staffMember?.fullName || 'S')[0].toUpperCase()}
-                </div>
+                <UserAvatar
+                  name={currentUser.name || staffMember?.fullName || 'Staff Member'}
+                  profilePictureUrl={
+                    staffMember?.profilePictureUrl ||
+                    staffMember?.avatarUrl ||
+                    staffAccount?.profilePictureUrl ||
+                    staffAccount?.avatarUrl ||
+                    currentUser.profilePictureUrl
+                  }
+                  size={64}
+                  className="rounded-2xl shrink-0"
+                />
                 <div>
                   <div className="flex items-center gap-2.5">
                     <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-black">
@@ -1416,6 +1435,44 @@ export default function StaffDashboard({
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Profile Picture URL & Live Preview */}
+                  <div className="space-y-1.5 sm:col-span-2 bg-gray-50 p-3.5 rounded-2xl border border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[10px] uppercase font-mono font-bold text-gray-700">
+                        Profile Picture URL
+                      </label>
+                      {profilePictureUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setProfilePictureUrl('')}
+                          className="text-[10px] font-mono text-red-600 hover:text-red-800 font-bold cursor-pointer"
+                        >
+                          Clear Picture
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <UserAvatar
+                        name={staffMember?.fullName || currentUser.name || staffAccount?.username || 'Staff'}
+                        profilePictureUrl={profilePictureUrl}
+                        size={48}
+                      />
+                      <div className="flex-1">
+                        <input
+                          type="url"
+                          value={profilePictureUrl}
+                          onChange={(e) => setProfilePictureUrl(e.target.value)}
+                          placeholder="https://images.example.com/photo.jpg"
+                          className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-medium text-black focus:border-black focus:outline-none transition-all"
+                          id="input-staff-dashboard-profile-picture-url"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-gray-400 font-mono">
+                      Direct image link. Displays beside your name when assigned as Account Manager in Job Management.
+                    </p>
+                  </div>
+
                   <div className="space-y-1">
                     <label className="block text-[10px] uppercase font-mono font-bold text-gray-400">
                       Login Username

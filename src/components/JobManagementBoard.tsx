@@ -63,6 +63,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import JobCommentsSection from './JobCommentsSection';
 import JobDetailCollaborationModal from './JobDetailCollaborationModal';
 import UserAvatar from './UserAvatar';
+import { resolveAccountManagerInfo } from '../utils/staffAvatarUtils';
 
 interface JobManagementBoardProps {
   jobs: Job[];
@@ -714,20 +715,15 @@ export default function JobManagementBoard({
 
   const getAccountManagerAvatar = (name?: string): string | undefined => {
     if (!name || !name.trim()) return undefined;
+    const resolved = resolveAccountManagerInfo(name, staff, staffAccounts, currentUser);
+    if (resolved.profilePictureUrl) return resolved.profilePictureUrl;
+
     const lower = name.trim().toLowerCase();
     const fromAdmins = availableAccountManagers.admins.find(a => a.value.toLowerCase() === lower);
     if (fromAdmins?.profilePictureUrl) return fromAdmins.profilePictureUrl;
     const fromStaff = availableAccountManagers.staff.find(s => s.value.toLowerCase() === lower);
     if (fromStaff?.profilePictureUrl) return fromStaff.profilePictureUrl;
 
-    const matchedStaff = (staff || []).find(s => (s.fullName || '').trim().toLowerCase() === lower);
-    if (matchedStaff?.profilePictureUrl || matchedStaff?.avatarUrl) {
-      return matchedStaff.profilePictureUrl || matchedStaff.avatarUrl;
-    }
-    const matchedAcc = (staffAccounts || []).find(a => (a.name || '').trim().toLowerCase() === lower);
-    if (matchedAcc?.profilePictureUrl || matchedAcc?.avatarUrl) {
-      return matchedAcc.profilePictureUrl || matchedAcc.avatarUrl;
-    }
     return undefined;
   };
 
@@ -1981,17 +1977,18 @@ export default function JobManagementBoard({
                                 <td className="py-3 px-3 min-w-[170px]">
                                   {(() => {
                                     const currentAM = job.values['col-account-manager'] || job.values['col-designer'] || '';
+                                    const resolvedAM = resolveAccountManagerInfo(currentAM, staff, staffAccounts, currentUser);
                                     const hasCurrentInOptions = Boolean(
                                       currentAM &&
                                       (availableAccountManagers.admins.some(a => a.value.toLowerCase() === currentAM.toLowerCase()) ||
                                        availableAccountManagers.staff.some(s => s.value.toLowerCase() === currentAM.toLowerCase()))
                                     );
-                                    const avatarUrl = getAccountManagerAvatar(currentAM);
+                                    const avatarUrl = resolvedAM.profilePictureUrl || getAccountManagerAvatar(currentAM);
 
                                     return (
                                       <div className="flex items-center gap-2">
                                         <UserAvatar
-                                          name={currentAM}
+                                          name={resolvedAM.displayName || currentAM}
                                           profilePictureUrl={avatarUrl}
                                           size={28}
                                         />
@@ -2640,48 +2637,54 @@ export default function JobManagementBoard({
 
                   <div className="space-y-1">
                     <label className="block font-mono uppercase font-bold text-[10px] text-gray-600">Account Manager</label>
-                    <div className="flex items-center gap-2">
-                      <UserAvatar
-                        name={newJobForm.accountManager}
-                        profilePictureUrl={getAccountManagerAvatar(newJobForm.accountManager)}
-                        size={32}
-                      />
-                      <select
-                        value={newJobForm.accountManager}
-                        onChange={e => setNewJobForm({ ...newJobForm, accountManager: e.target.value })}
-                        className="flex-1 min-w-0 bg-gray-50 border border-gray-200 focus:border-black rounded-xl p-2.5 text-xs text-black font-semibold focus:outline-none cursor-pointer"
-                        id="select-modal-account-manager"
-                      >
-                        <option value="">Select Account Manager</option>
-                        {availableAccountManagers.admins.length > 0 && (
-                          <optgroup label="Admin">
-                            {availableAccountManagers.admins.map(am => (
-                              <option key={am.value} value={am.value}>
-                                {am.label}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                        {availableAccountManagers.staff.length > 0 && (
-                          <optgroup label="Staff">
-                            {availableAccountManagers.staff.map(am => (
-                              <option key={am.value} value={am.value}>
-                                {am.label}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                        {newJobForm.accountManager &&
-                          !availableAccountManagers.admins.some(a => a.value.toLowerCase() === newJobForm.accountManager.toLowerCase()) &&
-                          !availableAccountManagers.staff.some(s => s.value.toLowerCase() === newJobForm.accountManager.toLowerCase()) && (
-                            <optgroup label="Current Value">
-                              <option value={newJobForm.accountManager}>
-                                {newJobForm.accountManager}
-                              </option>
-                            </optgroup>
-                        )}
-                      </select>
-                    </div>
+                    {(() => {
+                      const resolvedNewAM = resolveAccountManagerInfo(newJobForm.accountManager, staff, staffAccounts, currentUser);
+                      const avatarUrl = resolvedNewAM.profilePictureUrl || getAccountManagerAvatar(newJobForm.accountManager);
+                      return (
+                        <div className="flex items-center gap-2">
+                          <UserAvatar
+                            name={resolvedNewAM.displayName || newJobForm.accountManager}
+                            profilePictureUrl={avatarUrl}
+                            size={32}
+                          />
+                          <select
+                            value={newJobForm.accountManager}
+                            onChange={e => setNewJobForm({ ...newJobForm, accountManager: e.target.value })}
+                            className="flex-1 min-w-0 bg-gray-50 border border-gray-200 focus:border-black rounded-xl p-2.5 text-xs text-black font-semibold focus:outline-none cursor-pointer"
+                            id="select-modal-account-manager"
+                          >
+                            <option value="">Select Account Manager</option>
+                            {availableAccountManagers.admins.length > 0 && (
+                              <optgroup label="Admin">
+                                {availableAccountManagers.admins.map(am => (
+                                  <option key={am.value} value={am.value}>
+                                    {am.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {availableAccountManagers.staff.length > 0 && (
+                              <optgroup label="Staff">
+                                {availableAccountManagers.staff.map(am => (
+                                  <option key={am.value} value={am.value}>
+                                    {am.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {newJobForm.accountManager &&
+                              !availableAccountManagers.admins.some(a => a.value.toLowerCase() === newJobForm.accountManager.toLowerCase()) &&
+                              !availableAccountManagers.staff.some(s => s.value.toLowerCase() === newJobForm.accountManager.toLowerCase()) && (
+                                <optgroup label="Current Value">
+                                  <option value={newJobForm.accountManager}>
+                                    {newJobForm.accountManager}
+                                  </option>
+                                </optgroup>
+                              )}
+                          </select>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="space-y-1 md:col-span-2">

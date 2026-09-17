@@ -11,6 +11,15 @@ import { DEFAULT_QUOTE_NOTES } from '../constants/quoteDefaults';
 import { EMBEDDED_APPS_SCRIPT_URL } from '../config';
 import { deduplicateRecurringExpenses } from '../utils/financeCalculations';
 import { parseYearMonth } from '../utils/financeFilters';
+import { cleanProfilePictureUrl } from '../utils/staffAvatarUtils';
+
+const AVATAR_KEYS = [
+  'ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL',
+  'Profile Picture', 'ProfilePicture', 'ProfilePic', 'Profile Pic',
+  'Avatar URL', 'AvatarURL', 'avatarUrl', 'Avatar', 'avatar',
+  'ProfileImage', 'Profile Image', 'Photo', 'Picture', 'Image',
+  'StaffPhoto', 'Staff Photo', 'AccountPhoto', 'Account Photo'
+];
 
 function normalizeDateStr(raw?: any): string | undefined {
   if (!raw) return undefined;
@@ -1929,8 +1938,8 @@ export const sheetsService = {
           breakMinutes: getProp(item, ['BreakMinutes', 'breakMinutes', 'Break Minutes', 'BreakDuration']) !== undefined
             ? Number(getProp(item, ['BreakMinutes', 'breakMinutes', 'Break Minutes', 'BreakDuration']))
             : 60,
-          profilePictureUrl: getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL']) ? String(getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL'])).trim() : undefined,
-          avatarUrl: getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL']) ? String(getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL'])).trim() : undefined,
+          profilePictureUrl: cleanProfilePictureUrl(getProp(item, AVATAR_KEYS)),
+          avatarUrl: cleanProfilePictureUrl(getProp(item, AVATAR_KEYS)),
           createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
           updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
         }));
@@ -1949,11 +1958,19 @@ export const sheetsService = {
     if (!url) return false;
     const cleanedUrl = resolveUrl(url);
     try {
+      const pic = cleanProfilePictureUrl(staff.profilePictureUrl || staff.avatarUrl) || '';
       await fetch(cleanedUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'saveStaff', staff })
+        body: JSON.stringify({
+          action: 'saveStaff',
+          staff: {
+            ...staff,
+            profilePictureUrl: pic,
+            avatarUrl: pic
+          }
+        })
       });
       return true;
     } catch (error) {
@@ -1969,11 +1986,19 @@ export const sheetsService = {
     if (!url) return false;
     const cleanedUrl = resolveUrl(url);
     try {
+      const sanitized = staffMembers.map(s => {
+        const pic = cleanProfilePictureUrl(s.profilePictureUrl || s.avatarUrl) || '';
+        return {
+          ...s,
+          profilePictureUrl: pic,
+          avatarUrl: pic
+        };
+      });
       await fetch(cleanedUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'saveStaffBatch', staffMembers })
+        body: JSON.stringify({ action: 'saveStaffBatch', staffMembers: sanitized })
       });
       return true;
     } catch (error) {
@@ -2032,8 +2057,8 @@ export const sheetsService = {
           temporaryPassword: getProp(item, ['TemporaryPassword', 'temporaryPassword']) ? String(getProp(item, ['TemporaryPassword', 'temporaryPassword'])) : undefined,
           email: getProp(item, ['Email', 'email']) ? String(getProp(item, ['Email', 'email'])) : undefined,
           phone: getProp(item, ['Phone', 'phone', 'ContactNumber']) ? String(getProp(item, ['Phone', 'phone', 'ContactNumber'])) : undefined,
-          profilePictureUrl: getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL']) ? String(getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL'])).trim() : undefined,
-          avatarUrl: getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL']) ? String(getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL'])).trim() : undefined,
+          profilePictureUrl: cleanProfilePictureUrl(getProp(item, AVATAR_KEYS)),
+          avatarUrl: cleanProfilePictureUrl(getProp(item, AVATAR_KEYS)),
           lastLogin: getProp(item, ['LastLogin', 'lastLogin']) ? String(getProp(item, ['LastLogin', 'lastLogin'])) : undefined,
           createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
           updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
@@ -2053,11 +2078,19 @@ export const sheetsService = {
     if (!url) return false;
     const cleanedUrl = resolveUrl(url);
     try {
+      const pic = cleanProfilePictureUrl(account.profilePictureUrl || account.avatarUrl) || '';
       await fetch(cleanedUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'saveStaffAccount', account })
+        body: JSON.stringify({
+          action: 'saveStaffAccount',
+          account: {
+            ...account,
+            profilePictureUrl: pic,
+            avatarUrl: pic
+          }
+        })
       });
       return true;
     } catch (error) {
@@ -2073,11 +2106,19 @@ export const sheetsService = {
     if (!url) return false;
     const cleanedUrl = resolveUrl(url);
     try {
+      const sanitized = accounts.map(a => {
+        const pic = cleanProfilePictureUrl(a.profilePictureUrl || a.avatarUrl) || '';
+        return {
+          ...a,
+          profilePictureUrl: pic,
+          avatarUrl: pic
+        };
+      });
       await fetch(cleanedUrl, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'saveStaffAccountsBatch', accounts })
+        body: JSON.stringify({ action: 'saveStaffAccountsBatch', accounts: sanitized })
       });
       return true;
     } catch (error) {
@@ -3286,8 +3327,8 @@ export const sheetsService = {
           breakMinutes: getProp(item, ['BreakMinutes', 'breakMinutes', 'Break Minutes', 'BreakDuration']) !== undefined
             ? Number(getProp(item, ['BreakMinutes', 'breakMinutes', 'Break Minutes', 'BreakDuration']))
             : 60,
-          profilePictureUrl: getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL']) ? String(getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL'])).trim() : undefined,
-          avatarUrl: getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL']) ? String(getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL'])).trim() : undefined,
+          profilePictureUrl: cleanProfilePictureUrl(getProp(item, AVATAR_KEYS)),
+          avatarUrl: cleanProfilePictureUrl(getProp(item, AVATAR_KEYS)),
           createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
           updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
         }));
@@ -3306,8 +3347,8 @@ export const sheetsService = {
           status: (getProp(item, ['Status', 'status']) || 'Active') as any,
           email: getProp(item, ['Email', 'email']) ? String(getProp(item, ['Email', 'email'])) : undefined,
           phone: getProp(item, ['Phone', 'phone', 'ContactNumber']) ? String(getProp(item, ['Phone', 'phone', 'ContactNumber'])) : undefined,
-          profilePictureUrl: getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL']) ? String(getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL'])).trim() : undefined,
-          avatarUrl: getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL']) ? String(getProp(item, ['ProfilePictureUrl', 'profilePictureUrl', 'Profile Picture URL', 'ProfilePictureURL', 'AvatarURL', 'avatarUrl', 'ProfileImage', 'Avatar URL'])).trim() : undefined,
+          profilePictureUrl: cleanProfilePictureUrl(getProp(item, AVATAR_KEYS)),
+          avatarUrl: cleanProfilePictureUrl(getProp(item, AVATAR_KEYS)),
           lastLogin: getProp(item, ['LastLogin', 'lastLogin']) ? String(getProp(item, ['LastLogin', 'lastLogin'])) : undefined,
           createdAt: String(getProp(item, ['CreatedAt', 'createdAt', 'Created At']) || new Date().toISOString()),
           updatedAt: String(getProp(item, ['UpdatedAt', 'updatedAt', 'Updated At']) || new Date().toISOString())
