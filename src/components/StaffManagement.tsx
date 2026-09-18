@@ -69,6 +69,7 @@ import StaffShiftModal from './StaffShiftModal';
 import OvertimeApprovalStation from './OvertimeApprovalStation';
 import PayrollCalculationReview from './PayrollCalculationReview';
 import UserAvatar from './UserAvatar';
+import { cleanProfilePictureUrl } from '../utils/staffAvatarUtils';
 import {
   getStaffShiftConfig,
   calculateShiftAttendancePayroll,
@@ -351,7 +352,7 @@ export default function StaffManagement({
       return;
     }
 
-    const cleanPic = staffFormData.profilePictureUrl?.trim() || undefined;
+    const cleanPic = cleanProfilePictureUrl(staffFormData.profilePictureUrl) || (staffFormData.profilePictureUrl?.trim() || undefined);
     const newOrUpdated: StaffMember = {
       id: editingStaff ? editingStaff.id : generateStaffId(staff),
       fullName: staffFormData.fullName.trim(),
@@ -498,7 +499,7 @@ export default function StaffManagement({
       return;
     }
 
-    const cleanPic = accountFormData.profilePictureUrl.trim() || undefined;
+    const cleanPic = cleanProfilePictureUrl(accountFormData.profilePictureUrl) || (accountFormData.profilePictureUrl.trim() || undefined);
     const accountToSave: StaffAccount = {
       id: existingAccount ? existingAccount.id : generateStaffAccountId(staffAccounts),
       staffId: selectedStaffForAccount.id,

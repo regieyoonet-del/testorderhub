@@ -314,7 +314,9 @@ export function createJobFromOrder(
   // Initial Job Status logic:
   // Job directly inherits the order's status if valid, otherwise defaults to Pending
   let initialJobStatus: Job['status'] = 'Pending';
-  if (
+  if ((order.status as string) === 'To Ship / To Deliver / To Pickup') {
+    initialJobStatus = 'Shipped';
+  } else if (
     order.status === 'Approved' ||
     order.status === 'In Production' ||
     order.status === 'Shipped' ||

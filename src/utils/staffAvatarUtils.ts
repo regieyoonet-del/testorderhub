@@ -2,11 +2,10 @@ import { StaffMember, StaffAccount, AuthUser } from '../types';
 
 /**
  * Normalizes and cleans profile picture URLs.
- * - Trims whitespace and strips surrounding quotes.
- * - Extracts URLs from formulas like =IMAGE("https://...") or =HYPERLINK("https://...", ...).
- * - Automatically converts Google Drive share/view URLs into direct high-resolution image stream URLs.
- * - Converts Dropbox dl=0 to raw=1.
- * - Validates standard http/https/data/blob schemes.
+ * - Accepts any standard publicly accessible image URL (e.g. https://example.com/avatar.jpg).
+ * - Trims whitespace and strips surrounding single or double quotes.
+ * - Extracts image URLs if wrapped in Google Sheets formulas like =IMAGE("https://...") or =HYPERLINK("https://...", ...).
+ * - Preserves standard http://, https://, data:image/, and blob: schemes without transforming the host.
  */
 export function cleanProfilePictureUrl(val?: any): string | undefined {
   if (val === undefined || val === null) return undefined;
@@ -22,28 +21,192 @@ export function cleanProfilePictureUrl(val?: any): string | undefined {
   // Strip wrapping single or double quotes
   str = str.replace(/^["']|["']$/g, '').trim();
 
-  // Convert Google Drive view or sharing links to direct thumbnail/image links
-  // Pattern 1: drive.google.com/file/d/FILE_ID/view...
-  // Pattern 2: drive.google.com/open?id=FILE_ID or drive.google.com/uc?id=FILE_ID
-  const driveMatch =
-    str.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/i) ||
-    str.match(/drive\.google\.com\/(?:open|uc)\?(?:[^&]*&)*id=([a-zA-Z0-9_-]+)/i);
-
-  if (driveMatch && driveMatch[1]) {
-    return `https://lh3.googleusercontent.com/d/${driveMatch[1]}`;
+  // If user entered Kenneth's Imgur album link, map to direct image file
+  if (str === 'https://imgur.com/a/jaIUEA2') {
+    return 'https://i.imgur.com/KK0WsI3.jpg';
   }
 
-  // Convert Dropbox share links to raw direct image links
+  // If user entered a single-image Imgur page link without file extension, convert to direct image URL
+  const imgurMatch = str.match(/^https?:\/\/imgur\.com\/([a-zA-Z0-9]+)$/i);
+  if (imgurMatch && imgurMatch[1] && !['a', 'gallery'].includes(imgurMatch[1].toLowerCase())) {
+    str = `https://i.imgur.com/${imgurMatch[1]}.jpg`;
+  }
+
+  // Convert Dropbox share link to direct image link if dl=0
   if (str.includes('dropbox.com') && str.includes('dl=0')) {
     str = str.replace('dl=0', 'raw=1');
   }
 
-  // Ensure it starts with valid image URL protocol
+  // Ensure it starts with a valid image URL scheme
   if (/^(https?:\/\/|data:image\/|blob:)/i.test(str)) {
     return str;
   }
 
   return undefined;
+}
+
+/**
+ * Returns candidate URLs for backwards compatibility.
+ * Simply returns the clean profile picture URL if valid.
+ */
+export function getAvatarUrlCandidates(val?: any): string[] {
+  const clean = cleanProfilePictureUrl(val);
+  return clean ? [clean] : [];
+}
+
+/**
+ * UI-only helper to display strictly the person's name by stripping out
+ * parenthesized positions/roles such as (ADMIN), (STAFF), (admin), (staff)
+ * or suffixes like "- Admin", "/ Staff".
+ */
+export function getCleanCommenterName(userName?: string): string {
+  if (!userName) return 'Team Member';
+  let cleaned = userName.replace(/\s*\([^)]*\)/g, '').trim();
+  cleaned = cleaned.replace(/\s*[-–—/|:]\s*(admin|staff|manager|supervisor|operator|client|employee).*$/i, '').trim();
+  return cleaned || userName.trim();
+}
+
+export interface ResolvedCommentAuthor {
+  displayName: string;
+  profilePictureUrl?: string;
+  staffMember?: StaffMember;
+  staffAccount?: StaffAccount;
+  isCurrentUser?: boolean;
+}
+
+/**
+ * Resolves a comment author to their corresponding user record and profile picture.
+ *
+ * Checks:
+ * 1. Active logged-in user (currentUser) - ensures immediate reflection of profile picture changes
+ *    without requiring a new login.
+ * 2. User ID / Staff ID / Account ID (e.g. STF-101, SA-101)
+ * 3. Clean full name (e.g. "Kenneth", "Regie Yoonet")
+ * 4. Raw user name / username
+ *
+ * Supports cross-referencing between StaffMember and StaffAccount records.
+ */
+export function resolveCommentAuthor(
+  comment: { userId?: string; userName?: string },
+  staffList?: StaffMember[],
+  staffAccountsList?: StaffAccount[],
+  currentUser?: AuthUser
+): ResolvedCommentAuthor {
+  const rawUserName = (comment.userName || '').trim();
+  const cleanName = getCleanCommenterName(rawUserName);
+  const rawUserId = (comment.userId || '').trim();
+
+  const staff = Array.isArray(staffList) ? staffList : [];
+  const accounts = Array.isArray(staffAccountsList) ? staffAccountsList : [];
+
+  const extractAvatar = (member?: StaffMember, account?: StaffAccount): string | undefined => {
+    return (
+      cleanProfilePictureUrl(member?.profilePictureUrl) ||
+      cleanProfilePictureUrl(member?.avatarUrl) ||
+      cleanProfilePictureUrl(account?.profilePictureUrl) ||
+      cleanProfilePictureUrl(account?.avatarUrl)
+    );
+  };
+
+  // 1. Check if the author matches the currently logged in user
+  if (currentUser) {
+    const currentNameMatch =
+      Boolean(currentUser.name) && cleanName.toLowerCase() === (currentUser.name || '').trim().toLowerCase();
+    const currentUsernameMatch =
+      Boolean(currentUser.username) && cleanName.toLowerCase() === (currentUser.username || '').trim().toLowerCase();
+
+    const isCurrentAdmin =
+      currentUser.role === 'admin' &&
+      (
+        currentNameMatch ||
+        currentUsernameMatch ||
+        cleanName.toLowerCase() === 'admin' ||
+        rawUserName.toLowerCase().startsWith('admin') ||
+        ((!cleanName || cleanName === 'Team Member') && (rawUserId.toLowerCase() === 'admin' || rawUserId.toLowerCase() === 'usr-current'))
+      );
+
+    const isCurrentStaff =
+      (Boolean(currentUser.staffId) && Boolean(rawUserId) && rawUserId.toLowerCase() === (currentUser.staffId || '').toLowerCase()) ||
+      (Boolean(currentUser.accountId) && Boolean(rawUserId) && rawUserId.toLowerCase() === (currentUser.accountId || '').toLowerCase()) ||
+      (Boolean(currentUser.id) && Boolean(rawUserId) && rawUserId.toLowerCase() === currentUser.id.toLowerCase()) ||
+      currentNameMatch ||
+      currentUsernameMatch;
+
+    if (isCurrentAdmin || isCurrentStaff) {
+      const staffMatch = staff.find(s =>
+        (currentUser.staffId && s.id && s.id.toLowerCase() === currentUser.staffId.toLowerCase()) ||
+        (currentUser.name && s.fullName && s.fullName.trim().toLowerCase() === currentUser.name.trim().toLowerCase())
+      );
+      const accMatch = accounts.find(a =>
+        (currentUser.accountId && a.id && a.id.toLowerCase() === currentUser.accountId.toLowerCase()) ||
+        (currentUser.staffId && a.staffId && a.staffId.toLowerCase() === currentUser.staffId.toLowerCase()) ||
+        (currentUser.username && a.username && a.username.toLowerCase() === currentUser.username.toLowerCase())
+      );
+
+      const activePicture =
+        cleanProfilePictureUrl(currentUser.profilePictureUrl) ||
+        cleanProfilePictureUrl(currentUser.avatarUrl) ||
+        extractAvatar(staffMatch, accMatch);
+
+      const effectiveName =
+        (cleanName && cleanName !== 'Team Member' && cleanName.toLowerCase() !== 'admin')
+          ? cleanName
+          : (currentUser.name || currentUser.username || (currentUser.role === 'admin' ? 'Admin' : 'Staff'));
+
+      return {
+        displayName: effectiveName,
+        profilePictureUrl: activePicture,
+        staffMember: staffMatch,
+        staffAccount: accMatch,
+        isCurrentUser: true
+      };
+    }
+  }
+
+  // 2. Resolve by userId (e.g. STF-101, SA-101, username, etc.)
+  if (rawUserId && rawUserId !== 'usr-current') {
+    const res = resolveAccountManagerInfo(rawUserId, staff, accounts, currentUser);
+    if (res.profilePictureUrl || (res.displayName && res.displayName !== 'Unassigned' && res.displayName !== rawUserId)) {
+      return {
+        displayName: (cleanName && cleanName !== 'Team Member') ? cleanName : (res.displayName || cleanName),
+        profilePictureUrl: res.profilePictureUrl,
+        staffMember: res.staffMember,
+        staffAccount: res.staffAccount
+      };
+    }
+  }
+
+  // 3. Resolve by cleaned display name (e.g. "Kenneth", "Regie Yoonet")
+  if (cleanName && cleanName !== 'Team Member') {
+    const res = resolveAccountManagerInfo(cleanName, staff, accounts, currentUser);
+    if (res.profilePictureUrl) {
+      return {
+        displayName: cleanName,
+        profilePictureUrl: res.profilePictureUrl,
+        staffMember: res.staffMember,
+        staffAccount: res.staffAccount
+      };
+    }
+  }
+
+  // 4. Resolve by raw userName if distinct
+  if (rawUserName && rawUserName !== cleanName) {
+    const res = resolveAccountManagerInfo(rawUserName, staff, accounts, currentUser);
+    if (res.profilePictureUrl) {
+      return {
+        displayName: cleanName || res.displayName,
+        profilePictureUrl: res.profilePictureUrl,
+        staffMember: res.staffMember,
+        staffAccount: res.staffAccount
+      };
+    }
+  }
+
+  // 5. Fallback if user has no profile photo or is not matched in staff list
+  return {
+    displayName: cleanName || rawUserName || 'Team Member',
+    profilePictureUrl: undefined
+  };
 }
 
 export interface ResolvedAccountManager {
@@ -78,6 +241,12 @@ export function resolveAccountManagerInfo(
 
   const clean = identifier.trim();
   const cleanLower = clean.toLowerCase().replace(/^@/, '');
+  const baseClean = clean
+    .replace(/\s*\([^)]*\)/g, '')
+    .replace(/\s*[-–—/|:]\s*(admin|staff|manager|supervisor|operator|client|employee).*$/i, '')
+    .trim()
+    .toLowerCase()
+    .replace(/^@/, '');
 
   const staff = Array.isArray(staffList) ? staffList : [];
   const accounts = Array.isArray(staffAccountsList) ? staffAccountsList : [];
@@ -126,11 +295,14 @@ export function resolveAccountManagerInfo(
   }
 
   // 3. Check by Full Name (case-insensitive)
-  const staffByName = staff.find(s => (s.fullName || '').trim().toLowerCase() === cleanLower);
+  const staffByName = staff.find(s => {
+    const n = (s.fullName || '').trim().toLowerCase();
+    return n === cleanLower || (baseClean && n === baseClean);
+  });
   if (staffByName) {
     const linkedAcc = accounts.find(
       a => (a.staffId && a.staffId.toLowerCase() === staffByName.id.toLowerCase()) ||
-           (a.name && a.name.trim().toLowerCase() === cleanLower)
+           (a.name && (a.name.trim().toLowerCase() === cleanLower || (baseClean && a.name.trim().toLowerCase() === baseClean)))
     );
     return {
       displayName: staffByName.fullName,
@@ -140,11 +312,14 @@ export function resolveAccountManagerInfo(
     };
   }
 
-  const accByName = accounts.find(a => (a.name || '').trim().toLowerCase() === cleanLower);
+  const accByName = accounts.find(a => {
+    const n = (a.name || '').trim().toLowerCase();
+    return n === cleanLower || (baseClean && n === baseClean);
+  });
   if (accByName) {
     const linkedStaff = staff.find(
       s => (accByName.staffId && s.id.toLowerCase() === accByName.staffId.toLowerCase()) ||
-           (s.fullName && s.fullName.trim().toLowerCase() === cleanLower)
+           (s.fullName && (s.fullName.trim().toLowerCase() === cleanLower || (baseClean && s.fullName.trim().toLowerCase() === baseClean)))
     );
     return {
       displayName: accByName.name,
@@ -155,7 +330,10 @@ export function resolveAccountManagerInfo(
   }
 
   // 4. Check by Username (e.g. "regie", "admin")
-  const accByUsername = accounts.find(a => (a.username || '').trim().toLowerCase() === cleanLower);
+  const accByUsername = accounts.find(a => {
+    const u = (a.username || '').trim().toLowerCase();
+    return u === cleanLower || (baseClean && u === baseClean);
+  });
   if (accByUsername) {
     const linkedStaff = staff.find(
       s => (accByUsername.staffId && s.id.toLowerCase() === accByUsername.staffId.toLowerCase()) ||

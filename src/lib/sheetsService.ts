@@ -481,6 +481,8 @@ export const sheetsService = {
             status = isPortalOrder ? 'Pending Approval' : 'Pending';
           } else if (status === 'Pending Confirmation' || status === 'Pending Review') {
             status = 'Pending Approval';
+          } else if (status === 'To Ship / To Deliver / To Pickup') {
+            status = 'Shipped';
           }
 
           return {
@@ -1405,7 +1407,7 @@ export const sheetsService = {
           orderId: getProp(item, ['OrderID', 'orderId', 'Order ID']) ? String(getProp(item, ['OrderID', 'orderId', 'Order ID'])) : undefined,
           orderNumber: getProp(item, ['OrderNumber', 'orderNumber', 'Order Number']) ? String(getProp(item, ['OrderNumber', 'orderNumber', 'Order Number'])) : undefined,
           source: (getProp(item, ['Source', 'source']) || 'Manual') as any,
-          status: (getProp(item, ['Status', 'status']) || 'Pending') as any,
+          status: ((raw => String(raw).trim() === 'To Ship / To Deliver / To Pickup' ? 'Shipped' : raw)(getProp(item, ['Status', 'status']) || 'Pending')) as any,
           position: Number(getProp(item, ['Position', 'position']) || 0),
           values: parseObjectProp(getProp(item, ['ValuesJSON', 'values', 'Values', 'valuesJSON'])) || {},
           items: parseJobItems(getProp(item, ['ItemsJSON', 'items', 'Items'])),
@@ -3047,6 +3049,8 @@ export const sheetsService = {
             status = isPortalOrder ? 'Pending Approval' : 'Pending';
           } else if (status === 'Pending Confirmation' || status === 'Pending Review') {
             status = 'Pending Approval';
+          } else if (status === 'To Ship / To Deliver / To Pickup') {
+            status = 'Shipped';
           }
 
           return {
@@ -3188,7 +3192,7 @@ export const sheetsService = {
           orderId: getProp(item, ['OrderID', 'orderId', 'Order ID']) ? String(getProp(item, ['OrderID', 'orderId', 'Order ID'])) : undefined,
           orderNumber: getProp(item, ['OrderNumber', 'orderNumber', 'Order Number']) ? String(getProp(item, ['OrderNumber', 'orderNumber', 'Order Number'])) : undefined,
           source: (getProp(item, ['Source', 'source']) || 'Manual') as any,
-          status: (getProp(item, ['Status', 'status']) || 'Pending') as any,
+          status: ((raw => String(raw).trim() === 'To Ship / To Deliver / To Pickup' ? 'Shipped' : raw)(getProp(item, ['Status', 'status']) || 'Pending')) as any,
           position: Number(getProp(item, ['Position', 'position']) || 0),
           values: parseObjectProp(getProp(item, ['ValuesJSON', 'values', 'Values', 'valuesJSON'])) || {},
           items: parseJobItems(getProp(item, ['ItemsJSON', 'items', 'Items'])),

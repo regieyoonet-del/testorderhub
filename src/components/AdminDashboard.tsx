@@ -1451,7 +1451,7 @@ export default function AdminDashboard({
                     <option value="Pending">Pending (Admin)</option>
                     <option value="Approved">Approved</option>
                     <option value="In Production">In Production</option>
-                    <option value="Shipped">Shipped</option>
+                    <option value="Shipped">To Ship / To Deliver / To Pickup</option>
                     <option value="Completed">Completed</option>
                     <option value="Canceled">Canceled</option>
                   </select>
@@ -1467,7 +1467,7 @@ export default function AdminDashboard({
               { id: 'Pending', label: 'Pending (Admin)', bg: 'bg-neutral-50', text: 'text-gray-500', border: 'border-gray-200', badge: 'bg-gray-100 text-gray-700' },
               { id: 'Approved', label: 'Approved', bg: 'bg-purple-50/40', text: 'text-purple-700', border: 'border-purple-200', badge: 'bg-purple-100 text-purple-700' },
               { id: 'In Production', label: 'In Production', bg: 'bg-amber-50/40', text: 'text-amber-700', border: 'border-amber-200', badge: 'bg-amber-100 text-amber-700' },
-              { id: 'Shipped', label: 'Shipped', bg: 'bg-blue-50/40', text: 'text-blue-700', border: 'border-blue-200', badge: 'bg-blue-100 text-blue-700' },
+              { id: 'Shipped', label: 'To Ship / To Deliver / To Pickup', bg: 'bg-blue-50/40', text: 'text-blue-700', border: 'border-blue-200', badge: 'bg-blue-100 text-blue-700' },
               { id: 'Completed', label: 'Completed', bg: 'bg-green-50/40', text: 'text-green-700', border: 'border-green-200', badge: 'bg-green-100 text-green-700' },
               { id: 'Canceled', label: 'Canceled', bg: 'bg-red-50/40', text: 'text-red-700', border: 'border-red-200', badge: 'bg-red-100 text-red-700' }
             ].map((col) => {
@@ -1662,7 +1662,7 @@ export default function AdminDashboard({
                                     : `${st.color} border-gray-200`
                                 }`}
                                 id={`board-status-${ord.id}-${st.val.toLowerCase()}`}
-                                title={`Move to ${st.val}`}
+                                title={`Move to ${st.val === 'Shipped' ? 'To Ship / To Deliver / To Pickup' : st.val}`}
                               >
                                 {st.label}
                               </button>
@@ -2269,7 +2269,7 @@ export default function AdminDashboard({
                     selectedOrder.status === 'Approved' ? 'bg-purple-50 text-purple-700 border-purple-200' :
                     'bg-gray-50 text-gray-600 border-gray-200'
                   }`}>
-                    {selectedOrder.status}
+                    {selectedOrder.status === 'Shipped' ? 'To Ship / To Deliver / To Pickup' : selectedOrder.status}
                   </span>
                 </div>
                 <h3 className="text-xl font-extrabold uppercase tracking-tight text-black">
@@ -2585,7 +2585,7 @@ export default function AdminDashboard({
                     { label: 'Pending', val: 'Pending', color: 'bg-white hover:bg-neutral-100 text-gray-500' },
                     { label: 'Approved', val: 'Approved', color: 'bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200' },
                     { label: 'In Production', val: 'In Production', color: 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200' },
-                    { label: 'Shipped', val: 'Shipped', color: 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200' },
+                    { label: 'To Ship / To Deliver / To Pickup', val: 'Shipped', color: 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200' },
                     { label: 'Completed', val: 'Completed', color: 'bg-green-50 hover:bg-green-100 text-green-700 border-green-200' },
                     { label: 'Canceled', val: 'Canceled', color: 'bg-red-50 hover:bg-red-100 text-red-700 border-red-200' }
                   ].map((st) => (

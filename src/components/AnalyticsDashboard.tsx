@@ -1316,7 +1316,7 @@ export default function AnalyticsDashboard({
               Cash Inflow vs. Cash Outflow Settlement Matrix
             </h4>
             <p className="text-[10px] text-gray-500 font-mono">
-              Liquidity balance comparing realized collections (Completed Direct Orders &amp; Shipped Manual Jobs) against settled payables and disbursed payroll
+              Liquidity balance comparing realized collections (Completed Direct Orders &amp; To Ship / To Deliver / To Pickup Manual Jobs) against settled payables and disbursed payroll
             </p>
           </div>
 
@@ -1503,7 +1503,7 @@ export default function AnalyticsDashboard({
               >
                 <option value="all">All Statuses</option>
                 <option value="completed">Completed</option>
-                <option value="shipped">Shipped</option>
+                <option value="shipped">To Ship / To Deliver / To Pickup</option>
                 <option value="in production">In Production</option>
                 <option value="approved">Approved</option>
                 <option value="pending">Pending</option>
@@ -1595,7 +1595,7 @@ export default function AnalyticsDashboard({
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold ${
                             rec.status.toLowerCase().includes('completed') || rec.status.toLowerCase().includes('delivered')
                               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : rec.status.toLowerCase().includes('shipped')
+                              : rec.status.toLowerCase().includes('shipped') || rec.status.toLowerCase().includes('to ship')
                               ? 'bg-blue-50 text-blue-700 border border-blue-200'
                               : rec.status.toLowerCase().includes('production')
                               ? 'bg-amber-50 text-amber-700 border border-amber-200'
@@ -1603,7 +1603,7 @@ export default function AnalyticsDashboard({
                               ? 'bg-purple-50 text-purple-700 border border-purple-200'
                               : 'bg-gray-100 text-gray-700 border border-gray-200'
                           }`}>
-                            {rec.status}
+                            {rec.status === 'Shipped' ? 'To Ship / To Deliver / To Pickup' : rec.status}
                           </span>
                         </td>
 

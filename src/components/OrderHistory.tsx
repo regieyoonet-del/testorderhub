@@ -167,7 +167,7 @@ export default function OrderHistory({
       case 'Shipped':
         return (
           <span className={`${commonStyle} bg-black text-white border-black`}>
-            <Truck className="w-3 h-3 text-white" /> Shipped
+            <Truck className="w-3 h-3 text-white" /> To Ship / To Deliver / To Pickup
           </span>
         );
       case 'Completed':

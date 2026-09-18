@@ -61,8 +61,8 @@ function getThemeForName(name?: string) {
 
 /**
  * Reusable User Avatar Component
- * Displays circular staff/admin profile picture with automatic initials fallback
- * and error handling (never renders broken image icons).
+ * Displays circular staff/admin profile picture from a standard image URL.
+ * Falls back to initials if no URL is provided or if the image fails to load.
  */
 export default function UserAvatar({
   name = '',
@@ -73,20 +73,45 @@ export default function UserAvatar({
   title
 }: UserAvatarProps) {
   const [imageFailed, setImageFailed] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
-  const cleanUrl = useMemo(() => cleanProfilePictureUrl(profilePictureUrl) || '', [profilePictureUrl]);
+  const cleanUrl = useMemo(() => {
+    return cleanProfilePictureUrl(profilePictureUrl) || '';
+  }, [profilePictureUrl]);
 
-  // Reset error state if the cleaned URL changes
+  // Reset error and load state whenever cleanUrl changes
   useEffect(() => {
     setImageFailed(false);
+    setHasLoaded(false);
   }, [cleanUrl]);
 
-  const hasValidUrl = Boolean(cleanUrl && !imageFailed);
+  const shouldAttemptImage = Boolean(cleanUrl && !imageFailed);
   const initials = getInitials(name);
   const theme = getThemeForName(name);
 
   // Calculate proportional font size (approx 36-38% of container diameter, min 9px)
   const fontSize = Math.max(9, Math.round(size * 0.38));
+
+  const handleImageError = () => {
+    console.warn(`[UserAvatar] Profile image failed to load for "${name || 'user'}"`, {
+      name,
+      account: title || name,
+      failedUrl: cleanUrl
+    });
+    setImageFailed(true);
+  };
+
+  const handleImageLoad = () => {
+    setHasLoaded(true);
+  };
+
+  const status = imageFailed
+    ? 'failed'
+    : hasLoaded
+    ? 'loaded'
+    : shouldAttemptImage
+    ? 'loading'
+    : 'no-url';
 
   return (
     <div
@@ -99,18 +124,37 @@ export default function UserAvatar({
       className={`relative inline-flex items-center justify-center rounded-full overflow-hidden shrink-0 select-none ${
         showBorder ? 'border' : ''
       } ${
-        hasValidUrl ? 'border-gray-200 bg-gray-50' : theme.bg
+        shouldAttemptImage ? 'border-gray-200 bg-gray-50' : theme.bg
       } ${className}`}
       title={title || name || 'User Avatar'}
+      data-avatar-name={name}
+      data-avatar-status={status}
+      data-avatar-src={cleanUrl || undefined}
     >
-      {hasValidUrl ? (
-        <img
-          src={cleanUrl}
-          alt={name ? `${name}'s profile avatar` : 'Profile avatar'}
-          onError={() => setImageFailed(true)}
-          className="w-full h-full object-cover rounded-full"
-          referrerPolicy="no-referrer"
-        />
+      {shouldAttemptImage ? (
+        <>
+          {/* Subtle initials placeholder while loading or as underlay */}
+          {!hasLoaded && (
+            <span
+              style={{ fontSize: `${fontSize}px` }}
+              className="absolute inset-0 flex items-center justify-center font-mono font-bold tracking-tight leading-none uppercase text-gray-400 select-none pointer-events-none"
+            >
+              {initials}
+            </span>
+          )}
+          <img
+            key={cleanUrl}
+            src={cleanUrl}
+            alt={name ? `${name}'s profile avatar` : 'Profile avatar'}
+            onLoad={handleImageLoad}
+            onError={handleImageError}
+            className={`w-full h-full object-cover rounded-full transition-opacity duration-150 ${
+              hasLoaded ? 'opacity-100' : 'opacity-0'
+            }`}
+            loading="lazy"
+            decoding="async"
+          />
+        </>
       ) : (
         <span
           style={{ fontSize: `${fontSize}px` }}

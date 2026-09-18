@@ -37,6 +37,7 @@ import {
 import JobManagementBoard from './JobManagementBoard';
 import AdminProductCatalog from './AdminProductCatalog';
 import UserAvatar from './UserAvatar';
+import { cleanProfilePictureUrl } from '../utils/staffAvatarUtils';
 import {
   Clock,
   Calendar,
@@ -485,6 +486,21 @@ export default function StaffDashboard({
   const [profilePictureUrl, setProfilePictureUrl] = useState(
     staffAccount?.profilePictureUrl || staffAccount?.avatarUrl || staffMember?.profilePictureUrl || staffMember?.avatarUrl || currentUser.profilePictureUrl || ''
   );
+
+  // Sync state if props arrive asynchronously or via sync
+  useEffect(() => {
+    const currentPic =
+      staffAccount?.profilePictureUrl ||
+      staffAccount?.avatarUrl ||
+      staffMember?.profilePictureUrl ||
+      staffMember?.avatarUrl ||
+      currentUser.profilePictureUrl ||
+      '';
+    if (currentPic && !profilePictureUrl) {
+      setProfilePictureUrl(currentPic);
+    }
+  }, [staffAccount, staffMember, currentUser]);
+
   const [profileSaveSuccess, setProfileSaveSuccess] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [showPasscodeToggle, setShowPasscodeToggle] = useState(false);
@@ -499,7 +515,7 @@ export default function StaffDashboard({
       return;
     }
 
-    const cleanPic = profilePictureUrl.trim() || undefined;
+    const cleanPic = cleanProfilePictureUrl(profilePictureUrl) || (profilePictureUrl.trim() ? profilePictureUrl.trim() : undefined);
 
     if (staffAccount && onUpdateStaffAccount) {
       const updatedAccount: StaffAccount = {
@@ -581,7 +597,8 @@ export default function StaffDashboard({
                     staffMember?.avatarUrl ||
                     staffAccount?.profilePictureUrl ||
                     staffAccount?.avatarUrl ||
-                    currentUser.profilePictureUrl
+                    currentUser.profilePictureUrl ||
+                    profilePictureUrl
                   }
                   size={64}
                   className="rounded-2xl shrink-0"
@@ -843,7 +860,7 @@ export default function StaffDashboard({
                             ? 'bg-blue-100 text-blue-800 border border-blue-200'
                             : 'bg-gray-100 text-gray-800 border border-gray-200'
                         }`}>
-                          {j.status}
+                          {j.status === 'Shipped' ? 'To Ship / To Deliver / To Pickup' : j.status}
                         </span>
                         {onUpdateJobStatus && (
                           <button
@@ -902,7 +919,7 @@ export default function StaffDashboard({
                   <option value="Pending">Pending</option>
                   <option value="Approved">Approved</option>
                   <option value="In Production">In Production</option>
-                  <option value="Shipped">Shipped</option>
+                  <option value="Shipped">To Ship / To Deliver / To Pickup</option>
                   <option value="Completed">Completed</option>
                   <option value="Canceled">Canceled</option>
                 </select>

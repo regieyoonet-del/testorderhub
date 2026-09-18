@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
-import { Job, JobComment, AuthUser, JobActivity } from '../types';
+import React, { useState, useMemo } from 'react';
+import { Job, JobComment, AuthUser, JobActivity, StaffMember, StaffAccount } from '../types';
 import {
   MessageSquare,
   Send,
@@ -18,12 +18,17 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { sheetsService } from '../lib/sheetsService';
+import UserAvatar from './UserAvatar';
+import { resolveCommentAuthor, getCleanCommenterName } from '../utils/staffAvatarUtils';
+import { renderCommentWithLinks } from '../utils/linkUtils';
 
 interface JobCommentsSectionProps {
   job: Job;
   currentUser?: AuthUser;
   appsScriptUrl?: string;
   onSaveJob: (job: Job, immediate?: boolean) => void;
+  staff?: StaffMember[];
+  staffAccounts?: StaffAccount[];
   className?: string;
 }
 
@@ -50,29 +55,39 @@ function formatTimeAgo(dateStr: string): string {
   }
 }
 
-/**
- * UI-only helper to display strictly the person's name in the comment header.
- * Strips out any role, position, or title like (ADMIN), (STAFF), etc.
- */
-function getCleanCommenterName(userName?: string): string {
-  if (!userName) return 'Team Member';
-  // Strip out parenthesized positions/roles such as (ADMIN), (STAFF), (admin), (staff), etc.
-  let cleaned = userName.replace(/\s*\([^)]*\)/g, '').trim();
-  // Strip out trailing position/role indicators such as " - Admin", " - Staff", "/ Admin", etc.
-  cleaned = cleaned.replace(/\s*[-–—/|:]\s*(admin|staff|manager|supervisor|operator|client|employee).*$/i, '').trim();
-  return cleaned || userName.trim();
-}
-
 export default function JobCommentsSection({
   job,
   currentUser,
   appsScriptUrl,
   onSaveJob,
+  staff: propsStaff,
+  staffAccounts: propsStaffAccounts,
   className = ''
 }: JobCommentsSectionProps) {
   const [commentInput, setCommentInput] = useState('');
   const [copiedCommentId, setCopiedCommentId] = useState<string | null>(null);
   const [isPosting, setIsPosting] = useState(false);
+
+  // Fallback to cached staff and accounts if props are not provided
+  const staff = useMemo(() => {
+    if (propsStaff && propsStaff.length > 0) return propsStaff;
+    try {
+      const cached = localStorage.getItem('rp_staff');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  }, [propsStaff]);
+
+  const staffAccounts = useMemo(() => {
+    if (propsStaffAccounts && propsStaffAccounts.length > 0) return propsStaffAccounts;
+    try {
+      const cached = localStorage.getItem('rp_staff_accounts');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  }, [propsStaffAccounts]);
 
   const comments = job.comments || [];
 
@@ -88,6 +103,16 @@ export default function JobCommentsSection({
     currentUser?.id ||
     currentUser?.role ||
     'usr-current';
+
+  // Synchronously resolve current logged-in user profile picture
+  const currentUserAuthorInfo = useMemo(() => {
+    return resolveCommentAuthor(
+      { userId: currentUserId, userName: currentAuthorName },
+      staff,
+      staffAccounts,
+      currentUser
+    );
+  }, [currentUserId, currentAuthorName, staff, staffAccounts, currentUser]);
 
   const handlePostComment = async (textToPost?: string) => {
     const text = (textToPost || commentInput).trim();
@@ -212,15 +237,13 @@ export default function JobCommentsSection({
       <div className="bg-gray-50/80 border border-gray-200 rounded-2xl p-3 sm:p-4 focus-within:border-black focus-within:bg-white transition-all shadow-2xs space-y-3">
         <div className="flex items-start space-x-3">
           {/* User Avatar */}
-          <div
-            className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 select-none ${
-              currentRole === 'admin'
-                ? 'bg-neutral-900 text-white shadow-xs'
-                : 'bg-emerald-700 text-white shadow-xs'
-            }`}
-          >
-            {currentAuthorName.charAt(0).toUpperCase()}
-          </div>
+          <UserAvatar
+            name={currentUserAuthorInfo.displayName || currentAuthorName}
+            profilePictureUrl={currentUserAuthorInfo.profilePictureUrl}
+            size={32}
+            className="shrink-0 mt-0.5 shadow-2xs"
+            title={`Posting as ${currentUserAuthorInfo.displayName || currentAuthorName}`}
+          />
 
           {/* Text Area */}
           <div className="flex-1 min-w-0">
@@ -282,17 +305,14 @@ export default function JobCommentsSection({
         ) : (
           <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
             {comments.map((cmt, idx) => {
-              const displayName = getCleanCommenterName(cmt.userName);
+              const resolvedAuthor = resolveCommentAuthor(cmt, staff, staffAccounts, currentUser);
+              const displayName = resolvedAuthor.displayName || getCleanCommenterName(cmt.userName);
               const isCurrentUser =
+                Boolean(resolvedAuthor.isCurrentUser) ||
                 cmt.userId === currentUserId ||
                 displayName.toLowerCase() === currentAuthorName.toLowerCase() ||
                 cmt.userName.toLowerCase().startsWith(currentAuthorName.toLowerCase());
               const canDelete = isCurrentUser || currentRole === 'admin';
-
-              const isStaff =
-                cmt.userName.toLowerCase().includes('staff') ||
-                cmt.userId?.toLowerCase().includes('staff') ||
-                (!cmt.userName.toLowerCase().includes('admin') && !cmt.userId?.toLowerCase().includes('admin'));
 
               return (
                 <div
@@ -303,13 +323,13 @@ export default function JobCommentsSection({
                   {/* Top row: Avatar + Name (only person's name) + Time + Actions */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center space-x-2.5 min-w-0">
-                      <div
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-[11px] text-white shrink-0 shadow-2xs ${
-                          isStaff ? 'bg-emerald-700' : 'bg-neutral-900'
-                        }`}
-                      >
-                        {(displayName || cmt.userName).charAt(0).toUpperCase()}
-                      </div>
+                      <UserAvatar
+                        name={displayName}
+                        profilePictureUrl={resolvedAuthor.profilePictureUrl}
+                        size={28}
+                        className="shrink-0 shadow-2xs"
+                        title={displayName}
+                      />
                       <div className="min-w-0">
                         <span className="font-mono text-xs font-bold text-gray-900 truncate block">
                           {displayName}
@@ -353,7 +373,7 @@ export default function JobCommentsSection({
 
                   {/* Comment Body */}
                   <div className="pl-9 text-xs text-gray-800 font-sans leading-relaxed whitespace-pre-wrap break-words">
-                    {cmt.comment}
+                    {renderCommentWithLinks(cmt.comment)}
                   </div>
                 </div>
               );

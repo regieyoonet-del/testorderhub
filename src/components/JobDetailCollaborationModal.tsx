@@ -32,7 +32,8 @@ import {
 } from 'lucide-react';
 import JobCommentsSection from './JobCommentsSection';
 import UserAvatar from './UserAvatar';
-import { resolveAccountManagerInfo } from '../utils/staffAvatarUtils';
+import { resolveAccountManagerInfo, resolveCommentAuthor } from '../utils/staffAvatarUtils';
+import { formatStatusLabel } from '../utils/statusUtils';
 
 interface JobDetailCollaborationModalProps {
   job: Job | null;
@@ -162,7 +163,9 @@ export default function JobDetailCollaborationModal({
               }`}
             >
               {(['Pending', 'Approved', 'In Production', 'Shipped', 'Completed', 'Canceled'] as JobStatus[]).map(st => (
-                <option key={st} value={st} className="bg-neutral-900 text-white">{st}</option>
+                <option key={st} value={st} className="bg-neutral-900 text-white">
+                  {formatStatusLabel(st)}
+                </option>
               ))}
             </select>
 
@@ -246,6 +249,8 @@ export default function JobDetailCollaborationModal({
               currentUser={currentUser}
               appsScriptUrl={appsScriptUrl}
               onSaveJob={onSaveJob}
+              staff={staff}
+              staffAccounts={staffAccounts}
             />
           )}
 
@@ -427,18 +432,33 @@ export default function JobDetailCollaborationModal({
             <div className="space-y-3">
               {(job.activities && job.activities.length > 0) ? (
                 <div className="space-y-2 font-mono text-xs">
-                  {job.activities.map((act, idx) => (
-                    <div key={act.id || idx} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-start space-x-3">
-                      <Clock className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between text-[10px] text-gray-400 mb-0.5">
-                          <span className="font-bold text-gray-800">{act.user}</span>
-                          <span>{new Date(act.timestamp).toLocaleString()}</span>
+                  {job.activities.map((act, idx) => {
+                    const resolvedActor = resolveCommentAuthor(
+                      { userName: act.user },
+                      staff,
+                      staffAccounts,
+                      currentUser
+                    );
+                    const actorName = resolvedActor.displayName || act.user;
+                    return (
+                      <div key={act.id || idx} className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-start space-x-3">
+                        <UserAvatar
+                          name={actorName}
+                          profilePictureUrl={resolvedActor.profilePictureUrl}
+                          size={24}
+                          className="mt-0.5 shrink-0 shadow-2xs"
+                          title={actorName}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between text-[10px] text-gray-400 mb-0.5">
+                            <span className="font-bold text-gray-800">{actorName}</span>
+                            <span>{new Date(act.timestamp).toLocaleString()}</span>
+                          </div>
+                          <p className="text-gray-900 font-medium">{act.action}</p>
                         </div>
-                        <p className="text-gray-900 font-medium">{act.action}</p>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="font-mono text-xs text-gray-400 text-center py-8">No logged activity yet.</p>

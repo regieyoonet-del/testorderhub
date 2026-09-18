@@ -1065,7 +1065,7 @@ export default function OrderPortals({
                     <option value="Pending Approval">Pending Approval</option>
                     <option value="Approved">Approved</option>
                     <option value="In Production">In Production</option>
-                    <option value="Shipped">Shipped</option>
+                    <option value="Shipped">To Ship / To Deliver / To Pickup</option>
                     <option value="Completed">Completed</option>
                     <option value="Canceled">Canceled</option>
                   </select>
@@ -1305,7 +1305,7 @@ export default function OrderPortals({
                               : 'bg-gray-100 text-gray-900 border border-gray-300'
                           }`}>
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>{ord.status}</span>
+                            <span>{ord.status === 'Shipped' ? 'To Ship / To Deliver / To Pickup' : ord.status}</span>
                           </span>
 
                           {(onUpdateOrderStatus || onUpdateOrders) && (
@@ -1332,7 +1332,7 @@ export default function OrderPortals({
                               <option value="Pending Approval">Pending Approval</option>
                               <option value="Approved">Approved</option>
                               <option value="In Production">In Production</option>
-                              <option value="Shipped">Shipped</option>
+                              <option value="Shipped">To Ship / To Deliver / To Pickup</option>
                               <option value="Completed">Completed</option>
                               <option value="Canceled">Canceled</option>
                             </select>
@@ -1598,7 +1598,7 @@ export default function OrderPortals({
 
                           <div className="flex items-center gap-2">
                             <span className="bg-gray-100 border border-gray-200 text-black text-xs font-mono font-bold px-3 py-1 rounded-full uppercase">
-                              Status: {ord.status}
+                              Status: {ord.status === 'Shipped' ? 'To Ship / To Deliver / To Pickup' : ord.status}
                             </span>
                           </div>
                         </div>

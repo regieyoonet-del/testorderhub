@@ -28,6 +28,7 @@ import {
   calculateJobTotals,
   generateJobId
 } from '../data/initialJobs';
+import { formatStatusLabel } from '../utils/statusUtils';
 import {
   Search,
   Plus,
@@ -63,7 +64,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import JobCommentsSection from './JobCommentsSection';
 import JobDetailCollaborationModal from './JobDetailCollaborationModal';
 import UserAvatar from './UserAvatar';
-import { resolveAccountManagerInfo } from '../utils/staffAvatarUtils';
+import { resolveAccountManagerInfo, resolveCommentAuthor } from '../utils/staffAvatarUtils';
 
 interface JobManagementBoardProps {
   jobs: Job[];
@@ -112,7 +113,7 @@ const STATUS_CONFIG: Record<JobStatus, { label: string; color: string; bg: strin
     textColor: 'text-amber-700'
   },
   'Shipped': {
-    label: 'Shipped',
+    label: 'To Ship / To Deliver / To Pickup',
     color: 'bg-blue-500',
     bg: 'bg-blue-50/30',
     border: 'border-blue-200',
@@ -145,6 +146,11 @@ const ALL_STATUSES: JobStatus[] = [
   'Completed',
   'Canceled'
 ];
+
+export const getJobStatusDisplay = (st: JobStatus | string | undefined | null): string => {
+  if (!st) return '';
+  return STATUS_CONFIG[st as JobStatus]?.label || formatStatusLabel(st);
+};
 
 interface InlineCellInputProps {
   value: string | undefined | null;
@@ -1475,7 +1481,7 @@ export default function JobManagementBoard({
                     >
                       <option value="all">All Statuses</option>
                       {ALL_STATUSES.map(st => (
-                        <option key={st} value={st}>{st}</option>
+                        <option key={st} value={st}>{getJobStatusDisplay(st)}</option>
                       ))}
                     </select>
                   </div>
@@ -1679,7 +1685,7 @@ export default function JobManagementBoard({
                   </div>
                   <div className={`w-3 h-3 rounded-full ${config.color}`} />
                   <span className="font-sans text-xs font-black uppercase tracking-wider text-black">
-                    {status}
+                    {getJobStatusDisplay(status)}
                   </span>
                   <span className="font-mono text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-white border border-gray-200 text-gray-700 shadow-2xs">
                     {groupJobs.length}
@@ -1696,7 +1702,7 @@ export default function JobManagementBoard({
                 <div className="overflow-x-auto">
                   {groupJobs.length === 0 ? (
                     <div className="p-8 text-center font-mono text-xs text-gray-400 bg-gray-50/50">
-                      No jobs currently in <strong className="text-black font-extrabold">{status}</strong>. Drag jobs here or create a new job.
+                      No jobs currently in <strong className="text-black font-extrabold">{getJobStatusDisplay(status)}</strong>. Drag jobs here or create a new job.
                     </div>
                   ) : (
                     <table className="w-full text-left border-collapse text-xs min-w-[900px]">
@@ -1922,7 +1928,7 @@ export default function JobManagementBoard({
                                     }`}
                                   >
                                     {ALL_STATUSES.map(st => (
-                                      <option key={st} value={st}>{st}</option>
+                                      <option key={st} value={st}>{getJobStatusDisplay(st)}</option>
                                     ))}
                                   </select>
                                 </td>
@@ -2407,6 +2413,8 @@ export default function JobManagementBoard({
                                           currentUser={currentUser}
                                           appsScriptUrl={appsScriptUrl}
                                           onSaveJob={onSaveJob}
+                                          staff={staff}
+                                          staffAccounts={staffAccounts}
                                         />
                                       )}
 
@@ -2419,7 +2427,7 @@ export default function JobManagementBoard({
                                               <div><span className="text-gray-400">Job ID:</span> <strong className="text-black">{job.id}</strong></div>
                                               <div><span className="text-gray-400">Company:</span> <strong className="text-black">{job.companyName}</strong></div>
                                               <div><span className="text-gray-400">Source:</span> <strong className="text-black">{job.source}</strong></div>
-                                              <div><span className="text-gray-400">Status:</span> <strong className="text-black">{job.status}</strong></div>
+                                              <div><span className="text-gray-400">Status:</span> <strong className="text-black">{getJobStatusDisplay(job.status)}</strong></div>
                                               <div><span className="text-gray-400">Created:</span> <strong className="text-black">{new Date(job.createdAt).toLocaleString()}</strong></div>
                                               {job.orderId && (
                                                 <div><span className="text-gray-400">Linked Order ID:</span> <strong className="text-blue-600">{job.orderNumber || job.orderId}</strong></div>
@@ -2446,23 +2454,38 @@ export default function JobManagementBoard({
                                         <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
                                           {(job.activities && job.activities.length > 0) ? (
                                             <div className="space-y-1.5 font-mono text-[11px]">
-                                              {job.activities.map(act => (
-                                                <div key={act.id} className="flex items-start space-x-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                                                  <Clock className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
-                                                  <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center justify-between text-[10px] text-gray-400">
-                                                      <span className="font-bold text-gray-700">{act.user}</span>
-                                                      <span>{new Date(act.timestamp).toLocaleString()}</span>
+                                              {job.activities.map(act => {
+                                                const resolvedActor = resolveCommentAuthor(
+                                                  { userName: act.user },
+                                                  staff,
+                                                  staffAccounts,
+                                                  currentUser
+                                                );
+                                                const actorName = resolvedActor.displayName || act.user;
+                                                return (
+                                                  <div key={act.id} className="flex items-start space-x-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                                    <UserAvatar
+                                                      name={actorName}
+                                                      profilePictureUrl={resolvedActor.profilePictureUrl}
+                                                      size={22}
+                                                      className="mt-0.5 shrink-0 shadow-2xs"
+                                                      title={actorName}
+                                                    />
+                                                    <div className="flex-1 min-w-0">
+                                                      <div className="flex items-center justify-between text-[10px] text-gray-400">
+                                                        <span className="font-bold text-gray-700">{actorName}</span>
+                                                        <span>{new Date(act.timestamp).toLocaleString()}</span>
+                                                      </div>
+                                                      <p className="text-black font-medium">{act.action}</p>
+                                                      {(act.oldValue || act.newValue) && (
+                                                        <p className="text-[10px] text-gray-500">
+                                                          {act.oldValue ? `"${getJobStatusDisplay(act.oldValue)}" → ` : ""}"${getJobStatusDisplay(act.newValue)}"
+                                                        </p>
+                                                      )}
                                                     </div>
-                                                    <p className="text-black font-medium">{act.action}</p>
-                                                    {(act.oldValue || act.newValue) && (
-                                                      <p className="text-[10px] text-gray-500">
-                                                        {act.oldValue ? `"${act.oldValue}" → ` : ''}"{act.newValue}"
-                                                      </p>
-                                                    )}
                                                   </div>
-                                                </div>
-                                              ))}
+                                                );
+                                              })}
                                             </div>
                                           ) : (
                                             <p className="font-mono text-xs text-gray-400 text-center py-4">No logged activity yet.</p>
@@ -2606,7 +2629,7 @@ export default function JobManagementBoard({
                       className="w-full bg-gray-50 border border-gray-200 focus:border-black rounded-xl p-2.5 text-xs text-black font-semibold focus:outline-none font-mono"
                     >
                       {ALL_STATUSES.map(st => (
-                        <option key={st} value={st}>{st}</option>
+                        <option key={st} value={st}>{getJobStatusDisplay(st)}</option>
                       ))}
                     </select>
                   </div>
@@ -2977,7 +3000,7 @@ export default function JobManagementBoard({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Status:</span>
-                  <span className="font-bold text-black">{jobToDelete.status}</span>
+                  <span className="font-bold text-black">{getJobStatusDisplay(jobToDelete.status)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Sub-Items:</span>

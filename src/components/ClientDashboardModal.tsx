@@ -975,7 +975,7 @@ export default function ClientDashboardModal({
                                 ord.status === 'In Production' ? 'bg-amber-50 text-amber-700 border-amber-100' :
                                 'bg-gray-50 text-gray-500 border-gray-100'
                               }`}>
-                                {ord.status}
+                                {ord.status === 'Shipped' ? 'To Ship / To Deliver / To Pickup' : ord.status}
                               </span>
                             </div>
                             <span className="text-[10px] text-gray-400 block font-mono mt-0.5">
@@ -2701,7 +2701,11 @@ export default function ClientDashboardModal({
                                   ord.status === 'Approved' ? 'bg-purple-50 text-purple-700 border-purple-100' :
                                   'bg-gray-50 text-gray-500 border-gray-100'
                                 }`}>
-                                  {ord.status === 'Pending Approval' ? '⏳ Pending Review' : ord.status}
+                                  {ord.status === 'Pending Approval'
+                                    ? '⏳ Pending Review'
+                                    : ord.status === 'Shipped'
+                                    ? 'To Ship / To Deliver / To Pickup'
+                                    : ord.status}
                                 </span>
                               </div>
                               <span className="text-[10px] text-gray-500 block font-mono mt-0.5">
