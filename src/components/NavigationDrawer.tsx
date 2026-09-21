@@ -18,7 +18,8 @@ import {
   Briefcase,
   Package,
   Clock,
-  User
+  User,
+  MessageSquare
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -40,6 +41,7 @@ interface NavigationDrawerProps {
     jobs?: number;
     orders?: number;
     payslips?: number;
+    chat?: number;
   };
   onLogout?: () => void;
   currentStaffName?: string;
@@ -76,6 +78,12 @@ export default function NavigationDrawer({
             label: 'Admin Dashboard',
             icon: Sliders,
             count: null
+          },
+          {
+            id: 'chat',
+            label: 'Messages & Chat',
+            icon: MessageSquare,
+            count: counts.chat !== undefined ? counts.chat : null
           }
         ]
       : userRole === 'staff'
@@ -85,6 +93,12 @@ export default function NavigationDrawer({
             label: 'Dashboard',
             icon: LayoutGrid,
             count: null
+          },
+          {
+            id: 'chat',
+            label: 'Messages & Chat',
+            icon: MessageSquare,
+            count: counts.chat !== undefined ? counts.chat : null
           },
           {
             id: 'jobs',
@@ -135,6 +149,12 @@ export default function NavigationDrawer({
             label: 'ARH Products',
             icon: Layers,
             count: counts.browse !== undefined ? counts.browse : null
+          },
+          {
+            id: 'chat',
+            label: 'Support Chat',
+            icon: MessageSquare,
+            count: counts.chat !== undefined ? counts.chat : null
           },
           {
             id: 'portals',

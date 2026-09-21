@@ -10,7 +10,8 @@ import { PWAInstallButton } from './PWAInstallButton';
 import {
   ShoppingCart,
   Repeat,
-  Menu
+  Menu,
+  MessageSquare
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -34,6 +35,8 @@ interface HeaderProps {
   onSelectNotification?: (notif: AppNotification) => void;
   onMobileNavToggle?: () => void;
   currentStaffName?: string;
+  unreadChatCount?: number;
+  onChatToggle?: () => void;
 }
 
 export default function Header({
@@ -56,7 +59,9 @@ export default function Header({
   onClearNotifications,
   onSelectNotification,
   onMobileNavToggle,
-  currentStaffName
+  currentStaffName,
+  unreadChatCount = 0,
+  onChatToggle
 }: HeaderProps) {
   return (
     <header className="bg-white border-b-2 border-black sticky top-0 z-40">
@@ -169,6 +174,29 @@ export default function Header({
             onClearAll={onClearNotifications || (() => {})}
             onSelectNotification={onSelectNotification}
           />
+
+          {/* Chat Quick Access Button */}
+          {onChatToggle && (
+            <button
+              type="button"
+              onClick={onChatToggle}
+              className={`relative border border-black p-2.5 transition-all cursor-pointer flex items-center justify-center shrink-0 rounded-xl ${
+                activeTab === 'chat'
+                  ? 'bg-black text-white'
+                  : 'bg-white text-black hover:bg-black hover:text-white'
+              }`}
+              aria-label="Messages & Chat"
+              id="header-chat-toggle-btn"
+              title="Messages & Chat"
+            >
+              <MessageSquare className="w-5 h-5" />
+              {unreadChatCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white text-[9px] font-mono border border-white font-extrabold w-5 h-5 flex items-center justify-center rounded-full shadow-md animate-pulse">
+                  {unreadChatCount > 99 ? '99+' : unreadChatCount}
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Client Only: Shopping Cart */}
           {userRole === 'client' && (

@@ -21,8 +21,11 @@ import {
   AuthUser,
   CatalogProduct,
   QuoteEnquiry,
-  Product
+  Product,
+  ChatConversation,
+  ChatMessage
 } from '../types';
+import ChatView from './chat/ChatView';
 import { generateAttendanceId } from '../data/initialFinance';
 import {
   formatLocalDate,
@@ -76,7 +79,8 @@ import {
   CheckCircle,
   Clock3,
   AlertTriangle,
-  FileSpreadsheet
+  FileSpreadsheet,
+  MessageSquare
 } from 'lucide-react';
 
 export type StaffPortalTab =
@@ -86,7 +90,8 @@ export type StaffPortalTab =
   | 'attendance'
   | 'payslips'
   | 'work-history'
-  | 'profile';
+  | 'profile'
+  | 'chat';
 
 interface StaffDashboardProps {
   currentUser: AuthUser;
@@ -127,6 +132,14 @@ interface StaffDashboardProps {
   activeTab?: string;
   onTabChange?: (tab: string) => void;
   appsScriptUrl?: string;
+  chatConversations?: ChatConversation[];
+  chatMessages?: ChatMessage[];
+  onSendMessage?: (conversationId: string, text: string) => void;
+  onToggleReaction?: (messageId: string, emoji: string) => void;
+  onDeleteChatMessage?: (messageId: string) => void;
+  onCreateChatConversation?: (newConv: ChatConversation) => void;
+  onMarkChatRead?: (conversationId: string) => void;
+  unreadChatCount?: number;
 }
 
 export default function StaffDashboard({
@@ -167,14 +180,22 @@ export default function StaffDashboard({
   isSyncingSheets = false,
   activeTab: controlledActiveTab,
   onTabChange,
-  appsScriptUrl
+  appsScriptUrl,
+  chatConversations = [],
+  chatMessages = [],
+  onSendMessage,
+  onToggleReaction,
+  onDeleteChatMessage,
+  onCreateChatConversation,
+  onMarkChatRead,
+  unreadChatCount = 0
 }: StaffDashboardProps) {
-  // Navigation tabs for Staff Portal (Dashboard, Job Management, ARH Products, Time & Attendance, Payslips, Work History, Account Settings)
+  // Navigation tabs for Staff Portal (Dashboard, Job Management, ARH Products, Time & Attendance, Payslips, Work History, Account Settings, Messages & Chat)
   const [internalTab, setInternalTab] = useState<StaffPortalTab>('dashboard');
   
   const currentTab: StaffPortalTab = useMemo(() => {
     if (controlledActiveTab) {
-      const validTabs: StaffPortalTab[] = ['dashboard', 'jobs', 'catalog', 'attendance', 'payslips', 'work-history', 'profile'];
+      const validTabs: StaffPortalTab[] = ['dashboard', 'jobs', 'catalog', 'attendance', 'payslips', 'work-history', 'profile', 'chat'];
       if (validTabs.includes(controlledActiveTab as StaffPortalTab)) {
         return controlledActiveTab as StaffPortalTab;
       }
@@ -1596,6 +1617,27 @@ export default function StaffDashboard({
               </form>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 8: MESSAGES & CHAT */}
+      {/* ========================================================================= */}
+      {currentTab === 'chat' && (
+        <div className="bg-white border-2 border-black rounded-[28px] p-4 sm:p-6 shadow-xs animate-fade-in">
+          <ChatView
+            currentUser={currentUser}
+            conversations={chatConversations}
+            messages={chatMessages}
+            staffMembers={staff}
+            staffAccounts={staffAccounts}
+            companies={companies}
+            onSendMessage={onSendMessage || (() => {})}
+            onToggleReaction={onToggleReaction || (() => {})}
+            onDeleteMessage={onDeleteChatMessage || (() => {})}
+            onCreateConversation={onCreateChatConversation || (() => {})}
+            onMarkRead={onMarkChatRead || (() => {})}
+          />
         </div>
       )}
 

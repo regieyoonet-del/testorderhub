@@ -628,3 +628,50 @@ export interface SalesGoalRecord {
   updatedBy?: string;
 }
 
+// ----------------------------------------------------
+// CHAT & MESSAGING DATA MODELS
+// ----------------------------------------------------
+export type ChatConversationType = 'direct' | 'group' | 'client_admin';
+
+export interface ChatParticipant {
+  id: string; // 'admin', staffId (e.g. 'STF-101'), or companyId (e.g. 'co-1')
+  name: string;
+  role: 'admin' | 'staff' | 'client';
+  avatarUrl?: string;
+  email?: string;
+  department?: string;
+}
+
+export interface ChatConversation {
+  id: string; // e.g. 'conv-direct-...', 'conv-group-...', 'conv-client-...'
+  type: ChatConversationType;
+  title: string; // group title or client company name or direct user name
+  participantIds: string[]; // user IDs included in this chat
+  companyId?: string; // set for client_admin conversations
+  lastMessageText?: string;
+  lastMessageTimestamp?: string;
+  lastMessageSenderId?: string;
+  lastMessageSenderName?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatMessage {
+  id: string; // e.g. 'msg-...'
+  conversationId: string;
+  senderId: string; // 'admin', staffId, or companyId
+  senderName: string;
+  senderRole: 'admin' | 'staff' | 'client';
+  senderAvatarUrl?: string;
+  text: string;
+  timestamp: string; // ISO string
+  attachments?: Array<{
+    url: string;
+    name?: string;
+    type?: string;
+  }>;
+  readBy?: string[]; // user IDs who have read this message
+  reactions?: Record<string, string[]>; // emoji -> [user names or IDs]
+}
+

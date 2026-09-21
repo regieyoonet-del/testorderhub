@@ -93,7 +93,8 @@ import {
   Menu,
   LogOut,
   Kanban,
-  Target
+  Target,
+  MessageSquare
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ClientDashboardModal from './ClientDashboardModal';
@@ -102,7 +103,8 @@ import QuoteBuilder from './QuoteBuilder';
 import { AdminAppBranding } from './AdminAppBranding';
 import SalesGoalsSection from './SalesGoalsSection';
 import SalesGoalsSettingsModal from './SalesGoalsSettingsModal';
-import { SalesGoalRecord } from '../types';
+import ChatView from './chat/ChatView';
+import { SalesGoalRecord, ChatConversation, ChatMessage } from '../types';
 
 interface AdminDashboardProps {
   products: Product[];
@@ -167,7 +169,7 @@ interface AdminDashboardProps {
   onForceSyncAll: () => Promise<boolean>;
   onPullFromSheets?: () => Promise<void>;
   isSyncingSheets?: boolean;
-  initialTab?: 'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'sales-goals' | 'receipt' | 'quotes' | 'settings' | 'sync';
+  initialTab?: 'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'sales-goals' | 'receipt' | 'quotes' | 'settings' | 'sync' | 'chat';
   initialCatalogSection?: 'catalog' | 'enquiries';
   highlightEnquiryNumber?: string;
   highlightOrderNumber?: string;
@@ -177,6 +179,14 @@ interface AdminDashboardProps {
   onToggleMobileNav?: (open?: boolean) => void;
   onLogout?: () => void;
   currentUser?: AuthUser;
+  chatConversations?: ChatConversation[];
+  chatMessages?: ChatMessage[];
+  onSendMessage?: (conversationId: string, text: string) => void;
+  onToggleReaction?: (messageId: string, emoji: string) => void;
+  onDeleteChatMessage?: (messageId: string) => void;
+  onCreateChatConversation?: (newConv: ChatConversation) => void;
+  onMarkChatRead?: (conversationId: string) => void;
+  unreadChatCount?: number;
 }
 
 export default function AdminDashboard({
@@ -251,9 +261,17 @@ export default function AdminDashboard({
   isMobileNavOpen,
   onToggleMobileNav,
   onLogout,
-  currentUser
+  currentUser,
+  chatConversations = [],
+  chatMessages = [],
+  onSendMessage,
+  onToggleReaction,
+  onDeleteChatMessage,
+  onCreateChatConversation,
+  onMarkChatRead,
+  unreadChatCount = 0
 }: AdminDashboardProps) {
-  const [adminTab, setAdminTab] = useState<'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'sales-goals' | 'receipt' | 'quotes' | 'settings' | 'sync'>(initialTab || 'jobs');
+  const [adminTab, setAdminTab] = useState<'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'sales-goals' | 'receipt' | 'quotes' | 'settings' | 'sync' | 'chat'>(initialTab || 'jobs');
   const [showSalesGoalsModal, setShowSalesGoalsModal] = useState(false);
   const [salesGoalsModalYear, setSalesGoalsModalYear] = useState<number>(new Date().getFullYear());
 
@@ -792,6 +810,7 @@ export default function AdminDashboard({
 
   const navItems = [
     { id: 'jobs', label: 'Job Management', icon: Kanban, count: jobs.length },
+    { id: 'chat', label: 'Messages & Chat', icon: MessageSquare, count: unreadChatCount || null },
     { id: 'clients', label: 'Client Accounts', icon: Users, count: companies.length },
     { id: 'catalog', label: 'ARH Products', icon: Layers, count: catalogProducts.length },
     { id: 'orders', label: 'Orders', icon: ClipboardList, count: directCompanyOrders.length },
@@ -2206,6 +2225,31 @@ export default function AdminDashboard({
             onForceSyncAll={onForceSyncAll}
             onPullFromSheets={onPullFromSheets}
             isSyncingSheets={isSyncingSheets}
+          />
+        </div>
+      )}
+
+      {/* Messages & Chat Tab */}
+      {adminTab === 'chat' && (
+        <div className="bg-white border-2 border-black rounded-3xl p-4 sm:p-6 shadow-xs animate-fade-in">
+          <ChatView
+            currentUser={currentUser || {
+              id: 'admin',
+              username: 'admin',
+              name: systemSettings.hubName ? `${systemSettings.hubName} Admin` : 'ARH Admin',
+              role: 'admin',
+              profilePictureUrl: systemSettings.logoUrl
+            }}
+            conversations={chatConversations}
+            messages={chatMessages}
+            staffMembers={staff}
+            staffAccounts={staffAccounts}
+            companies={companies}
+            onSendMessage={onSendMessage || (() => {})}
+            onToggleReaction={onToggleReaction || (() => {})}
+            onDeleteMessage={onDeleteChatMessage || (() => {})}
+            onCreateConversation={onCreateChatConversation || (() => {})}
+            onMarkRead={onMarkChatRead || (() => {})}
           />
         </div>
       )}
