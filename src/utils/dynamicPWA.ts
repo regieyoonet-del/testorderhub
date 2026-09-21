@@ -15,6 +15,17 @@ const BRANDING_CACHE = 'pwa-branding-cache';
 export function registerPwaServiceWorker() {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
 
+  const isIframeOrDev = window.self !== window.top ||
+    window.location.hostname.includes('run.app') ||
+    window.location.hostname === 'localhost';
+
+  if (isIframeOrDev) {
+    navigator.serviceWorker.getRegistrations().then((regs) => {
+      regs.forEach((r) => r.unregister());
+    });
+    return;
+  }
+
   const register = () => {
     navigator.serviceWorker
       .register('/sw.js', { scope: '/' })

@@ -27,21 +27,51 @@
         window.dispatchEvent(new CustomEvent('pwa-installed'));
       });
 
-      if ('serviceWorker' in navigator) {
-        var registerSW = function () {
-          navigator.serviceWorker.register('/sw.js', { scope: '/' })
-            .then(function (reg) {
-              reg.update();
-            })
-            .catch(function (err) {
-              console.warn('[PWA] SW register notice:', err);
-            });
-        };
+      // Global runtime error logger
+      window.addEventListener('error', function (e) {
+        console.error('[Hub Error]', e.error || e.message);
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        console.error('[Hub Unhandled Rejection]', e.reason);
+      });
 
-        if (document.readyState === 'complete') {
-          registerSW();
+      // In development or preview iframe (AI Studio), unregister service workers to avoid stale caching
+      var isIframeOrDev = window.self !== window.top ||
+        window.location.hostname.includes('run.app') ||
+        window.location.hostname === 'localhost';
+
+      if ('serviceWorker' in navigator) {
+        if (isIframeOrDev) {
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            for (var i = 0; i < regs.length; i++) {
+              regs[i].unregister();
+            }
+          });
+          if ('caches' in window) {
+            caches.keys().then(function (names) {
+              for (var j = 0; j < names.length; j++) {
+                if (names[j].includes('shell') || names[j].includes('pwa')) {
+                  caches.delete(names[j]);
+                }
+              }
+            });
+          }
         } else {
-          window.addEventListener('load', registerSW);
+          var registerSW = function () {
+            navigator.serviceWorker.register('/sw.js', { scope: '/' })
+              .then(function (reg) {
+                reg.update();
+              })
+              .catch(function (err) {
+                console.warn('[PWA] SW register notice:', err);
+              });
+          };
+
+          if (document.readyState === 'complete') {
+            registerSW();
+          } else {
+            window.addEventListener('load', registerSW);
+          }
         }
       }
     </script>

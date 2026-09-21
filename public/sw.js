@@ -1,14 +1,11 @@
-// ARH Print Hub - Service Worker for PWA Installation & Offline Shell Support
-// Designed strictly for PWA installation compliance across macOS Chrome, Windows, Android, and iOS.
-// GUARANTEE: Google Sheets API, Apps Script sync, external Auth, and live business data
-// are NEVER cached or intercepted - they pass directly to the network.
+// ARH Print Hub - Service Worker for PWA Installation & Static Asset Support
+// Strictly ensures development modules, Vite scripts, and dynamic business data are NEVER intercepted.
 
-const SW_VERSION = 'arh-pwa-v2.2';
-const BRANDING_CACHE = 'pwa-branding-cache';
-const SHELL_CACHE = 'pwa-shell-v2.2';
+const SW_VERSION = 'arh-pwa-v3.0';
+const BRANDING_CACHE = 'pwa-branding-cache-v3';
+const STATIC_ASSETS_CACHE = 'pwa-static-v3';
 
 const PRECACHE_ASSETS = [
-  '/',
   '/manifest.webmanifest',
   '/manifest.json',
   '/pwa-192x192.png',
@@ -18,9 +15,8 @@ const PRECACHE_ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
-  // Pre-cache shell assets so Chrome's PWA installability offline check succeeds
   event.waitUntil(
-    caches.open(SHELL_CACHE).then((cache) => {
+    caches.open(STATIC_ASSETS_CACHE).then((cache) => {
       return cache.addAll(PRECACHE_ASSETS).catch((err) => {
         console.warn('[PWA] Pre-cache notice:', err);
       });
@@ -29,13 +25,16 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  // Claim all clients immediately so the service worker controls the page on first load
+  // Purge ALL old caches to ensure any stale code or scripts from previous versions are wiped clean
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
         keys
-          .filter((k) => k !== BRANDING_CACHE && k !== SHELL_CACHE)
-          .map((k) => caches.delete(k))
+          .filter((k) => k !== BRANDING_CACHE && k !== STATIC_ASSETS_CACHE)
+          .map((k) => {
+            console.log('[PWA] Purging stale cache:', k);
+            return caches.delete(k);
+          })
       );
     }).then(() => self.clients.claim())
   );
@@ -44,18 +43,28 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // 1. NEVER intercept or cache Google Sheets, Apps Script, Google APIs, Auth, or mutating requests
+  // 1. NEVER intercept or cache Vite, development modules, source files, dynamic APIs, or Google endpoints
   if (
     event.request.method !== 'GET' ||
     url.hostname.includes('google') ||
     url.hostname.includes('googleapis.com') ||
     url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/@') ||
+    url.pathname.startsWith('/node_modules/') ||
+    url.pathname.includes('.vite') ||
+    url.pathname.endsWith('.tsx') ||
+    url.pathname.endsWith('.ts') ||
+    url.pathname.endsWith('.jsx') ||
+    url.pathname.endsWith('.css') ||
+    url.search.includes('v=') ||
+    url.search.includes('t=') ||
     url.protocol.startsWith('chrome-extension')
   ) {
-    return;
+    return; // Pass directly to network
   }
 
-  // 2. Dynamic branding & manifest requests: check BRANDING_CACHE first
+  // 2. Dynamic branding & manifest requests
   if (
     url.pathname === '/manifest.webmanifest' ||
     url.pathname === '/manifest.json' ||
@@ -66,7 +75,6 @@ self.addEventListener('fetch', (event) => {
       caches.open(BRANDING_CACHE).then(async (cache) => {
         const cached = await cache.match(event.request);
         if (cached) return cached;
-        // If manifest.json requested and not in cache, fallback to manifest.webmanifest
         if (url.pathname === '/manifest.json') {
           return (await caches.match('/manifest.webmanifest')) || fetch('/manifest.webmanifest');
         }
@@ -76,42 +84,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. Navigation requests (HTML documents) - Network first, fallback to cached shell
-  if (event.request.mode === 'navigate') {
+  // 3. For all other requests (including HTML navigation), always prefer network
+  // Only serve from cache if network fails and it is an exact matched static PWA icon
+  if (PRECACHE_ASSETS.includes(url.pathname)) {
     event.respondWith(
-      fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const copy = networkResponse.clone();
-            caches.open(SHELL_CACHE).then((cache) => cache.put(event.request, copy));
-          }
-          return networkResponse;
-        })
-        .catch(async () => {
-          const cached = await caches.match(event.request);
-          if (cached) return cached;
-          const shell = await caches.match('/');
-          if (shell) return shell;
-          return new Response('Offline', { status: 503, statusText: 'Offline' });
-        })
+      fetch(event.request).catch(async () => {
+        const cached = await caches.match(event.request);
+        if (cached) return cached;
+        return new Response('Offline', { status: 503, statusText: 'Offline' });
+      })
     );
     return;
   }
-
-  // 4. Precached static shell icons and assets: Stale-while-revalidate or Network-first
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200 && url.origin === self.location.origin) {
-            const copy = networkResponse.clone();
-            caches.open(SHELL_CACHE).then((cache) => cache.put(event.request, copy));
-          }
-          return networkResponse;
-        })
-        .catch(() => cachedResponse);
-
-      return cachedResponse || fetchPromise;
-    })
-  );
 });

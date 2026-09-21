@@ -219,6 +219,39 @@ function parseJobActivities(val: any): JobActivity[] {
   return [];
 }
 
+const VALID_JOB_COMMENT_REACTION_EMOJIS = new Set(['👍', '❤️', '😂', '😮', '😢', '🎉']);
+
+function parseJobCommentReactions(val: any): Record<string, string[]> | undefined {
+  if (!val) return undefined;
+  let parsed = val;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!trimmed || trimmed === '{}' || trimmed === '[]' || trimmed === 'null') {
+      return undefined;
+    }
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      return undefined;
+    }
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return undefined;
+  }
+  const result: Record<string, string[]> = {};
+  let count = 0;
+  for (const [key, users] of Object.entries(parsed)) {
+    if (VALID_JOB_COMMENT_REACTION_EMOJIS.has(key) && Array.isArray(users)) {
+      const validUsers = Array.from(new Set(users.map(u => String(u).trim()).filter(Boolean)));
+      if (validUsers.length > 0) {
+        result[key] = validUsers;
+        count++;
+      }
+    }
+  }
+  return count > 0 ? result : undefined;
+}
+
 function parseJobComments(val: any): JobComment[] {
   if (!val) return [];
   if (Array.isArray(val)) {
@@ -229,7 +262,9 @@ function parseJobComments(val: any): JobComment[] {
       userName: String(getProp(it, ['userName', 'UserName', 'Name', 'User Name', 'user']) || 'Admin'),
       comment: String(getProp(it, ['comment', 'Comment', 'text', 'Text', 'message']) || ''),
       createdAt: String(getProp(it, ['createdAt', 'CreatedAt', 'Timestamp', 'Created Date', 'Created At']) || new Date().toISOString()),
-      updatedAt: getProp(it, ['updatedAt', 'UpdatedAt', 'Updated At']) ? String(getProp(it, ['updatedAt', 'UpdatedAt', 'Updated At'])) : undefined
+      updatedAt: getProp(it, ['updatedAt', 'UpdatedAt', 'Updated At']) ? String(getProp(it, ['updatedAt', 'UpdatedAt', 'Updated At'])) : undefined,
+      parentCommentId: getProp(it, ['parentCommentId', 'ParentCommentId', 'Parent Comment ID', 'parent_comment_id']) ? String(getProp(it, ['parentCommentId', 'ParentCommentId', 'Parent Comment ID', 'parent_comment_id'])) : undefined,
+      reactions: parseJobCommentReactions(getProp(it, ['reactions', 'Reactions', 'reactionsJSON', 'Reactions JSON']))
     })).filter(c => Boolean(c.comment && c.comment.trim() !== ''));
   }
   if (typeof val === 'string') {
@@ -1500,7 +1535,7 @@ export const sheetsService = {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'deleteJobComment', commentId })
+        body: JSON.stringify({ action: 'deleteJobComment', commentId, id: commentId })
       });
       return true;
     } catch (error) {
@@ -3278,14 +3313,23 @@ export const sheetsService = {
           jobs = jobs.map(j => {
             const fromJobSheet = j.comments || [];
             const fromDedicatedSheet = commentMapByJob.get(j.id) || [];
-            const merged = [...fromJobSheet];
-            const seenIds = new Set(fromJobSheet.map(c => c.id));
+            const mergedMap = new Map<string, JobComment>();
+            for (const c of fromJobSheet) {
+              mergedMap.set(c.id, c);
+            }
             for (const c of fromDedicatedSheet) {
-              if (!seenIds.has(c.id)) {
-                seenIds.add(c.id);
-                merged.push(c);
+              const existing = mergedMap.get(c.id);
+              if (existing) {
+                mergedMap.set(c.id, {
+                  ...existing,
+                  ...c,
+                  reactions: c.reactions || existing.reactions
+                });
+              } else {
+                mergedMap.set(c.id, c);
               }
             }
+            const merged = Array.from(mergedMap.values());
             return {
               ...j,
               comments: merged.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())

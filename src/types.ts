@@ -164,6 +164,8 @@ export interface JobComment {
   comment: string;
   createdAt: string;
   updatedAt?: string;
+  parentCommentId?: string;
+  reactions?: Record<string, string[]>;
 }
 
 export interface Job {

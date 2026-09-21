@@ -283,8 +283,18 @@ export default function App() {
   // ----------------------------------------------------
   
   const [companies, setCompanies] = useState<CompanyProfile[]>(() => {
+    let loaded: CompanyProfile[] = INITIAL_COMPANIES;
     const cached = localStorage.getItem('rp_companies');
-    const loaded: CompanyProfile[] = cached ? JSON.parse(cached) : INITIAL_COMPANIES;
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          loaded = parsed;
+        }
+      } catch {
+        loaded = INITIAL_COMPANIES;
+      }
+    }
     return loaded.map(c => {
       const sanitized = sanitizeCompany(c);
       const initComp = INITIAL_COMPANIES.find(ic => ic.id === c.id);
@@ -303,8 +313,18 @@ export default function App() {
   });
 
   const [products, setProducts] = useState<Product[]>(() => {
+    let loaded: Product[] = INITIAL_PRODUCTS;
     const cached = localStorage.getItem('rp_master_products');
-    const loaded: Product[] = cached ? JSON.parse(cached) : INITIAL_PRODUCTS;
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          loaded = parsed;
+        }
+      } catch {
+        loaded = INITIAL_PRODUCTS;
+      }
+    }
     const mergedLoaded = loaded.map(p => {
       const initMatch = INITIAL_PRODUCTS.find(ip => ip.id === p.id);
       return {
@@ -321,28 +341,50 @@ export default function App() {
       try {
         const parsed: Order[] = JSON.parse(cached);
         // Filter out legacy default mock orders
-        return parsed.filter(o => !['ord-1001', 'ord-1002', 'ord-1003'].includes(o.id));
+        return Array.isArray(parsed) ? parsed.filter(o => !['ord-1001', 'ord-1002', 'ord-1003'].includes(o.id)) : INITIAL_ORDERS;
       } catch {
-        return [];
+        return INITIAL_ORDERS;
       }
     }
     return INITIAL_ORDERS;
   });
 
   const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>(() => {
+    let loaded: CatalogProduct[] = INITIAL_CATALOG_PRODUCTS;
     const cached = localStorage.getItem('rp_catalog_products');
-    const loaded: CatalogProduct[] = cached ? JSON.parse(cached) : INITIAL_CATALOG_PRODUCTS;
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          loaded = parsed;
+        }
+      } catch {
+        loaded = INITIAL_CATALOG_PRODUCTS;
+      }
+    }
     return loaded.map(sanitizeCatalogProduct);
   });
 
   const [quoteEnquiries, setQuoteEnquiries] = useState<QuoteEnquiry[]>(() => {
     const cached = localStorage.getItem('rp_quote_enquiries');
-    return cached ? JSON.parse(cached) : INITIAL_QUOTE_ENQUIRIES;
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+    return INITIAL_QUOTE_ENQUIRIES;
   });
 
   const [orderPortals, setOrderPortals] = useState<OrderPortal[]>(() => {
     const cached = localStorage.getItem('rp_order_portals');
-    return cached ? JSON.parse(cached) : INITIAL_PORTALS;
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+    return INITIAL_PORTALS;
   });
 
   const [notifications, setNotifications] = useState<AppNotification[]>(() => {

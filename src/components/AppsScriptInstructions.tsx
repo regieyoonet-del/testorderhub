@@ -264,7 +264,8 @@ function doPost(e) {
   }
 
   if (payload.action === "deleteJobComment") {
-    return getJsonOutput(deleteRowById(sheet, "JobComments", "Comment ID", payload.commentId));
+    var targetCommentId = payload.commentId || payload.id || payload.targetId;
+    return getJsonOutput(deleteJobComment(sheet, targetCommentId));
   }
 
   if (payload.action === "cleanDuplicateColumns") {
@@ -483,7 +484,7 @@ function initSheets(ss) {
     "Jobs": ["Job ID", "Company ID", "Company Name", "Order ID", "Order Number", "Source", "Status", "Position", "Values JSON", "Items JSON", "Activities JSON", "Comments JSON", "Created At", "Updated At", "Created By"],
     "JobColumns": ["Column ID", "Name", "Type", "Position", "Required", "Is System Field", "Is Hidden", "Options", "Created Date"],
     "JobItemColumns": ["Column ID", "Name", "Type", "Position", "Required", "Is System Field", "Is Hidden", "Calculation", "Options"],
-    "JobComments": ["Comment ID", "Job ID", "User ID", "User Name", "Comment", "Created At", "Updated At"],
+    "JobComments": ["Comment ID", "Job ID", "User ID", "User Name", "Comment", "Created At", "Updated At", "Parent Comment ID", "Reactions"],
     "Staff": ["Staff ID", "Full Name", "Position", "Department", "Employment Status", "Date Started", "Salary Type", "Basic Salary", "Allowances", "Other Compensation", "Notes", "Status", "ProfilePictureUrl", "Created At", "Updated At"],
     "StaffAccounts": ["Account ID", "Staff ID", "Name", "Username", "Passcode", "Role", "Status", "Email", "Phone", "ProfilePictureUrl", "Avatar URL", "Last Login", "Created At", "Updated At"],
     "Attendance": ["Attendance ID", "Staff ID", "Staff Name", "Date", "Clock In", "Clock Out", "Total Hours", "Status", "Notes", "Created At", "Updated At"],
@@ -1466,7 +1467,7 @@ function clearNotifications(ss) {
 
 function saveJob(ss, job) {
   var sheet = ss.getSheetByName("Jobs");
-  var expectedHeaders = ["Job ID", "Company ID", "Company Name", "Order ID", "Order Number", "Source", "Status", "Position", "Values JSON", "Items JSON", "Activities JSON", "Created At", "Updated At", "Created By"];
+  var expectedHeaders = ["Job ID", "Company ID", "Company Name", "Order ID", "Order Number", "Source", "Status", "Position", "Values JSON", "Items JSON", "Activities JSON", "Comments JSON", "Created At", "Updated At", "Created By"];
   var data = ensureHeaders(sheet, expectedHeaders);
   var headers = data[0];
   
@@ -1590,7 +1591,7 @@ function updateJobStatus(ss, jobId, status) {
 function saveJobComment(ss, comment) {
   if (!comment) return { status: "error", message: "Invalid comment" };
   var sheet = ss.getSheetByName("JobComments");
-  var expectedHeaders = ["Comment ID", "Job ID", "User ID", "User Name", "Comment", "Created At", "Updated At"];
+  var expectedHeaders = ["Comment ID", "Job ID", "User ID", "User Name", "Comment", "Created At", "Updated At", "Parent Comment ID", "Reactions"];
   var data = ensureHeaders(sheet, expectedHeaders);
   var headers = data[0];
   
@@ -1619,7 +1620,9 @@ function saveJobComment(ss, comment) {
     "User Name": comment.userName || "Admin",
     "Comment": comment.comment || "",
     "Created At": comment.createdAt || new Date().toISOString(),
-    "Updated At": comment.updatedAt || new Date().toISOString()
+    "Updated At": comment.updatedAt || new Date().toISOString(),
+    "Parent Comment ID": comment.parentCommentId || "",
+    "Reactions": comment.reactions ? (typeof comment.reactions === 'string' ? comment.reactions : JSON.stringify(comment.reactions)) : "{}"
   };
   
   var rowData = [];
@@ -1642,6 +1645,36 @@ function saveJobCommentsBatch(ss, comments) {
     saveJobComment(ss, c);
   });
   return { status: "success", count: comments.length };
+}
+
+function deleteJobComment(ss, commentId) {
+  if (!commentId) return { status: "error", message: "Invalid commentId" };
+  var sheet = ss.getSheetByName("JobComments");
+  if (!sheet) return { status: "success", id: commentId, deleted: false, message: "Sheet not found" };
+  var data = sheet.getDataRange().getValues();
+  if (!data || data.length <= 1) return { status: "success", id: commentId, deleted: false };
+  var headers = data[0];
+  
+  var idCol = -1;
+  var parentIdCol = -1;
+  for (var c = 0; c < headers.length; c++) {
+    var normH = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (normH === "commentid" || normH === "id") idCol = c;
+    if (normH === "parentcommentid") parentIdCol = c;
+  }
+  if (idCol === -1) idCol = 0;
+  
+  var targetStr = String(commentId).trim().toLowerCase();
+  var deletedCount = 0;
+  for (var i = data.length - 1; i >= 1; i--) {
+    var rowId = String(data[i][idCol]).trim().toLowerCase();
+    var rowParentId = parentIdCol !== -1 ? String(data[i][parentIdCol]).trim().toLowerCase() : "";
+    if (rowId === targetStr || (rowParentId && rowParentId === targetStr)) {
+      sheet.deleteRow(i + 1);
+      deletedCount++;
+    }
+  }
+  return { status: "success", id: commentId, deleted: deletedCount > 0, count: deletedCount };
 }
 
 function saveJobColumns(ss, columns) {
