@@ -170,6 +170,8 @@ interface AdminDashboardProps {
   onPullFromSheets?: () => Promise<void>;
   isSyncingSheets?: boolean;
   initialTab?: 'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'sales-goals' | 'receipt' | 'quotes' | 'settings' | 'sync' | 'chat';
+  activeTab?: 'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'sales-goals' | 'receipt' | 'quotes' | 'settings' | 'sync' | 'chat';
+  onTabChange?: (tab: 'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'sales-goals' | 'receipt' | 'quotes' | 'settings' | 'sync' | 'chat') => void;
   initialCatalogSection?: 'catalog' | 'enquiries';
   highlightEnquiryNumber?: string;
   highlightOrderNumber?: string;
@@ -253,6 +255,8 @@ export default function AdminDashboard({
   onPullFromSheets,
   isSyncingSheets,
   initialTab,
+  activeTab,
+  onTabChange,
   initialCatalogSection,
   highlightEnquiryNumber,
   highlightOrderNumber,
@@ -271,7 +275,7 @@ export default function AdminDashboard({
   onMarkChatRead,
   unreadChatCount = 0
 }: AdminDashboardProps) {
-  const [adminTab, setAdminTab] = useState<'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'sales-goals' | 'receipt' | 'quotes' | 'settings' | 'sync' | 'chat'>(initialTab || 'jobs');
+  const [adminTab, setAdminTab] = useState<'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'sales-goals' | 'receipt' | 'quotes' | 'settings' | 'sync' | 'chat'>(activeTab || initialTab || 'jobs');
   const [showSalesGoalsModal, setShowSalesGoalsModal] = useState(false);
   const [salesGoalsModalYear, setSalesGoalsModalYear] = useState<number>(new Date().getFullYear());
 
@@ -295,21 +299,46 @@ export default function AdminDashboard({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isDrawerOpen]);
 
+  const handleSelectTab = (tab: 'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'sales-goals' | 'receipt' | 'quotes' | 'settings' | 'sync' | 'chat') => {
+    setAdminTab(tab);
+    if (onTabChange) {
+      onTabChange(tab);
+    }
+  };
+
   React.useEffect(() => {
-    if (initialTab) {
+    if (activeTab && activeTab !== adminTab) {
+      setAdminTab(activeTab);
+      if (activeTab === 'chat') {
+        setSelectedOrder(null);
+        setShowProductForm(false);
+        setShowClientForm(false);
+        setDrawerOpen(false);
+      }
+    }
+  }, [activeTab]);
+
+  React.useEffect(() => {
+    if (initialTab && initialTab !== adminTab) {
       setAdminTab(initialTab);
+      if (initialTab === 'chat') {
+        setSelectedOrder(null);
+        setShowProductForm(false);
+        setShowClientForm(false);
+        setDrawerOpen(false);
+      }
     }
   }, [initialTab]);
 
   React.useEffect(() => {
     if (highlightJobId) {
-      setAdminTab('jobs');
+      handleSelectTab('jobs');
     }
   }, [highlightJobId]);
 
   React.useEffect(() => {
     if (highlightOrderNumber || highlightOrderId) {
-      setAdminTab('orders');
+      handleSelectTab('orders');
       const searchVal = highlightOrderNumber || highlightOrderId || '';
       setOrderSearch(searchVal);
       setFilterStatus('all');
@@ -886,7 +915,7 @@ export default function AdminDashboard({
                         key={item.id}
                         type="button"
                         onClick={() => {
-                          setAdminTab(item.id as any);
+                          handleSelectTab(item.id as any);
                           setShowClientForm(false);
                           setShowProductForm(false);
                           setDrawerOpen(false);
@@ -966,7 +995,7 @@ export default function AdminDashboard({
           onSaveJobColumns={onSaveJobColumns}
           onSaveJobItemColumns={onSaveJobItemColumns}
           onSelectOrder={(ord) => {
-            setAdminTab('orders');
+            handleSelectTab('orders');
             setSelectedOrder(ord);
           }}
           currencySymbol={currencySymbol}
@@ -2404,7 +2433,7 @@ export default function AdminDashboard({
                           type="button"
                           onClick={() => {
                             setSelectedOrder(null);
-                            setAdminTab('jobs');
+                            handleSelectTab('jobs');
                           }}
                           className="bg-black hover:bg-neutral-800 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
                           id="btn-open-linked-job"

@@ -712,6 +712,7 @@ export default function App() {
   const [highlightQuoteId, setHighlightQuoteId] = useState<string | undefined>(undefined);
   const [highlightEnquiryNumber, setHighlightEnquiryNumber] = useState<string | undefined>(undefined);
   const [adminCatalogSection, setAdminCatalogSection] = useState<'catalog' | 'enquiries' | undefined>(undefined);
+  const [adminCurrentTab, setAdminCurrentTab] = useState<'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'sales-goals' | 'receipt' | 'quotes' | 'settings' | 'sync' | 'chat'>('jobs');
   const [adminInitialTab, setAdminInitialTab] = useState<'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'sales-goals' | 'receipt' | 'quotes' | 'settings' | 'sync' | 'chat' | undefined>(undefined);
   const [isAdminNavOpen, setIsAdminNavOpen] = useState<boolean>(false);
 
@@ -722,6 +723,7 @@ export default function App() {
   const handleChatToggle = () => {
     if (loggedInUser?.role === 'admin') {
       setActiveTab('admin');
+      setAdminCurrentTab('chat');
       setAdminInitialTab('chat');
     } else if (loggedInUser?.role === 'staff') {
       setActiveTab('chat');
@@ -741,9 +743,11 @@ export default function App() {
       setActiveTab('admin');
       if (isQuoteNotif) {
         setAdminCatalogSection('enquiries');
+        setAdminCurrentTab('catalog');
         setHighlightEnquiryNumber(notif.orderNumber || notif.orderId);
       } else {
         setAdminCatalogSection(undefined);
+        setAdminCurrentTab('orders');
         setHighlightOrderNumber(notif.orderNumber);
         setHighlightOrderId(notif.orderId);
       }
@@ -1011,9 +1015,10 @@ export default function App() {
 
     setChatMessages(prev => [...prev, newMessage]);
 
+    let updatedConvToPersist: ChatConversation | undefined;
     setChatConversations(prev => prev.map(c => {
       if (c.id === conversationId) {
-        return {
+        const updated: ChatConversation = {
           ...c,
           lastMessageText: text.trim(),
           lastMessageTimestamp: newMessage.timestamp,
@@ -1021,12 +1026,17 @@ export default function App() {
           lastMessageSenderName: currentUserDisplayName,
           updatedAt: newMessage.timestamp
         };
+        updatedConvToPersist = updated;
+        return updated;
       }
       return c;
     }));
 
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
       sheetsService.saveChatMessage(appsScriptConfig.webAppUrl, newMessage);
+      if (updatedConvToPersist) {
+        sheetsService.saveChatConversation(appsScriptConfig.webAppUrl, updatedConvToPersist);
+      }
     }
   };
 
@@ -3086,6 +3096,13 @@ export default function App() {
       if (salesGoals && salesGoals.length > 0) {
         await sheetsService.saveSalesGoalsBatch(url, salesGoals);
       }
+      // 15. Sync persistent chat conversations & messages
+      if (chatConversations && chatConversations.length > 0) {
+        await sheetsService.saveChatConversationsBatch(url, chatConversations);
+      }
+      if (chatMessages && chatMessages.length > 0) {
+        await sheetsService.saveChatMessagesBatch(url, chatMessages);
+      }
       return true;
     } catch (e) {
       console.warn('Force sync notice:', e);
@@ -4240,6 +4257,7 @@ export default function App() {
         onMobileNavToggle={handleAdminNavToggle}
         unreadChatCount={unreadChatCount}
         onChatToggle={handleChatToggle}
+        adminTab={adminCurrentTab}
       />
 
       {/* Universal Slide-in Navigation Drawer for Client & Non-Admin Views */}
@@ -4407,7 +4425,9 @@ export default function App() {
                 onForceSyncAll={handleForceSyncAll}
                 onPullFromSheets={syncWithSheets}
                 isSyncingSheets={isSyncingSheets}
-                initialTab={activeTab === 'sync' ? 'sync' : (adminInitialTab || (adminCatalogSection ? 'catalog' : ((highlightOrderNumber || highlightOrderId) ? 'orders' : undefined)))}
+                activeTab={activeTab === 'sync' ? 'sync' : adminCurrentTab}
+                onTabChange={setAdminCurrentTab}
+                initialTab={activeTab === 'sync' ? 'sync' : (adminCurrentTab || adminInitialTab || (adminCatalogSection ? 'catalog' : ((highlightOrderNumber || highlightOrderId) ? 'orders' : undefined)))}
                 initialCatalogSection={adminCatalogSection}
                 highlightEnquiryNumber={highlightEnquiryNumber}
                 highlightOrderNumber={highlightOrderNumber}

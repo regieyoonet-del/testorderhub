@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Search } from 'lucide-react';
 
 export interface EmojiItem {
@@ -183,6 +184,7 @@ export interface EmojiPickerPopoverProps {
   className?: string;
   id?: string;
   triggerId?: string;
+  triggerRef?: React.RefObject<HTMLElement | null>;
 }
 
 export default function EmojiPickerPopover({
@@ -192,12 +194,110 @@ export default function EmojiPickerPopover({
   placement = 'bottom',
   className = '',
   id,
-  triggerId
+  triggerId,
+  triggerRef
 }: EmojiPickerPopoverProps) {
   const [activeCategory, setActiveCategory] = useState<EmojiItem['category']>('popular');
   const [searchQuery, setSearchQuery] = useState('');
+  const [coords, setCoords] = useState<{
+    top?: number;
+    bottom?: number;
+    left: number;
+    width: number;
+    maxHeight?: number;
+  } | null>(null);
+
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  const updatePosition = useCallback(() => {
+    if (!isOpen) return;
+    const triggerEl = triggerRef?.current || (triggerId ? document.getElementById(triggerId) : null);
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const pickerWidth = Math.min(320, viewportWidth - 24);
+    const estimatedHeight = 310;
+    const margin = 8;
+    const topSafeMargin = 64; // Clearance for top fixed header
+
+    let left = 12;
+    let top: number | undefined;
+    let bottom: number | undefined;
+    let maxHeight = Math.min(350, viewportHeight - topSafeMargin - 16);
+
+    if (triggerEl) {
+      const rect = triggerEl.getBoundingClientRect();
+      left = rect.left;
+      if (left + pickerWidth > viewportWidth - 12) {
+        left = viewportWidth - pickerWidth - 12;
+      }
+      if (left < 12) {
+        left = 12;
+      }
+
+      const spaceAbove = rect.top - topSafeMargin;
+      const spaceBelow = viewportHeight - rect.bottom - 12;
+
+      let openUp = false;
+      if (placement === 'top') {
+        if (spaceAbove >= estimatedHeight || spaceAbove >= spaceBelow) {
+          openUp = true;
+        } else {
+          openUp = false;
+        }
+      } else {
+        if (spaceBelow >= estimatedHeight || spaceBelow >= spaceAbove) {
+          openUp = false;
+        } else {
+          openUp = true;
+        }
+      }
+
+      if (openUp) {
+        const rawBottom = viewportHeight - rect.top + margin;
+        if (viewportHeight - rawBottom - estimatedHeight < topSafeMargin) {
+          top = topSafeMargin + 4;
+          bottom = undefined;
+          maxHeight = Math.max(160, rect.top - top - margin);
+        } else {
+          bottom = Math.max(12, rawBottom);
+          top = undefined;
+          maxHeight = Math.min(350, viewportHeight - bottom - topSafeMargin);
+        }
+      } else {
+        const rawTop = rect.bottom + margin;
+        if (rawTop + estimatedHeight > viewportHeight - 12) {
+          top = Math.max(topSafeMargin + 4, rawTop);
+          maxHeight = Math.max(160, viewportHeight - top - 12);
+        } else {
+          top = rawTop;
+          maxHeight = Math.min(350, viewportHeight - top - 12);
+        }
+        bottom = undefined;
+      }
+    } else {
+      left = Math.max(12, (viewportWidth - pickerWidth) / 2);
+      bottom = 80;
+      maxHeight = Math.min(350, viewportHeight - 120);
+    }
+
+    setCoords({ bottom, top, left, width: pickerWidth, maxHeight });
+  }, [isOpen, triggerId, triggerRef, placement]);
+
+  // Position listener on resize/scroll
+  useEffect(() => {
+    if (!isOpen) {
+      setCoords(null);
+      return;
+    }
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [isOpen, updatePosition]);
 
   // Close on Escape or click outside
   useEffect(() => {
@@ -209,6 +309,9 @@ export default function EmojiPickerPopover({
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       if (popoverRef.current && !popoverRef.current.contains(target)) {
+        if (triggerRef?.current && triggerRef.current.contains(target)) {
+          return;
+        }
         if (triggerId && target.closest && target.closest(`#${triggerId}`)) {
           return;
         }
@@ -231,7 +334,7 @@ export default function EmojiPickerPopover({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose, triggerId]);
+  }, [isOpen, onClose, triggerId, triggerRef]);
 
   const filteredEmojis = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -247,17 +350,22 @@ export default function EmojiPickerPopover({
 
   if (!isOpen) return null;
 
-  const placementClasses =
-    placement === 'top'
-      ? 'bottom-full right-0 mb-2'
-      : 'top-full right-0 mt-2';
-
-  return (
+  const content = (
     <div
       ref={popoverRef}
-      className={`absolute ${placementClasses} z-50 bg-white border-2 border-black rounded-2xl shadow-xl p-2.5 w-[280px] sm:w-[300px] max-w-[calc(100vw-24px)] animate-in fade-in zoom-in-95 duration-100 select-none ${className}`}
+      style={{
+        position: 'fixed',
+        left: `${coords?.left ?? 12}px`,
+        ...(coords?.top !== undefined ? { top: `${coords.top}px` } : {}),
+        ...(coords?.bottom !== undefined ? { bottom: `${coords.bottom}px` } : {}),
+        width: `${coords?.width ?? 300}px`,
+        maxHeight: coords?.maxHeight ? `${coords.maxHeight}px` : 'calc(100vh - 80px)',
+        zIndex: 999999
+      }}
+      className={`bg-white border-2 border-black rounded-2xl shadow-2xl p-2.5 max-w-[calc(100vw-24px)] flex flex-col animate-in fade-in zoom-in-95 duration-100 select-none ${className}`}
       onClick={(e) => e.stopPropagation()}
       id={id || 'emoji-picker-popover'}
+      data-emoji-picker="true"
     >
       {/* Header with Search & Close */}
       <div className="flex items-center gap-1.5 pb-2 border-b border-gray-100">
@@ -353,4 +461,6 @@ export default function EmojiPickerPopover({
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : content;
 }

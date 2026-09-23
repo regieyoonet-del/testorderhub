@@ -3232,6 +3232,59 @@ export const sheetsService = {
   },
 
   /**
+   * Save a batch of Chat Conversations to Google Sheets.
+   */
+  async saveChatConversationsBatch(url: string, conversations: ChatConversation[]): Promise<boolean> {
+    if (!url || !Array.isArray(conversations) || conversations.length === 0) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'saveChatConversationsBatch',
+          conversations: conversations.map(c => ({
+            ...c,
+            participantIds: Array.isArray(c.participantIds) ? c.participantIds.join(',') : String(c.participantIds || '')
+          }))
+        })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveChatConversationsBatch):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Save a batch of Chat Messages to Google Sheets.
+   */
+  async saveChatMessagesBatch(url: string, messages: ChatMessage[]): Promise<boolean> {
+    if (!url || !Array.isArray(messages) || messages.length === 0) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'saveChatMessagesBatch',
+          messages: messages.map(m => ({
+            ...m,
+            readBy: Array.isArray(m.readBy) ? m.readBy.join(',') : '',
+            reactions: m.reactions ? (typeof m.reactions === 'string' ? m.reactions : JSON.stringify(m.reactions)) : ''
+          }))
+        })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (saveChatMessagesBatch):', error);
+      return false;
+    }
+  },
+
+  /**
    * Single-roundtrip bulk fetch of all database tables from Apps Script for fast sign-in & initial load sync.
    */
   async fetchAllData(url: string): Promise<AllSheetsData | null> {

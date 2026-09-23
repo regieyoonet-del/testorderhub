@@ -173,15 +173,13 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
               </button>
 
               {isEmojiPickerOpen && (
-                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50">
-                  <EmojiPickerPopover
-                    isOpen={isEmojiPickerOpen}
-                    onClose={() => setIsEmojiPickerOpen(false)}
-                    onSelectEmoji={handleSelectReaction}
-                    placement="top"
-                    triggerId={`btn-react-picker-${message.id}`}
-                  />
-                </div>
+                <EmojiPickerPopover
+                  isOpen={isEmojiPickerOpen}
+                  onClose={() => setIsEmojiPickerOpen(false)}
+                  onSelectEmoji={handleSelectReaction}
+                  placement="top"
+                  triggerId={`btn-react-picker-${message.id}`}
+                />
               )}
             </div>
 

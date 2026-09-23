@@ -37,6 +37,7 @@ interface HeaderProps {
   currentStaffName?: string;
   unreadChatCount?: number;
   onChatToggle?: () => void;
+  adminTab?: string;
 }
 
 export default function Header({
@@ -61,8 +62,10 @@ export default function Header({
   onMobileNavToggle,
   currentStaffName,
   unreadChatCount = 0,
-  onChatToggle
+  onChatToggle,
+  adminTab
 }: HeaderProps) {
+  const isChatActive = activeTab === 'chat' || (userRole === 'admin' && activeTab === 'admin' && adminTab === 'chat');
   return (
     <header className="bg-white border-b-2 border-black sticky top-0 z-40">
       {/* Main Branding Bar */}
@@ -181,7 +184,7 @@ export default function Header({
               type="button"
               onClick={onChatToggle}
               className={`relative border border-black p-2.5 transition-all cursor-pointer flex items-center justify-center shrink-0 rounded-xl ${
-                activeTab === 'chat'
+                isChatActive
                   ? 'bg-black text-white'
                   : 'bg-white text-black hover:bg-black hover:text-white'
               }`}

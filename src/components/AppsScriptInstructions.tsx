@@ -56,7 +56,10 @@ function doGet(e) {
       expenses: getTableData(sheet, "Expenses"),
       expenseCategories: getTableData(sheet, "ExpenseCategories"),
       recurringExpenses: getTableData(sheet, "RecurringExpenses"),
-      salesGoals: getTableData(sheet, "SalesGoals")
+      salesGoals: getTableData(sheet, "SalesGoals"),
+      chatConversations: getTableData(sheet, "ChatConversations"),
+      chatMessages: getTableData(sheet, "ChatMessages"),
+      chatParticipants: getTableData(sheet, "ChatParticipants")
     });
   }
 
@@ -139,6 +142,18 @@ function doGet(e) {
 
   if (action === "getSalesGoals") {
     return getJsonOutput(getTableData(sheet, "SalesGoals"));
+  }
+
+  if (action === "getChatConversations") {
+    return getJsonOutput(getTableData(sheet, "ChatConversations"));
+  }
+
+  if (action === "getChatMessages") {
+    return getJsonOutput(getChatMessages(sheet, e.parameter.conversationId));
+  }
+
+  if (action === "getChatParticipants") {
+    return getJsonOutput(getTableData(sheet, "ChatParticipants"));
   }
   
   return getJsonOutput({ status: "success", message: "ARH Print Apps Script is active" });
@@ -369,6 +384,38 @@ function doPost(e) {
     var sgYear = payload.year || (payload.goal && payload.goal.year);
     return getJsonOutput(deleteRowById(sheet, "SalesGoals", "Year", sgYear));
   }
+
+  if (payload.action === "saveChatConversation") {
+    var c = payload.conversation || payload.chatConversation;
+    return getJsonOutput(saveChatConversation(sheet, c));
+  }
+
+  if (payload.action === "saveChatConversationsBatch") {
+    var cList = payload.conversations || payload.chatConversations || payload.list;
+    return getJsonOutput(saveChatConversationsBatch(sheet, cList));
+  }
+
+  if (payload.action === "deleteChatConversation") {
+    return getJsonOutput(deleteChatConversation(sheet, payload.conversationId || payload.id));
+  }
+
+  if (payload.action === "saveChatMessage") {
+    var m = payload.message || payload.chatMessage;
+    return getJsonOutput(saveChatMessage(sheet, m));
+  }
+
+  if (payload.action === "saveChatMessagesBatch") {
+    var mList = payload.messages || payload.chatMessages || payload.list;
+    return getJsonOutput(saveChatMessagesBatch(sheet, mList));
+  }
+
+  if (payload.action === "deleteChatMessage") {
+    return getJsonOutput(deleteChatMessage(sheet, payload.messageId || payload.id));
+  }
+
+  if (payload.action === "markChatRead") {
+    return getJsonOutput(markChatRead(sheet, payload.conversationId, payload.userId));
+  }
   
   return getJsonOutput({ status: "error", message: "Unknown action" });
 }
@@ -468,7 +515,7 @@ function getMapValueByHeader(map, header) {
 }
 
 function initSheets(ss) {
-  var sheets = ["Orders", "OrderItems", "Products", "CatalogProducts", "Companies", "Portals", "Admin", "Quotes", "Notifications", "Jobs", "JobColumns", "JobItemColumns", "JobComments", "Staff", "StaffAccounts", "Attendance", "Payroll", "Expenses", "ExpenseCategories", "RecurringExpenses", "SalesGoals"];
+  var sheets = ["Orders", "OrderItems", "Products", "CatalogProducts", "Companies", "Portals", "Admin", "Quotes", "Notifications", "Jobs", "JobColumns", "JobItemColumns", "JobComments", "Staff", "StaffAccounts", "Attendance", "Payroll", "Expenses", "ExpenseCategories", "RecurringExpenses", "SalesGoals", "ChatConversations", "ChatMessages", "ChatParticipants"];
   
   // Headers definitions
   var headers = {
@@ -492,7 +539,10 @@ function initSheets(ss) {
     "Expenses": ["Expense ID", "Expense Name", "Category", "Expense Type", "Amount", "Expense Date", "Payment Status", "Payment Date", "Vendor", "Reference Number", "Notes", "Recurring Expense ID", "Payroll ID", "Created At", "Updated At"],
     "ExpenseCategories": ["Category ID", "Name", "Is System", "Status"],
     "RecurringExpenses": ["Recurring Expense ID", "Expense Name", "Category", "Amount", "Frequency", "Start Date", "End Date", "Duration Months", "Payments Per Year", "Specific Months JSON", "Status", "Notes", "Created At", "Updated At"],
-    "SalesGoals": ["Year", "Annual Goal", "Q1 Goal", "Q2 Goal", "Q3 Goal", "Q4 Goal", "Notes", "Created At", "Updated At", "Updated By"]
+    "SalesGoals": ["Year", "Annual Goal", "Q1 Goal", "Q2 Goal", "Q3 Goal", "Q4 Goal", "Notes", "Created At", "Updated At", "Updated By"],
+    "ChatConversations": ["Conversation ID", "Type", "Title", "Company ID", "Participant IDs", "Created By", "Created At", "Updated At", "Last Message Text", "Last Message Timestamp", "Last Message Sender ID", "Last Message Sender Name", "Status", "Created By Role"],
+    "ChatMessages": ["Message ID", "Conversation ID", "Sender ID", "Sender Name", "Sender Role", "Sender Avatar URL", "Text", "Timestamp", "Read By", "Reactions JSON", "Status", "Reply To Message ID", "Deleted At"],
+    "ChatParticipants": ["Conversation ID", "User ID", "User Role", "Company ID", "Joined At", "Last Read At", "Is Active"]
   };
   
   for (var i = 0; i < sheets.length; i++) {
@@ -513,6 +563,9 @@ function initSheets(ss) {
 
   // Seed default expense categories if ExpenseCategories has no data rows
   seedDefaultExpenseCategories(ss);
+
+  // Seed default chat channels if ChatConversations has no data rows
+  seedDefaultChat(ss);
 
   // Clean any historical duplicate rows in JobColumns / JobItemColumns
   cleanDuplicateColumns(ss);
@@ -2378,6 +2431,434 @@ function saveAttendanceBatch(ss, records) {
   return { status: "success", count: records.length };
 }
 
+function getChatMessages(ss, conversationId) {
+  var allMsgs = getTableData(ss, "ChatMessages");
+  if (!conversationId) return allMsgs;
+  return allMsgs.filter(function(m) {
+    var cId = m["Conversation ID"] || m["conversationId"] || m["ConversationID"];
+    return String(cId).trim() === String(conversationId).trim();
+  });
+}
+
+function saveChatConversation(ss, conversation) {
+  var sheet = ss.getSheetByName("ChatConversations");
+  if (!sheet || !conversation) return { status: "error", message: "Missing conversation" };
+  var expectedHeaders = ["Conversation ID", "Type", "Title", "Company ID", "Participant IDs", "Created By", "Created At", "Updated At", "Last Message Text", "Last Message Timestamp", "Last Message Sender ID", "Last Message Sender Name", "Status", "Created By Role"];
+  var data = ensureHeaders(sheet, expectedHeaders);
+  var headers = data[0];
+
+  var targetId = String(conversation.id || conversation["Conversation ID"] || conversation["conversationId"] || "").trim();
+  if (!targetId) return { status: "error", message: "Missing conversation ID" };
+
+  var idIndex = 0;
+  for (var c = 0; c < headers.length; c++) {
+    var nh = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (nh === "conversationid") {
+      idIndex = c;
+      break;
+    }
+  }
+
+  var rowIndex = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idIndex]).trim() === targetId) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+
+  var participantIdsStr = "";
+  if (Array.isArray(conversation.participantIds)) {
+    participantIdsStr = conversation.participantIds.join(",");
+  } else if (conversation.participantIds) {
+    participantIdsStr = String(conversation.participantIds);
+  }
+
+  var convMap = {
+    "Conversation ID": targetId,
+    "Type": conversation.type || "direct",
+    "Title": conversation.title || "",
+    "Company ID": conversation.companyId || "",
+    "Participant IDs": participantIdsStr,
+    "Created By": conversation.createdBy || "admin",
+    "Created At": conversation.createdAt || new Date().toISOString(),
+    "Updated At": conversation.updatedAt || new Date().toISOString(),
+    "Last Message Text": conversation.lastMessageText || "",
+    "Last Message Timestamp": conversation.lastMessageTimestamp || "",
+    "Last Message Sender ID": conversation.lastMessageSenderId || "",
+    "Last Message Sender Name": conversation.lastMessageSenderName || "",
+    "Status": conversation.status || "active",
+    "Created By Role": conversation.createdByRole || "admin"
+  };
+
+  var row = [];
+  for (var h = 0; h < headers.length; h++) {
+    row.push(getMapValueByHeader(convMap, headers[h]));
+  }
+
+  if (rowIndex !== -1) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  } else {
+    sheet.appendRow(row);
+  }
+
+  if (Array.isArray(conversation.participantIds)) {
+    syncChatParticipants(ss, targetId, conversation.participantIds, conversation.companyId);
+  }
+
+  return { status: "success", conversationId: targetId };
+}
+
+function saveChatConversationsBatch(ss, conversations) {
+  if (!Array.isArray(conversations)) return { status: "error", message: "Invalid array" };
+  conversations.forEach(function(c) {
+    saveChatConversation(ss, c);
+  });
+  return { status: "success", count: conversations.length };
+}
+
+function deleteChatConversation(ss, conversationId) {
+  if (!conversationId) return { status: "error", message: "Missing conversation ID" };
+  deleteRowById(ss, "ChatConversations", "Conversation ID", conversationId);
+  deleteRowById(ss, "ChatMessages", "Conversation ID", conversationId);
+  deleteRowById(ss, "ChatParticipants", "Conversation ID", conversationId);
+  return { status: "success", conversationId: conversationId };
+}
+
+function syncChatParticipants(ss, conversationId, participantIds, companyId) {
+  var sheet = ss.getSheetByName("ChatParticipants");
+  if (!sheet) return;
+  var expectedHeaders = ["Conversation ID", "User ID", "User Role", "Company ID", "Joined At", "Last Read At", "Is Active"];
+  var data = ensureHeaders(sheet, expectedHeaders);
+  var headers = data[0];
+
+  var existing = {};
+  for (var i = 1; i < data.length; i++) {
+    var cId = String(data[i][0]).trim();
+    var uId = String(data[i][1]).trim();
+    if (cId === String(conversationId).trim()) {
+      existing[uId] = i + 1;
+    }
+  }
+
+  participantIds.forEach(function(uId) {
+    var cleanUId = String(uId).trim();
+    if (!cleanUId) return;
+    var userRole = cleanUId === "admin" ? "admin" : cleanUId.startsWith("co-") ? "client" : "staff";
+    var partMap = {
+      "Conversation ID": conversationId,
+      "User ID": cleanUId,
+      "User Role": userRole,
+      "Company ID": companyId || "",
+      "Joined At": new Date().toISOString(),
+      "Last Read At": new Date().toISOString(),
+      "Is Active": "true"
+    };
+    var row = [];
+    for (var h = 0; h < headers.length; h++) {
+      row.push(getMapValueByHeader(partMap, headers[h]));
+    }
+    if (!existing[cleanUId]) {
+      sheet.appendRow(row);
+    }
+  });
+}
+
+function saveChatMessage(ss, message) {
+  var sheet = ss.getSheetByName("ChatMessages");
+  if (!sheet || !message) return { status: "error", message: "Missing message" };
+  var expectedHeaders = ["Message ID", "Conversation ID", "Sender ID", "Sender Name", "Sender Role", "Sender Avatar URL", "Text", "Timestamp", "Read By", "Reactions JSON", "Status", "Reply To Message ID", "Deleted At"];
+  var data = ensureHeaders(sheet, expectedHeaders);
+  var headers = data[0];
+
+  var targetId = String(message.id || message["Message ID"] || message["messageId"] || "").trim();
+  if (!targetId) return { status: "error", message: "Missing message ID" };
+  var convId = String(message.conversationId || message["Conversation ID"] || "").trim();
+
+  var idIndex = 0;
+  for (var c = 0; c < headers.length; c++) {
+    var nh = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (nh === "messageid") {
+      idIndex = c;
+      break;
+    }
+  }
+
+  var rowIndex = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idIndex]).trim() === targetId) {
+      rowIndex = i + 1;
+      break;
+    }
+  }
+
+  var readByStr = "";
+  if (Array.isArray(message.readBy)) {
+    readByStr = message.readBy.join(",");
+  } else if (message.readBy) {
+    readByStr = String(message.readBy);
+  }
+
+  var reactionsStr = "";
+  if (message.reactions) {
+    if (typeof message.reactions === "string") {
+      reactionsStr = message.reactions;
+    } else {
+      try { reactionsStr = JSON.stringify(message.reactions); } catch(e) {}
+    }
+  }
+
+  var msgMap = {
+    "Message ID": targetId,
+    "Conversation ID": convId,
+    "Sender ID": message.senderId || "",
+    "Sender Name": message.senderName || "",
+    "Sender Role": message.senderRole || "staff",
+    "Sender Avatar URL": message.senderAvatarUrl || "",
+    "Text": message.text || "",
+    "Timestamp": message.timestamp || new Date().toISOString(),
+    "Read By": readByStr,
+    "Reactions JSON": reactionsStr,
+    "Status": message.status || "sent",
+    "Reply To Message ID": message.replyToMessageId || "",
+    "Deleted At": message.deletedAt || ""
+  };
+
+  var row = [];
+  for (var h = 0; h < headers.length; h++) {
+    row.push(getMapValueByHeader(msgMap, headers[h]));
+  }
+
+  if (rowIndex !== -1) {
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  } else {
+    sheet.appendRow(row);
+  }
+
+  if (convId && message.text) {
+    updateConversationLastMessage(ss, convId, message.text, message.timestamp || new Date().toISOString(), message.senderId || "", message.senderName || "");
+  }
+
+  return { status: "success", messageId: targetId };
+}
+
+function updateConversationLastMessage(ss, conversationId, lastText, lastTimestamp, senderId, senderName) {
+  var convSheet = ss.getSheetByName("ChatConversations");
+  if (!convSheet) return;
+  var data = convSheet.getDataRange().getValues();
+  if (data.length <= 1) return;
+  var headers = data[0];
+
+  var idCol = -1;
+  var textCol = -1;
+  var timeCol = -1;
+  var senderIdCol = -1;
+  var senderNameCol = -1;
+  var updatedCol = -1;
+
+  for (var c = 0; c < headers.length; c++) {
+    var nh = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (nh === "conversationid") idCol = c;
+    if (nh === "lastmessagetext") textCol = c;
+    if (nh === "lastmessagetimestamp") timeCol = c;
+    if (nh === "lastmessagesenderid") senderIdCol = c;
+    if (nh === "lastmessagesendername") senderNameCol = c;
+    if (nh === "updatedat") updatedCol = c;
+  }
+
+  if (idCol === -1) return;
+
+  for (var r = 1; r < data.length; r++) {
+    if (String(data[r][idCol]).trim() === String(conversationId).trim()) {
+      if (textCol !== -1) convSheet.getRange(r + 1, textCol + 1).setValue(lastText);
+      if (timeCol !== -1) convSheet.getRange(r + 1, timeCol + 1).setValue(lastTimestamp);
+      if (senderIdCol !== -1) convSheet.getRange(r + 1, senderIdCol + 1).setValue(senderId);
+      if (senderNameCol !== -1) convSheet.getRange(r + 1, senderNameCol + 1).setValue(senderName);
+      if (updatedCol !== -1) convSheet.getRange(r + 1, updatedCol + 1).setValue(lastTimestamp);
+      break;
+    }
+  }
+}
+
+function saveChatMessagesBatch(ss, messages) {
+  if (!Array.isArray(messages)) return { status: "error", message: "Invalid array" };
+  messages.forEach(function(m) {
+    saveChatMessage(ss, m);
+  });
+  return { status: "success", count: messages.length };
+}
+
+function deleteChatMessage(ss, messageId) {
+  if (!messageId) return { status: "error", message: "Missing message ID" };
+  return deleteRowById(ss, "ChatMessages", "Message ID", messageId);
+}
+
+function markChatRead(ss, conversationId, userId) {
+  if (!conversationId || !userId) return { status: "error", message: "Missing parameters" };
+  var msgSheet = ss.getSheetByName("ChatMessages");
+  if (!msgSheet) return { status: "success" };
+  var data = msgSheet.getDataRange().getValues();
+  if (data.length <= 1) return { status: "success" };
+  var headers = data[0];
+
+  var convCol = -1;
+  var readByCol = -1;
+  for (var c = 0; c < headers.length; c++) {
+    var nh = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (nh === "conversationid") convCol = c;
+    if (nh === "readby") readByCol = c;
+  }
+
+  if (convCol !== -1 && readByCol !== -1) {
+    for (var r = 1; r < data.length; r++) {
+      if (String(data[r][convCol]).trim() === String(conversationId).trim()) {
+        var existingStr = String(data[r][readByCol] || "").trim();
+        var arr = existingStr ? existingStr.split(",").map(function(s){ return s.trim(); }).filter(Boolean) : [];
+        if (arr.indexOf(userId) === -1) {
+          arr.push(userId);
+          msgSheet.getRange(r + 1, readByCol + 1).setValue(arr.join(","));
+        }
+      }
+    }
+  }
+
+  return { status: "success" };
+}
+
+function seedDefaultChat(ss) {
+  var sheet = ss.getSheetByName("ChatConversations");
+  if (!sheet) return;
+  var data = sheet.getDataRange().getValues();
+  if (data.length > 1) return;
+
+  var defaultConvs = [
+    {
+      id: "conv-group-studio-production",
+      type: "group",
+      title: "Studio Production & Press",
+      companyId: "",
+      participantIds: ["admin", "STF-101"],
+      createdBy: "admin",
+      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      updatedAt: new Date(Date.now() - 42 * 60 * 1000).toISOString(),
+      lastMessageText: "Screens for the new uniform batch are prepared and aligned! 👍",
+      lastMessageTimestamp: new Date(Date.now() - 42 * 60 * 1000).toISOString(),
+      lastMessageSenderId: "STF-101",
+      lastMessageSenderName: "Regie Santos",
+      status: "active",
+      createdByRole: "admin"
+    },
+    {
+      id: "conv-direct-admin-stf101",
+      type: "direct",
+      title: "Regie Santos",
+      companyId: "",
+      participantIds: ["admin", "STF-101"],
+      createdBy: "admin",
+      createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+      updatedAt: new Date(Date.now() - 110 * 60 * 1000).toISOString(),
+      lastMessageText: "Great work on the weekend rush order, Regie. Inventory logs are updated.",
+      lastMessageTimestamp: new Date(Date.now() - 110 * 60 * 1000).toISOString(),
+      lastMessageSenderId: "admin",
+      lastMessageSenderName: "Admin",
+      status: "active",
+      createdByRole: "admin"
+    },
+    {
+      id: "conv-client-co-1",
+      type: "client_admin",
+      title: "Paramount Studios",
+      companyId: "co-1",
+      participantIds: ["admin", "co-1"],
+      createdBy: "co-1",
+      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      updatedAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+      lastMessageText: "Hi ARH Print team! Can we double check the embroidery thread color for the jackets?",
+      lastMessageTimestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+      lastMessageSenderId: "co-1",
+      lastMessageSenderName: "Paramount Studios",
+      status: "active",
+      createdByRole: "client"
+    }
+  ];
+
+  saveChatConversationsBatch(ss, defaultConvs);
+
+  var defaultMsgs = [
+    {
+      id: "msg-grp-1",
+      conversationId: "conv-group-studio-production",
+      senderId: "admin",
+      senderName: "Admin",
+      senderRole: "admin",
+      senderAvatarUrl: "",
+      text: "Welcome to the Studio Production channel. All print press calibrations and schedule updates will be logged here.",
+      timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      readBy: ["admin", "STF-101"],
+      reactions: { "🙌": ["Regie Santos", "Admin"] }
+    },
+    {
+      id: "msg-grp-2",
+      conversationId: "conv-group-studio-production",
+      senderId: "STF-101",
+      senderName: "Regie Santos",
+      senderRole: "staff",
+      senderAvatarUrl: "",
+      text: "Understood! We inspected the plastisol ink levels and mesh screens this morning.",
+      timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 15 * 60 * 1000).toISOString(),
+      readBy: ["admin", "STF-101"],
+      reactions: { "👍": ["Admin"] }
+    },
+    {
+      id: "msg-grp-3",
+      conversationId: "conv-group-studio-production",
+      senderId: "STF-101",
+      senderName: "Regie Santos",
+      senderRole: "staff",
+      senderAvatarUrl: "",
+      text: "Screens for the new uniform batch are prepared and aligned! 👍",
+      timestamp: new Date(Date.now() - 42 * 60 * 1000).toISOString(),
+      readBy: ["STF-101"],
+      reactions: { "🔥": ["Admin"], "🚀": ["Regie Santos"] }
+    },
+    {
+      id: "msg-dir-1",
+      conversationId: "conv-direct-admin-stf101",
+      senderId: "STF-101",
+      senderName: "Regie Santos",
+      senderRole: "staff",
+      senderAvatarUrl: "",
+      text: "Hi Admin, I submitted the updated supply replenishment report for emulsion fluid.",
+      timestamp: new Date(Date.now() - 125 * 60 * 1000).toISOString(),
+      readBy: ["admin", "STF-101"]
+    },
+    {
+      id: "msg-dir-2",
+      conversationId: "conv-direct-admin-stf101",
+      senderId: "admin",
+      senderName: "Admin",
+      senderRole: "admin",
+      senderAvatarUrl: "",
+      text: "Great work on the weekend rush order, Regie. Inventory logs are updated.",
+      timestamp: new Date(Date.now() - 110 * 60 * 1000).toISOString(),
+      readBy: ["admin", "STF-101"]
+    },
+    {
+      id: "msg-client-1",
+      conversationId: "conv-client-co-1",
+      senderId: "co-1",
+      senderName: "Paramount Studios",
+      senderRole: "client",
+      senderAvatarUrl: "",
+      text: "Hi ARH Print team! Can we double check the embroidery thread color for the jackets?",
+      timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+      readBy: ["co-1"]
+    }
+  ];
+
+  saveChatMessagesBatch(ss, defaultMsgs);
+}
+
 function getJsonOutput(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
@@ -2821,6 +3302,66 @@ function getJsonOutput(obj) {
                 <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
                 <div className="flex flex-wrap gap-1">
                   {["Year", "Annual Goal", "Q1 Goal", "Q2 Goal", "Q3 Goal", "Q4 Goal", "Notes", "Created At", "Updated At", "Updated By"].map(col => (
+                    <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
+                      {col}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sheet 19: ChatConversations */}
+            <div className="border border-gray-200 bg-gray-50 p-3 space-y-2 rounded-xl">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                <span className="font-mono text-[11px] font-bold text-black bg-white px-2 py-0.5 border border-black rounded-md">
+                  💬 Tab 19: ChatConversations
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono">Persistent channels &amp; direct chat threads</span>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
+                <div className="flex flex-wrap gap-1">
+                  {["Conversation ID", "Type", "Title", "Company ID", "Participant IDs", "Created By", "Created At", "Updated At", "Last Message Text", "Last Message Timestamp", "Last Message Sender ID", "Last Message Sender Name", "Status", "Created By Role"].map(col => (
+                    <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
+                      {col}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sheet 20: ChatMessages */}
+            <div className="border border-gray-200 bg-gray-50 p-3 space-y-2 rounded-xl">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                <span className="font-mono text-[11px] font-bold text-black bg-white px-2 py-0.5 border border-black rounded-md">
+                  ✉️ Tab 20: ChatMessages
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono">Persistent team &amp; client chat messages</span>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
+                <div className="flex flex-wrap gap-1">
+                  {["Message ID", "Conversation ID", "Sender ID", "Sender Name", "Sender Role", "Sender Avatar URL", "Text", "Timestamp", "Read By", "Reactions JSON", "Status", "Reply To Message ID", "Deleted At"].map(col => (
+                    <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
+                      {col}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sheet 21: ChatParticipants */}
+            <div className="border border-gray-200 bg-gray-50 p-3 space-y-2 rounded-xl">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                <span className="font-mono text-[11px] font-bold text-black bg-white px-2 py-0.5 border border-black rounded-md">
+                  👥 Tab 21: ChatParticipants
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono">Per-user participant read timestamps &amp; membership</span>
+              </div>
+              <div className="space-y-1">
+                <span className="block text-[9px] uppercase font-mono font-bold text-gray-400">Column Headers (Row 1):</span>
+                <div className="flex flex-wrap gap-1">
+                  {["Conversation ID", "User ID", "User Role", "Company ID", "Joined At", "Last Read At", "Is Active"].map(col => (
                     <span key={col} className="bg-white border border-gray-100 rounded px-1.5 py-0.5 font-mono text-[10px] text-neutral-800 font-semibold shadow-xs">
                       {col}
                     </span>

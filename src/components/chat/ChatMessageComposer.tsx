@@ -23,6 +23,7 @@ export default function ChatMessageComposer({
   const [text, setText] = useState('');
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const emojiButtonRef = useRef<HTMLButtonElement | null>(null);
 
   // Auto-focus when conversation changes
   useEffect(() => {
@@ -84,20 +85,20 @@ export default function ChatMessageComposer({
     <div className="relative border-t border-gray-200 bg-white p-3 sm:p-4 shrink-0" id="chat-composer-container">
       {/* Emoji Picker Popover */}
       {isEmojiPickerOpen && (
-        <div className="absolute bottom-full right-4 mb-2 z-50">
-          <EmojiPickerPopover
-            isOpen={isEmojiPickerOpen}
-            onClose={() => setIsEmojiPickerOpen(false)}
-            onSelectEmoji={handleSelectEmoji}
-            placement="top"
-            triggerId="btn-chat-composer-emoji"
-          />
-        </div>
+        <EmojiPickerPopover
+          isOpen={isEmojiPickerOpen}
+          onClose={() => setIsEmojiPickerOpen(false)}
+          onSelectEmoji={handleSelectEmoji}
+          placement="top"
+          triggerId="btn-chat-composer-emoji"
+          triggerRef={emojiButtonRef}
+        />
       )}
 
       <div className="flex items-end gap-2 bg-gray-50 border border-gray-200 rounded-2xl p-1.5 focus-within:border-black focus-within:ring-1 focus-within:ring-black/10 transition-all">
         {/* Emoji Button */}
         <button
+          ref={emojiButtonRef}
           type="button"
           id="btn-chat-composer-emoji"
           onClick={() => setIsEmojiPickerOpen(prev => !prev)}
