@@ -48,6 +48,7 @@ export interface ChatViewProps {
   onMarkRead: (conversationId: string) => void;
   initialConversationId?: string;
   onBackToApp?: () => void;
+  onActiveConversationChange?: (id: string | null) => void;
 }
 
 export default function ChatView({
@@ -67,11 +68,12 @@ export default function ChatView({
   onCreateConversation,
   onMarkRead,
   initialConversationId,
-  onBackToApp
+  onBackToApp,
+  onActiveConversationChange
 }: ChatViewProps) {
   const effectiveUser = loggedInUser || currentUser || null;
   const effectiveStaff = staff && staff.length > 0 ? staff : staffMembers;
-  const currentUserId = getCurrentChatUserId(effectiveUser, activeCompany);
+  const currentUserId = getCurrentChatUserId(effectiveUser, activeCompany, effectiveStaff, staffAccounts);
   const currentUserDisplayName = getCurrentChatUserDisplayName(effectiveUser, activeCompany, effectiveStaff);
   const currentUserRole: 'admin' | 'staff' | 'client' =
     effectiveUser?.role === 'admin' ? 'admin' : effectiveUser?.role === 'client' ? 'client' : 'staff';
@@ -120,6 +122,11 @@ export default function ChatView({
     }
   }, [activeConversationId, activeMessages.length]);
 
+  // Notify parent of active conversation selection for targeted polling
+  useEffect(() => {
+    onActiveConversationChange?.(activeConversationId);
+  }, [activeConversationId, onActiveConversationChange]);
+
   // Scroll to bottom on conversation change or new message
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -163,10 +170,10 @@ export default function ChatView({
 
   // Resolve active conversation display details
   const activeTitle = activeConversation
-    ? getConversationDisplayTitle(activeConversation, currentUserId, companies, staff, staffAccounts)
+    ? getConversationDisplayTitle(activeConversation, currentUserId, companies, staff, staffAccounts, systemSettings)
     : '';
   const activeAvatar = activeConversation
-    ? getConversationDisplayAvatar(activeConversation, currentUserId, companies, staff, staffAccounts)
+    ? getConversationDisplayAvatar(activeConversation, currentUserId, companies, staff, staffAccounts, systemSettings)
     : undefined;
 
   // Resolved participants for active conversation
@@ -176,6 +183,11 @@ export default function ChatView({
       resolveParticipantInfo(id, companies, staff, staffAccounts, systemSettings)
     );
   }, [activeConversation, companies, staff, staffAccounts, systemSettings]);
+
+  const conversationCompany = useMemo(() => {
+    if (!activeConversation?.companyId) return null;
+    return companies.find(c => c.id?.toLowerCase() === activeConversation.companyId?.toLowerCase()) || null;
+  }, [activeConversation, companies]);
 
   return (
     <div
@@ -274,7 +286,9 @@ export default function ChatView({
                     {activeConversation.type === 'group'
                       ? `${activeParticipants.length} team members`
                       : activeConversation.type === 'client_admin'
-                      ? 'Secure Support Channel • ARH Admin'
+                      ? (currentUserRole === 'admin' && conversationCompany?.contactPerson
+                          ? `Contact: ${conversationCompany.contactPerson} • Client Support`
+                          : 'Secure Support Channel • ARH')
                       : 'End-to-End Team Chat'}
                   </p>
                 </div>

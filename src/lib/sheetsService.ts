@@ -410,10 +410,22 @@ function parseSalesGoalRecord(item: any): SalesGoalRecord | null {
   };
 }
 
+const SEED_CHAT_CONVERSATION_IDS = new Set([
+  'conv-group-studio-production',
+  'conv-direct-admin-stf101',
+  'conv-client-co-1'
+]);
+
+const SEED_CHAT_MESSAGE_IDS = new Set([
+  'msg-grp-1', 'msg-grp-2', 'msg-grp-3',
+  'msg-dir-1', 'msg-dir-2',
+  'msg-client-1', 'msg-clt-1', 'msg-clt-2'
+]);
+
 function parseChatConversation(raw: any): ChatConversation | null {
   if (!raw) return null;
   const id = String(getProp(raw, ['Conversation ID', 'conversationId', 'id', 'ConversationID', 'Id']) || '').trim();
-  if (!id) return null;
+  if (!id || SEED_CHAT_CONVERSATION_IDS.has(id)) return null;
 
   const rawParticipants = getProp(raw, ['Participant IDs', 'participantIds', 'participants', 'Participants', 'ParticipantIDs']);
   let participantIds: string[] = [];
@@ -457,7 +469,7 @@ function parseChatMessage(raw: any): ChatMessage | null {
   if (!raw) return null;
   const id = String(getProp(raw, ['Message ID', 'messageId', 'id', 'MessageID', 'Id']) || '').trim();
   const conversationId = String(getProp(raw, ['Conversation ID', 'conversationId', 'ConversationID']) || '').trim();
-  if (!id || !conversationId) return null;
+  if (!id || !conversationId || SEED_CHAT_MESSAGE_IDS.has(id) || SEED_CHAT_CONVERSATION_IDS.has(conversationId)) return null;
 
   const rawReadBy = getProp(raw, ['Read By', 'readBy', 'ReadBy']);
   let readBy: string[] = [];
@@ -3123,6 +3135,55 @@ export const sheetsService = {
       return null;
     } catch (error) {
       console.warn('Google Sheets sync notice (fetchChatMessages):', error);
+      return null;
+    }
+  },
+
+  /**
+   * Lightweight Chat-only sync from Google Sheets.
+   * Returns updated conversations and messages in a single fast GET request.
+   */
+  async fetchChatUpdates(
+    url: string,
+    conversationId?: string,
+    since?: string
+  ): Promise<{ conversations: ChatConversation[]; messages: ChatMessage[]; timestamp?: string } | null> {
+    if (!url) return null;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      let endpoint = `${cleanedUrl}?action=getChatUpdates`;
+      if (conversationId) {
+        endpoint += `&conversationId=${encodeURIComponent(conversationId)}`;
+      }
+      if (since) {
+        endpoint += `&since=${encodeURIComponent(since)}`;
+      }
+      const response = await fetch(endpoint, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      if (!data) return null;
+
+      const rawConvs = data.conversations || data.ChatConversations;
+      const rawMsgs = data.messages || data.ChatMessages;
+
+      const conversations = Array.isArray(rawConvs)
+        ? rawConvs.map(parseChatConversation).filter((c): c is ChatConversation => c !== null)
+        : [];
+
+      const messages = Array.isArray(rawMsgs)
+        ? rawMsgs.map(parseChatMessage).filter((m): m is ChatMessage => m !== null)
+        : [];
+
+      return {
+        conversations,
+        messages,
+        timestamp: data.timestamp
+      };
+    } catch (error) {
+      console.warn('Google Sheets sync notice (fetchChatUpdates):', error);
       return null;
     }
   },

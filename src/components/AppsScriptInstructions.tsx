@@ -152,6 +152,10 @@ function doGet(e) {
     return getJsonOutput(getChatMessages(sheet, e.parameter.conversationId));
   }
 
+  if (action === "getChatUpdates") {
+    return getJsonOutput(getChatUpdates(sheet, e.parameter.since, e.parameter.conversationId));
+  }
+
   if (action === "getChatParticipants") {
     return getJsonOutput(getTableData(sheet, "ChatParticipants"));
   }
@@ -416,6 +420,14 @@ function doPost(e) {
   if (payload.action === "markChatRead") {
     return getJsonOutput(markChatRead(sheet, payload.conversationId, payload.userId));
   }
+
+  if (payload.action === "getOrCreateDirectConversation") {
+    return getJsonOutput(getOrCreateDirectConversationServer(sheet, payload.participantA, payload.participantB, payload.title));
+  }
+
+  if (payload.action === "deduplicateChat" || payload.action === "cleanChatDuplicates") {
+    return getJsonOutput(deduplicateAndConsolidateChatConversations(sheet));
+  }
   
   return getJsonOutput({ status: "error", message: "Unknown action" });
 }
@@ -564,8 +576,8 @@ function initSheets(ss) {
   // Seed default expense categories if ExpenseCategories has no data rows
   seedDefaultExpenseCategories(ss);
 
-  // Seed default chat channels if ChatConversations has no data rows
-  seedDefaultChat(ss);
+  // Purge any legacy demo/seed chat rows from previous tests (leaves user messages untouched)
+  cleanKnownSeedChat(ss);
 
   // Clean any historical duplicate rows in JobColumns / JobItemColumns
   cleanDuplicateColumns(ss);
@@ -2440,6 +2452,78 @@ function getChatMessages(ss, conversationId) {
   });
 }
 
+function normalizeParticipantIdServer(id) {
+  if (!id) return "";
+  var s = String(id).trim().toLowerCase();
+  if (s === "arh" || s === "admin") return "admin";
+  return s;
+}
+
+function getDirectConversationKeyServer(p1, p2) {
+  var norm1 = normalizeParticipantIdServer(p1);
+  var norm2 = normalizeParticipantIdServer(p2);
+  return [norm1, norm2].sort().join("__");
+}
+
+function findExistingDirectConversationServer(ss, p1, p2) {
+  var sheet = ss.getSheetByName("ChatConversations");
+  if (!sheet || sheet.getLastRow() <= 1) return null;
+  var targetKey = getDirectConversationKeyServer(p1, p2);
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0] || [];
+
+  var idIndex = 0, typeIndex = 1, partIndex = 4;
+  for (var c = 0; c < headers.length; c++) {
+    var nh = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (nh === "conversationid") idIndex = c;
+    else if (nh === "type") typeIndex = c;
+    else if (nh === "participantids") partIndex = c;
+  }
+
+  for (var i = 1; i < data.length; i++) {
+    var type = String(data[i][typeIndex] || "").trim().toLowerCase();
+    if (type === "direct") {
+      var parts = String(data[i][partIndex] || "").split(",");
+      if (parts.length === 2) {
+        var key = getDirectConversationKeyServer(parts[0], parts[1]);
+        if (key === targetKey) {
+          var conv = {};
+          for (var h = 0; h < headers.length; h++) {
+            conv[headers[h]] = data[i][h];
+          }
+          conv.id = String(data[i][idIndex]);
+          return { rowIndex: i + 1, conversation: conv };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function getOrCreateDirectConversationServer(ss, p1, p2, title) {
+  var existing = findExistingDirectConversationServer(ss, p1, p2);
+  if (existing) {
+    return { status: "success", conversationId: existing.conversation.id, conversation: existing.conversation, isNew: false };
+  }
+  var norm1 = normalizeParticipantIdServer(p1);
+  var norm2 = normalizeParticipantIdServer(p2);
+  var sorted = [norm1, norm2].sort();
+  var canonicalId = "conv-direct-" + sorted[0] + "-" + sorted[1];
+
+  var newConv = {
+    id: canonicalId,
+    type: "direct",
+    title: title || (sorted[1] === "admin" ? "ARH" : sorted[1]),
+    participantIds: [norm1, norm2],
+    createdBy: norm1,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  saveChatConversation(ss, newConv);
+  return { status: "success", conversationId: canonicalId, conversation: newConv, isNew: true };
+}
+
 function saveChatConversation(ss, conversation) {
   var sheet = ss.getSheetByName("ChatConversations");
   if (!sheet || !conversation) return { status: "error", message: "Missing conversation" };
@@ -2448,37 +2532,91 @@ function saveChatConversation(ss, conversation) {
   var headers = data[0];
 
   var targetId = String(conversation.id || conversation["Conversation ID"] || conversation["conversationId"] || "").trim();
-  if (!targetId) return { status: "error", message: "Missing conversation ID" };
+  var convType = String(conversation.type || conversation["Type"] || "direct").trim().toLowerCase();
 
-  var idIndex = 0;
+  var idIndex = 0, typeIndex = 1, companyIdIndex = 3, partIndex = 4;
   for (var c = 0; c < headers.length; c++) {
     var nh = headers[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (nh === "conversationid") {
-      idIndex = c;
-      break;
-    }
+    if (nh === "conversationid") idIndex = c;
+    else if (nh === "type") typeIndex = c;
+    else if (nh === "companyid") companyIdIndex = c;
+    else if (nh === "participantids") partIndex = c;
+  }
+
+  var participantIds = [];
+  if (Array.isArray(conversation.participantIds)) {
+    participantIds = conversation.participantIds;
+  } else if (conversation.participantIds) {
+    participantIds = String(conversation.participantIds).split(",").map(function(s) { return s.trim(); });
   }
 
   var rowIndex = -1;
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][idIndex]).trim() === targetId) {
-      rowIndex = i + 1;
-      break;
+
+  // 1. Search by exact Conversation ID
+  if (targetId) {
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][idIndex]).trim() === targetId) {
+        rowIndex = i + 1;
+        break;
+      }
     }
   }
 
-  var participantIdsStr = "";
-  if (Array.isArray(conversation.participantIds)) {
-    participantIdsStr = conversation.participantIds.join(",");
-  } else if (conversation.participantIds) {
-    participantIdsStr = String(conversation.participantIds);
+  // 2. Server-side direct conversation matching:
+  // If not found by ID and it's a direct conversation, resolve existing direct conversation using stable participant IDs!
+  if (rowIndex === -1 && convType === "direct" && participantIds.length === 2) {
+    var directKey = getDirectConversationKeyServer(participantIds[0], participantIds[1]);
+    for (var i = 1; i < data.length; i++) {
+      var rowType = String(data[i][typeIndex] || "").trim().toLowerCase();
+      if (rowType === "direct") {
+        var rowParts = String(data[i][partIndex] || "").split(",");
+        if (rowParts.length === 2 && getDirectConversationKeyServer(rowParts[0], rowParts[1]) === directKey) {
+          rowIndex = i + 1;
+          targetId = String(data[i][idIndex]).trim(); // REUSE the existing canonical conversation!
+          break;
+        }
+      }
+    }
+    // If still not found, enforce canonical deterministic ID
+    if (rowIndex === -1 && !targetId) {
+      var pA = normalizeParticipantIdServer(participantIds[0]);
+      var pB = normalizeParticipantIdServer(participantIds[1]);
+      var sortedP = [pA, pB].sort();
+      targetId = "conv-direct-" + sortedP[0] + "-" + sortedP[1];
+    }
   }
+
+  // 3. Server-side client_admin conversation matching:
+  // If not found by ID and it's client_admin, match existing conversation by Company ID!
+  var targetCompanyId = String(conversation.companyId || conversation["Company ID"] || "").trim();
+  if (rowIndex === -1 && (convType === "client_admin" || targetCompanyId)) {
+    if (targetCompanyId) {
+      var normCoId = targetCompanyId.toLowerCase();
+      for (var i = 1; i < data.length; i++) {
+        var rowCo = String(data[i][companyIdIndex] || "").trim().toLowerCase();
+        if (rowCo === normCoId) {
+          rowIndex = i + 1;
+          targetId = String(data[i][idIndex]).trim(); // REUSE the existing company conversation!
+          break;
+        }
+      }
+    }
+    if (rowIndex === -1 && !targetId && targetCompanyId) {
+      targetId = "conv-client-" + targetCompanyId;
+    }
+  }
+
+  if (!targetId) {
+    targetId = "conv-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+  }
+
+  var participantIdsStr = participantIds.join(",");
 
   var convMap = {
     "Conversation ID": targetId,
     "Type": conversation.type || "direct",
     "Title": conversation.title || "",
-    "Company ID": conversation.companyId || "",
+    "Company ID": targetCompanyId,
     "Participant IDs": participantIdsStr,
     "Created By": conversation.createdBy || "admin",
     "Created At": conversation.createdAt || new Date().toISOString(),
@@ -2502,8 +2640,8 @@ function saveChatConversation(ss, conversation) {
     sheet.appendRow(row);
   }
 
-  if (Array.isArray(conversation.participantIds)) {
-    syncChatParticipants(ss, targetId, conversation.participantIds, conversation.companyId);
+  if (participantIds.length > 0) {
+    syncChatParticipants(ss, targetId, participantIds, targetCompanyId);
   }
 
   return { status: "success", conversationId: targetId };
@@ -2725,138 +2863,206 @@ function markChatRead(ss, conversationId, userId) {
   return { status: "success" };
 }
 
-function seedDefaultChat(ss) {
-  var sheet = ss.getSheetByName("ChatConversations");
-  if (!sheet) return;
-  var data = sheet.getDataRange().getValues();
-  if (data.length > 1) return;
+function deduplicateAndConsolidateChatConversations(ss) {
+  var convSheet = ss.getSheetByName("ChatConversations");
+  var msgSheet = ss.getSheetByName("ChatMessages");
+  var partSheet = ss.getSheetByName("ChatParticipants");
+  if (!convSheet || convSheet.getLastRow() <= 1) return { status: "success", mergedCount: 0 };
 
-  var defaultConvs = [
-    {
-      id: "conv-group-studio-production",
-      type: "group",
-      title: "Studio Production & Press",
-      companyId: "",
-      participantIds: ["admin", "STF-101"],
-      createdBy: "admin",
-      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date(Date.now() - 42 * 60 * 1000).toISOString(),
-      lastMessageText: "Screens for the new uniform batch are prepared and aligned! 👍",
-      lastMessageTimestamp: new Date(Date.now() - 42 * 60 * 1000).toISOString(),
-      lastMessageSenderId: "STF-101",
-      lastMessageSenderName: "Regie Santos",
-      status: "active",
-      createdByRole: "admin"
-    },
-    {
-      id: "conv-direct-admin-stf101",
-      type: "direct",
-      title: "Regie Santos",
-      companyId: "",
-      participantIds: ["admin", "STF-101"],
-      createdBy: "admin",
-      createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date(Date.now() - 110 * 60 * 1000).toISOString(),
-      lastMessageText: "Great work on the weekend rush order, Regie. Inventory logs are updated.",
-      lastMessageTimestamp: new Date(Date.now() - 110 * 60 * 1000).toISOString(),
-      lastMessageSenderId: "admin",
-      lastMessageSenderName: "Admin",
-      status: "active",
-      createdByRole: "admin"
-    },
-    {
-      id: "conv-client-co-1",
-      type: "client_admin",
-      title: "Paramount Studios",
-      companyId: "co-1",
-      participantIds: ["admin", "co-1"],
-      createdBy: "co-1",
-      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      updatedAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-      lastMessageText: "Hi ARH Print team! Can we double check the embroidery thread color for the jackets?",
-      lastMessageTimestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-      lastMessageSenderId: "co-1",
-      lastMessageSenderName: "Paramount Studios",
-      status: "active",
-      createdByRole: "client"
+  var convData = convSheet.getDataRange().getValues();
+  var convHeaders = convData[0];
+  var cIdIdx = 0, cTypeIdx = 1, cCoIdx = 3, cPartIdx = 4, cUpdIdx = 7, cLastTxtIdx = 8, cLastTimeIdx = 9;
+
+  for (var c = 0; c < convHeaders.length; c++) {
+    var nh = convHeaders[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (nh === "conversationid") cIdIdx = c;
+    else if (nh === "type") cTypeIdx = c;
+    else if (nh === "companyid") cCoIdx = c;
+    else if (nh === "participantids") cPartIdx = c;
+    else if (nh === "updatedat") cUpdIdx = c;
+    else if (nh === "lastmessagetext") cLastTxtIdx = c;
+    else if (nh === "lastmessagetimestamp") cLastTimeIdx = c;
+  }
+
+  var seedConvSet = {
+    "conv-group-studio-production": true,
+    "conv-direct-admin-stf101": true,
+    "conv-client-co-1": true
+  };
+
+  var directGroups = {};
+  var clientGroups = {};
+  var rowsToDelete = [];
+  var redirectMap = {};
+
+  for (var i = 1; i < convData.length; i++) {
+    var id = String(convData[i][cIdIdx] || "").trim();
+    if (!id || seedConvSet[id]) continue;
+
+    var type = String(convData[i][cTypeIdx] || "").trim().toLowerCase();
+    var coId = String(convData[i][cCoIdx] || "").trim().toLowerCase();
+
+    if (type === "direct") {
+      var parts = String(convData[i][cPartIdx] || "").split(",");
+      if (parts.length === 2) {
+        var key = getDirectConversationKeyServer(parts[0], parts[1]);
+        if (!directGroups[key]) directGroups[key] = [];
+        directGroups[key].push({ rowIndex: i + 1, id: id, rowData: convData[i] });
+      }
+    } else if (type === "client_admin" && coId) {
+      if (!clientGroups[coId]) clientGroups[coId] = [];
+      clientGroups[coId].push({ rowIndex: i + 1, id: id, rowData: convData[i] });
     }
+  }
+
+  // Resolve direct duplicate groups
+  Object.keys(directGroups).forEach(function(key) {
+    var group = directGroups[key];
+    if (group.length > 1) {
+      var parts = key.split("__");
+      var canonicalExpectedId = "conv-direct-" + parts[0] + "-" + parts[1];
+      var canonical = null;
+      for (var g = 0; g < group.length; g++) {
+        if (group[g].id.toLowerCase() === canonicalExpectedId.toLowerCase()) {
+          canonical = group[g];
+          break;
+        }
+      }
+      if (!canonical) canonical = group[0];
+
+      for (var g = 0; g < group.length; g++) {
+        if (group[g].id !== canonical.id) {
+          redirectMap[group[g].id] = canonical.id;
+          rowsToDelete.push(group[g].id);
+        }
+      }
+    }
+  });
+
+  // Resolve client duplicate groups
+  Object.keys(clientGroups).forEach(function(coId) {
+    var group = clientGroups[coId];
+    if (group.length > 1) {
+      var canonicalExpectedId = "conv-client-" + coId;
+      var canonical = null;
+      for (var g = 0; g < group.length; g++) {
+        if (group[g].id.toLowerCase() === canonicalExpectedId.toLowerCase()) {
+          canonical = group[g];
+          break;
+        }
+      }
+      if (!canonical) canonical = group[0];
+
+      for (var g = 0; g < group.length; g++) {
+        if (group[g].id !== canonical.id) {
+          redirectMap[group[g].id] = canonical.id;
+          rowsToDelete.push(group[g].id);
+        }
+      }
+    }
+  });
+
+  // If duplicates exist, migrate all messages attached to duplicate IDs into the canonical conversation ID
+  var hasRedirects = Object.keys(redirectMap).length > 0;
+  if (hasRedirects && msgSheet && msgSheet.getLastRow() > 1) {
+    var mData = msgSheet.getDataRange().getValues();
+    var mHeaders = mData[0];
+    var mConvIdIdx = 1;
+    for (var c = 0; c < mHeaders.length; c++) {
+      var nh = mHeaders[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (nh === "conversationid") {
+        mConvIdIdx = c;
+        break;
+      }
+    }
+    for (var m = 1; m < mData.length; m++) {
+      var msgCId = String(mData[m][mConvIdIdx] || "").trim();
+      if (redirectMap[msgCId]) {
+        msgSheet.getRange(m + 1, mConvIdIdx + 1).setValue(redirectMap[msgCId]);
+      }
+    }
+  }
+
+  // Safely delete duplicate conversation rows
+  rowsToDelete.forEach(function(dupId) {
+    deleteRowById(ss, "ChatConversations", "Conversation ID", dupId);
+    if (partSheet) {
+      deleteRowById(ss, "ChatParticipants", "Conversation ID", dupId);
+    }
+  });
+
+  return { status: "success", mergedCount: rowsToDelete.length, redirectMap: redirectMap };
+}
+
+function cleanKnownSeedChat(ss) {
+  var seedConvIds = [
+    "conv-group-studio-production",
+    "conv-direct-admin-stf101",
+    "conv-client-co-1"
+  ];
+  var seedMsgIds = [
+    "msg-grp-1", "msg-grp-2", "msg-grp-3",
+    "msg-dir-1", "msg-dir-2",
+    "msg-client-1", "msg-clt-1", "msg-clt-2"
   ];
 
-  saveChatConversationsBatch(ss, defaultConvs);
+  seedConvIds.forEach(function(id) {
+    deleteRowById(ss, "ChatConversations", "Conversation ID", id);
+    deleteRowById(ss, "ChatParticipants", "Conversation ID", id);
+  });
+  seedMsgIds.forEach(function(id) {
+    deleteRowById(ss, "ChatMessages", "Message ID", id);
+  });
 
-  var defaultMsgs = [
-    {
-      id: "msg-grp-1",
-      conversationId: "conv-group-studio-production",
-      senderId: "admin",
-      senderName: "Admin",
-      senderRole: "admin",
-      senderAvatarUrl: "",
-      text: "Welcome to the Studio Production channel. All print press calibrations and schedule updates will be logged here.",
-      timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      readBy: ["admin", "STF-101"],
-      reactions: { "🙌": ["Regie Santos", "Admin"] }
-    },
-    {
-      id: "msg-grp-2",
-      conversationId: "conv-group-studio-production",
-      senderId: "STF-101",
-      senderName: "Regie Santos",
-      senderRole: "staff",
-      senderAvatarUrl: "",
-      text: "Understood! We inspected the plastisol ink levels and mesh screens this morning.",
-      timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 15 * 60 * 1000).toISOString(),
-      readBy: ["admin", "STF-101"],
-      reactions: { "👍": ["Admin"] }
-    },
-    {
-      id: "msg-grp-3",
-      conversationId: "conv-group-studio-production",
-      senderId: "STF-101",
-      senderName: "Regie Santos",
-      senderRole: "staff",
-      senderAvatarUrl: "",
-      text: "Screens for the new uniform batch are prepared and aligned! 👍",
-      timestamp: new Date(Date.now() - 42 * 60 * 1000).toISOString(),
-      readBy: ["STF-101"],
-      reactions: { "🔥": ["Admin"], "🚀": ["Regie Santos"] }
-    },
-    {
-      id: "msg-dir-1",
-      conversationId: "conv-direct-admin-stf101",
-      senderId: "STF-101",
-      senderName: "Regie Santos",
-      senderRole: "staff",
-      senderAvatarUrl: "",
-      text: "Hi Admin, I submitted the updated supply replenishment report for emulsion fluid.",
-      timestamp: new Date(Date.now() - 125 * 60 * 1000).toISOString(),
-      readBy: ["admin", "STF-101"]
-    },
-    {
-      id: "msg-dir-2",
-      conversationId: "conv-direct-admin-stf101",
-      senderId: "admin",
-      senderName: "Admin",
-      senderRole: "admin",
-      senderAvatarUrl: "",
-      text: "Great work on the weekend rush order, Regie. Inventory logs are updated.",
-      timestamp: new Date(Date.now() - 110 * 60 * 1000).toISOString(),
-      readBy: ["admin", "STF-101"]
-    },
-    {
-      id: "msg-client-1",
-      conversationId: "conv-client-co-1",
-      senderId: "co-1",
-      senderName: "Paramount Studios",
-      senderRole: "client",
-      senderAvatarUrl: "",
-      text: "Hi ARH Print team! Can we double check the embroidery thread color for the jackets?",
-      timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-      readBy: ["co-1"]
+  deduplicateAndConsolidateChatConversations(ss);
+}
+
+function getChatUpdates(ss, since, conversationId) {
+  var convSheet = ss.getSheetByName("ChatConversations");
+  var msgSheet = ss.getSheetByName("ChatMessages");
+
+  var convs = convSheet ? getTableData(ss, "ChatConversations") : [];
+  var msgs = [];
+
+  if (msgSheet && msgSheet.getLastRow() > 1) {
+    var rawMsgs = getTableData(ss, "ChatMessages");
+    if (conversationId) {
+      var cleanCId = String(conversationId).trim();
+      msgs = rawMsgs.filter(function(m) {
+        var cId = m["Conversation ID"] || m["conversationId"] || m["ConversationID"];
+        return String(cId).trim() === cleanCId;
+      });
+    } else {
+      msgs = rawMsgs.slice(-150);
     }
-  ];
+  }
 
-  saveChatMessagesBatch(ss, defaultMsgs);
+  var seedConvSet = {
+    "conv-group-studio-production": true,
+    "conv-direct-admin-stf101": true,
+    "conv-client-co-1": true
+  };
+  var seedMsgSet = {
+    "msg-grp-1": true, "msg-grp-2": true, "msg-grp-3": true,
+    "msg-dir-1": true, "msg-dir-2": true,
+    "msg-client-1": true, "msg-clt-1": true, "msg-clt-2": true
+  };
+
+  convs = convs.filter(function(c) {
+    var id = String(c["Conversation ID"] || c["id"] || "");
+    return !seedConvSet[id];
+  });
+  msgs = msgs.filter(function(m) {
+    var id = String(m["Message ID"] || m["id"] || "");
+    return !seedMsgSet[id];
+  });
+
+  return {
+    status: "success",
+    timestamp: new Date().toISOString(),
+    conversations: convs,
+    messages: msgs
+  };
 }
 
 function getJsonOutput(obj) {

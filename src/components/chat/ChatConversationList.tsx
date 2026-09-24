@@ -10,7 +10,8 @@ import {
   ChatMessage,
   CompanyProfile,
   StaffMember,
-  StaffAccount
+  StaffAccount,
+  SystemSettings
 } from '../../types';
 import UserAvatar from '../UserAvatar';
 import {
@@ -31,6 +32,7 @@ export interface ChatConversationListProps {
   companies: CompanyProfile[];
   staff: StaffMember[];
   staffAccounts: StaffAccount[];
+  systemSettings?: SystemSettings;
 }
 
 export default function ChatConversationList({
@@ -43,7 +45,8 @@ export default function ChatConversationList({
   currentUserRole,
   companies = [],
   staff = [],
-  staffAccounts = []
+  staffAccounts = [],
+  systemSettings
 }: ChatConversationListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTab, setFilterTab] = useState<'all' | 'direct' | 'group' | 'client'>('all');
@@ -60,12 +63,12 @@ export default function ChatConversationList({
       const q = searchQuery.trim().toLowerCase();
       if (!q) return true;
 
-      const title = getConversationDisplayTitle(conv, currentUserId, companies, staff, staffAccounts).toLowerCase();
+      const title = getConversationDisplayTitle(conv, currentUserId, companies, staff, staffAccounts, systemSettings).toLowerCase();
       const lastMsg = (conv.lastMessageText || '').toLowerCase();
 
       return title.includes(q) || lastMsg.includes(q);
     });
-  }, [conversations, filterTab, searchQuery, currentUserId, companies, staff, staffAccounts]);
+  }, [conversations, filterTab, searchQuery, currentUserId, companies, staff, staffAccounts, systemSettings]);
 
   return (
     <div className="flex flex-col h-full bg-white border-r border-gray-200 w-full md:w-80 lg:w-96 shrink-0 select-none">
@@ -174,8 +177,8 @@ export default function ChatConversationList({
         ) : (
           filteredConversations.map(conv => {
             const isSelected = activeConversationId === conv.id;
-            const title = getConversationDisplayTitle(conv, currentUserId, companies, staff, staffAccounts);
-            const avatarUrl = getConversationDisplayAvatar(conv, currentUserId, companies, staff, staffAccounts);
+            const title = getConversationDisplayTitle(conv, currentUserId, companies, staff, staffAccounts, systemSettings);
+            const avatarUrl = getConversationDisplayAvatar(conv, currentUserId, companies, staff, staffAccounts, systemSettings);
             const unreadCount = getConversationUnreadCount(conv.id, messages, currentUserId);
 
             return (
@@ -223,6 +226,17 @@ export default function ChatConversationList({
                       {formatChatTimestamp(conv.lastMessageTimestamp || conv.updatedAt)}
                     </span>
                   </div>
+
+                  {conv.type === 'client_admin' && currentUserRole === 'admin' && (
+                    (() => {
+                      const co = conv.companyId ? companies.find(c => c.id?.toLowerCase() === conv.companyId?.toLowerCase()) : undefined;
+                      return co?.contactPerson ? (
+                        <div className="text-[10px] text-gray-500 font-mono -mt-0.5 mb-0.5 truncate">
+                          Contact: {co.contactPerson}
+                        </div>
+                      ) : null;
+                    })()
+                  )}
 
                   <div className="flex items-center justify-between gap-1">
                     <p className="text-[11px] text-gray-500 truncate font-sans">

@@ -16,10 +16,13 @@ import {
 
 /**
  * Normalizes the user ID for chat messaging across Admin, Staff, and Client roles.
+ * Canonical identity is strictly based on stable account/company IDs, never browser/session state.
  */
 export function getCurrentChatUserId(
   user: AuthUser | null | undefined,
-  activeCompany?: CompanyProfile | null
+  activeCompany?: CompanyProfile | null,
+  staffList?: StaffMember[],
+  staffAccounts?: StaffAccount[]
 ): string {
   if (!user) return 'anonymous';
   if (user.role === 'admin') {
@@ -28,12 +31,35 @@ export function getCurrentChatUserId(
   if (user.role === 'client') {
     return user.companyId || activeCompany?.id || 'client';
   }
-  // Staff
+
+  // Staff: resolve stable Staff ID (e.g. STF-101 / staff_123)
+  if (user.staffId && user.staffId.trim()) {
+    return user.staffId.trim();
+  }
+  if (user.accountId && staffAccounts && staffAccounts.length > 0) {
+    const matched = staffAccounts.find(a => a.id === user.accountId || a.staffId === user.accountId);
+    if (matched?.staffId && matched.staffId.trim()) {
+      return matched.staffId.trim();
+    }
+  }
+  if (user.username && staffAccounts && staffAccounts.length > 0) {
+    const matched = staffAccounts.find(a => a.username?.toLowerCase() === user.username?.toLowerCase());
+    if (matched?.staffId && matched.staffId.trim()) {
+      return matched.staffId.trim();
+    }
+  }
+  if (user.name && staffList && staffList.length > 0) {
+    const matched = staffList.find(s => s.fullName?.toLowerCase() === user.name?.toLowerCase());
+    if (matched?.id && matched.id.trim()) {
+      return matched.id.trim();
+    }
+  }
   return user.staffId || user.accountId || user.id || 'staff';
 }
 
 /**
  * Returns the human display name of the current user.
+ * Admin display identity is strictly "ARH".
  */
 export function getCurrentChatUserDisplayName(
   user: AuthUser | null | undefined,
@@ -42,7 +68,7 @@ export function getCurrentChatUserDisplayName(
 ): string {
   if (!user) return 'Guest';
   if (user.role === 'admin') {
-    return user.name || 'Admin';
+    return 'ARH';
   }
   if (user.role === 'client') {
     return activeCompany?.name || user.name || 'Client';
@@ -54,16 +80,18 @@ export function getCurrentChatUserDisplayName(
 
 /**
  * Resolves avatar URL for the current user.
+ * ARH identity uses the configured hub logo.
  */
 export function getCurrentChatUserAvatar(
   user: AuthUser | null | undefined,
   activeCompany?: CompanyProfile | null,
   staffList?: StaffMember[],
-  staffAccounts?: StaffAccount[]
+  staffAccounts?: StaffAccount[],
+  systemSettings?: SystemSettings
 ): string | undefined {
   if (!user) return undefined;
   if (user.role === 'admin') {
-    return user.profilePictureUrl || user.avatarUrl || undefined;
+    return systemSettings?.logoUrl || user.profilePictureUrl || user.avatarUrl || undefined;
   }
   if (user.role === 'client') {
     return activeCompany?.logoUrl || undefined;
@@ -84,6 +112,7 @@ export function getCurrentChatUserAvatar(
 
 /**
  * Resolves detailed participant metadata from an arbitrary participant ID.
+ * Canonical Admin identity is always named "ARH" and uses the uploaded hub logo.
  */
 export function resolveParticipantInfo(
   participantId: string,
@@ -92,10 +121,11 @@ export function resolveParticipantInfo(
   staffAccounts: StaffAccount[] = [],
   systemSettings?: SystemSettings
 ): ChatParticipant {
-  if (participantId === 'admin' || participantId.toLowerCase().includes('admin')) {
+  const cleanId = String(participantId || '').trim().toLowerCase();
+  if (cleanId === 'admin' || cleanId === 'arh') {
     return {
       id: 'admin',
-      name: systemSettings?.hubName ? `${systemSettings.shortHubName || 'ARH'} Admin` : 'Admin',
+      name: 'ARH',
       role: 'admin',
       avatarUrl: systemSettings?.logoUrl,
       email: systemSettings?.adminEmail
@@ -103,7 +133,7 @@ export function resolveParticipantInfo(
   }
 
   // Check if it's a company
-  const company = companies.find(c => c.id === participantId || c.username === participantId);
+  const company = companies.find(c => c.id?.toLowerCase() === cleanId || c.username?.toLowerCase() === cleanId);
   if (company) {
     return {
       id: company.id,
@@ -115,12 +145,12 @@ export function resolveParticipantInfo(
   }
 
   // Check if it's a staff member
-  const staffMember = staff.find(s => s.id === participantId);
-  const staffAcc = staffAccounts.find(a => a.staffId === participantId || a.id === participantId);
+  const staffMember = staff.find(s => s.id?.toLowerCase() === cleanId);
+  const staffAcc = staffAccounts.find(a => a.staffId?.toLowerCase() === cleanId || a.id?.toLowerCase() === cleanId);
 
   if (staffMember || staffAcc) {
     return {
-      id: participantId,
+      id: staffMember?.id || staffAcc?.staffId || participantId,
       name: staffMember?.fullName || staffAcc?.name || 'Staff Member',
       role: 'staff',
       avatarUrl: staffMember?.profilePictureUrl || staffMember?.avatarUrl || staffAcc?.profilePictureUrl || staffAcc?.avatarUrl,
@@ -138,9 +168,9 @@ export function resolveParticipantInfo(
 
 /**
  * Strict role-based filtering for conversations.
- * - Client can ONLY see their own conversation with Admin (companyId matching).
+ * - Client can ONLY see their own conversation with ARH (companyId matching).
  * - Staff can see direct chats they are a participant in, plus groups they belong to.
- * - Admin can see all conversations (internal + client support).
+ * - Admin/ARH can see all conversations (internal + client support).
  */
 export function filterConversationsForUser(
   conversations: ChatConversation[],
@@ -149,21 +179,29 @@ export function filterConversationsForUser(
   currentCompanyId?: string
 ): ChatConversation[] {
   if (!Array.isArray(conversations)) return [];
+  const normCurrent = String(currentUserId || '').trim().toLowerCase();
 
   if (currentUserRole === 'client') {
-    const validCompanyId = currentCompanyId || currentUserId;
+    const validCompanyId = String(currentCompanyId || currentUserId || '').trim().toLowerCase();
     return conversations.filter(c => {
       if (c.type !== 'client_admin') return false;
-      return c.companyId === validCompanyId || c.participantIds.includes(validCompanyId);
+      const cCo = String(c.companyId || '').trim().toLowerCase();
+      if (cCo === validCompanyId) return true;
+      if (Array.isArray(c.participantIds)) {
+        return c.participantIds.some(p => String(p).trim().toLowerCase() === validCompanyId);
+      }
+      return false;
     });
   }
 
   if (currentUserRole === 'staff') {
     return conversations.filter(c => {
-      // Staff only sees chats they participate in (direct staff chats, staff groups, staff-admin direct)
-      // Client support conversations are reserved for Admin
       if (c.type === 'client_admin') return false;
-      return c.participantIds.includes(currentUserId);
+      if (!Array.isArray(c.participantIds)) return false;
+      return c.participantIds.some(p => {
+        const normP = String(p).trim().toLowerCase();
+        return normP === normCurrent;
+      });
     });
   }
 
@@ -180,11 +218,12 @@ export function getConversationUnreadCount(
   currentUserId: string
 ): number {
   if (!Array.isArray(messages) || !currentUserId) return 0;
+  const normUser = String(currentUserId).trim().toLowerCase();
   return messages.filter(
     m =>
       m.conversationId === conversationId &&
-      m.senderId !== currentUserId &&
-      (!m.readBy || !m.readBy.includes(currentUserId))
+      String(m.senderId || '').trim().toLowerCase() !== normUser &&
+      (!m.readBy || !m.readBy.some(r => String(r).trim().toLowerCase() === normUser))
   ).length;
 }
 
@@ -205,12 +244,13 @@ export function getTotalUnreadCount(
     currentCompanyId
   );
   const accessibleConvIds = new Set(accessibleConvs.map(c => c.id));
+  const normUser = String(currentUserId).trim().toLowerCase();
 
   return (messages || []).filter(
     m =>
       accessibleConvIds.has(m.conversationId) &&
-      m.senderId !== currentUserId &&
-      (!m.readBy || !m.readBy.includes(currentUserId))
+      String(m.senderId || '').trim().toLowerCase() !== normUser &&
+      (!m.readBy || !m.readBy.some(r => String(r).trim().toLowerCase() === normUser))
   ).length;
 }
 
@@ -275,53 +315,355 @@ export function formatChatDateHeader(isoString: string): string {
 }
 
 /**
+ * Returns a stable, deterministic direct conversation ID from two participant IDs.
+ * Always produces the exact same conversation ID regardless of browser, device, or ordering.
+ * e.g. "conv-direct-admin-STF-101"
+ */
+export function getCanonicalDirectConversationId(participantA: string, participantB: string): string {
+  const normA = (participantA.toLowerCase() === 'arh' ? 'admin' : participantA).trim();
+  const normB = (participantB.toLowerCase() === 'arh' ? 'admin' : participantB).trim();
+  const sorted = [normA, normB].sort((a, b) => a.localeCompare(b));
+  return `conv-direct-${sorted[0]}-${sorted[1]}`;
+}
+
+/**
+ * Normalizes two participant IDs into an order-independent matching key.
+ */
+export function getDirectConversationKey(participantA: string, participantB: string): string {
+  const normA = (participantA.toLowerCase() === 'arh' ? 'admin' : participantA).trim().toLowerCase();
+  const normB = (participantB.toLowerCase() === 'arh' ? 'admin' : participantB).trim().toLowerCase();
+  return [normA, normB].sort().join('__');
+}
+
+/**
+ * Robust search to find if a direct conversation already exists between two participants.
+ * Compares canonical participant IDs without relying on random UUIDs.
+ */
+export function findExistingDirectConversation(
+  conversations: ChatConversation[],
+  participantA: string,
+  participantB: string
+): ChatConversation | undefined {
+  if (!Array.isArray(conversations)) return undefined;
+  const targetKey = getDirectConversationKey(participantA, participantB);
+
+  return conversations.find(c => {
+    if (c.type !== 'direct') return false;
+    if (!Array.isArray(c.participantIds) || c.participantIds.length !== 2) return false;
+    return getDirectConversationKey(c.participantIds[0], c.participantIds[1]) === targetKey;
+  });
+}
+
+/**
  * Resolves the display title for a conversation based on who is looking at it.
+ * Admin side is always displayed as "ARH".
  */
 export function getConversationDisplayTitle(
   conversation: ChatConversation,
   currentUserId: string,
   companies: CompanyProfile[] = [],
   staff: StaffMember[] = [],
-  staffAccounts: StaffAccount[] = []
+  staffAccounts: StaffAccount[] = [],
+  systemSettings?: SystemSettings
 ): string {
   if (conversation.type === 'group') {
     return conversation.title;
   }
 
+  const normCurrent = String(currentUserId || '').trim().toLowerCase();
+  const isCurrentAdmin = normCurrent === 'admin' || normCurrent === 'arh';
+
   if (conversation.type === 'client_admin') {
+    // If the person looking is the client, other participant is ARH!
+    if (!isCurrentAdmin) {
+      return 'ARH';
+    }
+    // If ARH is looking, show the company business name!
     if (conversation.companyId) {
-      const co = companies.find(c => c.id === conversation.companyId);
+      const co = companies.find(c => c.id?.toLowerCase() === conversation.companyId?.toLowerCase());
       if (co) return co.name;
     }
     return conversation.title || 'Client Support';
   }
 
   // Direct conversation: find other participant
-  const otherParticipantId = conversation.participantIds.find(id => id !== currentUserId) || conversation.participantIds[0];
-  const info = resolveParticipantInfo(otherParticipantId, companies, staff, staffAccounts);
+  const otherParticipantId = conversation.participantIds.find(
+    id => String(id).trim().toLowerCase() !== normCurrent
+  ) || conversation.participantIds[0];
+
+  const info = resolveParticipantInfo(otherParticipantId, companies, staff, staffAccounts, systemSettings);
   return info.name;
 }
 
 /**
- * Resolves avatar for conversation list.
+ * Resolves avatar for conversation list and headers.
+ * Admin side uses the uploaded company/hub logo.
  */
 export function getConversationDisplayAvatar(
   conversation: ChatConversation,
   currentUserId: string,
   companies: CompanyProfile[] = [],
   staff: StaffMember[] = [],
-  staffAccounts: StaffAccount[] = []
+  staffAccounts: StaffAccount[] = [],
+  systemSettings?: SystemSettings
 ): string | undefined {
   if (conversation.type === 'group') {
     return undefined; // groups use group icon
   }
 
+  const normCurrent = String(currentUserId || '').trim().toLowerCase();
+  const isCurrentAdmin = normCurrent === 'admin' || normCurrent === 'arh';
+
   if (conversation.type === 'client_admin') {
-    const co = companies.find(c => c.id === conversation.companyId);
+    // If client is looking, other participant is ARH!
+    if (!isCurrentAdmin) {
+      return systemSettings?.logoUrl;
+    }
+    // If ARH is looking, show the company logo!
+    const co = companies.find(c => c.id?.toLowerCase() === conversation.companyId?.toLowerCase());
     return co?.logoUrl;
   }
 
-  const otherParticipantId = conversation.participantIds.find(id => id !== currentUserId) || conversation.participantIds[0];
-  const info = resolveParticipantInfo(otherParticipantId, companies, staff, staffAccounts);
+  const otherParticipantId = conversation.participantIds.find(
+    id => String(id).trim().toLowerCase() !== normCurrent
+  ) || conversation.participantIds[0];
+
+  const info = resolveParticipantInfo(otherParticipantId, companies, staff, staffAccounts, systemSettings);
   return info.avatarUrl;
 }
+
+export const SEED_CHAT_CONVERSATION_IDS = new Set([
+  'conv-group-studio-production',
+  'conv-direct-admin-stf101',
+  'conv-client-co-1'
+]);
+
+export const SEED_CHAT_MESSAGE_IDS = new Set([
+  'msg-grp-1', 'msg-grp-2', 'msg-grp-3',
+  'msg-dir-1', 'msg-dir-2',
+  'msg-client-1', 'msg-clt-1', 'msg-clt-2'
+]);
+
+/**
+ * Deduplicates multiple conversations representing the same relationship (e.g. ARH ↔ staff_123 or ARH ↔ company_123).
+ * Identifies canonical conversations and generates a redirect map for messages attached to redundant IDs.
+ */
+export function deduplicateAndMergeConversations(
+  convs: ChatConversation[]
+): { conversations: ChatConversation[]; redirectMap: Map<string, string> } {
+  const redirectMap = new Map<string, string>();
+  const directGroups = new Map<string, ChatConversation[]>();
+  const clientGroups = new Map<string, ChatConversation[]>();
+  const others: ChatConversation[] = [];
+
+  convs.forEach(c => {
+    if (!c || !c.id || SEED_CHAT_CONVERSATION_IDS.has(c.id)) return;
+
+    if (c.type === 'direct' && Array.isArray(c.participantIds) && c.participantIds.length === 2) {
+      const key = getDirectConversationKey(c.participantIds[0], c.participantIds[1]);
+      if (!directGroups.has(key)) directGroups.set(key, []);
+      directGroups.get(key)!.push(c);
+    } else if (c.type === 'client_admin' && c.companyId) {
+      const key = String(c.companyId).trim().toLowerCase();
+      if (!clientGroups.has(key)) clientGroups.set(key, []);
+      clientGroups.get(key)!.push(c);
+    } else {
+      others.push(c);
+    }
+  });
+
+  const mergedConvs: ChatConversation[] = [...others];
+
+  // Merge direct duplicates
+  directGroups.forEach((group, key) => {
+    if (group.length === 1) {
+      mergedConvs.push(group[0]);
+    } else {
+      const [p1, p2] = key.split('__');
+      const canonicalDefaultId = `conv-direct-${p1}-${p2}`;
+      // Prefer deterministic canonical ID if already present, otherwise use the earliest conversation
+      let canonical = group.find(c => c.id.toLowerCase() === canonicalDefaultId) || group[0];
+
+      group.forEach(dup => {
+        if (dup.id !== canonical.id) {
+          redirectMap.set(dup.id, canonical.id);
+          const dupTime = new Date(dup.lastMessageTimestamp || dup.updatedAt || 0).getTime();
+          const canTime = new Date(canonical.lastMessageTimestamp || canonical.updatedAt || 0).getTime();
+          if (dupTime > canTime) {
+            canonical = {
+              ...canonical,
+              lastMessageText: dup.lastMessageText || canonical.lastMessageText,
+              lastMessageTimestamp: dup.lastMessageTimestamp || canonical.lastMessageTimestamp,
+              lastMessageSenderId: dup.lastMessageSenderId || canonical.lastMessageSenderId,
+              lastMessageSenderName: dup.lastMessageSenderName || canonical.lastMessageSenderName,
+              updatedAt: dup.updatedAt || canonical.updatedAt
+            };
+          }
+        }
+      });
+      mergedConvs.push(canonical);
+    }
+  });
+
+  // Merge client_admin duplicates
+  clientGroups.forEach((group, companyId) => {
+    if (group.length === 1) {
+      mergedConvs.push(group[0]);
+    } else {
+      const canonicalDefaultId = `conv-client-${companyId}`;
+      let canonical = group.find(c => c.id.toLowerCase() === canonicalDefaultId) || group[0];
+
+      group.forEach(dup => {
+        if (dup.id !== canonical.id) {
+          redirectMap.set(dup.id, canonical.id);
+          const dupTime = new Date(dup.lastMessageTimestamp || dup.updatedAt || 0).getTime();
+          const canTime = new Date(canonical.lastMessageTimestamp || canonical.updatedAt || 0).getTime();
+          if (dupTime > canTime) {
+            canonical = {
+              ...canonical,
+              lastMessageText: dup.lastMessageText || canonical.lastMessageText,
+              lastMessageTimestamp: dup.lastMessageTimestamp || canonical.lastMessageTimestamp,
+              lastMessageSenderId: dup.lastMessageSenderId || canonical.lastMessageSenderId,
+              lastMessageSenderName: dup.lastMessageSenderName || canonical.lastMessageSenderName,
+              updatedAt: dup.updatedAt || canonical.updatedAt
+            };
+          }
+        }
+      });
+      mergedConvs.push(canonical);
+    }
+  });
+
+  return { conversations: mergedConvs, redirectMap };
+}
+
+/**
+ * Reconciles conversations from server with local conversations state idempotently.
+ * Enforces single conversation uniqueness for direct (Staff ↔ ARH) and client support chats.
+ */
+export function reconcileChatConversations(
+  existingList: ChatConversation[],
+  incomingList: ChatConversation[]
+): ChatConversation[] {
+  const incomingMap = new Map<string, ChatConversation>();
+  incomingList.forEach(c => {
+    if (c && c.id && !SEED_CHAT_CONVERSATION_IDS.has(c.id)) {
+      incomingMap.set(c.id, c);
+    }
+  });
+
+  // Merge existing conversations
+  const merged = existingList
+    .filter(c => c && c.id && !SEED_CHAT_CONVERSATION_IDS.has(c.id))
+    .map(local => {
+      const server = incomingMap.get(local.id);
+      if (!server) {
+        return local;
+      }
+      const localTime = new Date(local.updatedAt || local.createdAt || 0).getTime();
+      const serverTime = new Date(server.updatedAt || server.createdAt || 0).getTime();
+      if (localTime > serverTime + 500) {
+        return {
+          ...server,
+          ...local,
+          lastMessageText: server.lastMessageText || local.lastMessageText,
+          lastMessageTimestamp: server.lastMessageTimestamp || local.lastMessageTimestamp,
+          lastMessageSenderId: server.lastMessageSenderId || local.lastMessageSenderId,
+          lastMessageSenderName: server.lastMessageSenderName || local.lastMessageSenderName
+        };
+      }
+      return {
+        ...local,
+        ...server,
+        participantIds: server.participantIds?.length ? server.participantIds : local.participantIds
+      };
+    });
+
+  // Add new conversations from incoming
+  const existingIds = new Set(existingList.map(c => c.id));
+  incomingList.forEach(inc => {
+    if (inc && inc.id && !existingIds.has(inc.id) && !SEED_CHAT_CONVERSATION_IDS.has(inc.id)) {
+      merged.push(inc);
+    }
+  });
+
+  // Deduplicate and consolidate duplicate direct / client conversations
+  const { conversations: deduplicated } = deduplicateAndMergeConversations(merged);
+
+  return deduplicated.sort((a, b) => {
+    const timeA = new Date(a.lastMessageTimestamp || a.updatedAt || a.createdAt || 0).getTime();
+    const timeB = new Date(b.lastMessageTimestamp || b.updatedAt || b.createdAt || 0).getTime();
+    return timeB - timeA;
+  });
+}
+
+/**
+ * Reconciles messages from server with local messages state idempotently.
+ * Preserves optimistic messages in flight, synchronizes reactions & read receipts,
+ * and seamlessly redirects messages from legacy duplicate conversations into canonical conversations.
+ */
+export function reconcileChatMessages(
+  existingList: ChatMessage[],
+  incomingList: ChatMessage[],
+  redirectMap?: Map<string, string>
+): ChatMessage[] {
+  const incomingMap = new Map<string, ChatMessage>();
+  incomingList.forEach(m => {
+    if (m && m.id && !SEED_CHAT_MESSAGE_IDS.has(m.id) && !SEED_CHAT_CONVERSATION_IDS.has(m.conversationId)) {
+      incomingMap.set(m.id, m);
+    }
+  });
+
+  const merged = existingList
+    .filter(m => m && m.id && !SEED_CHAT_MESSAGE_IDS.has(m.id) && !SEED_CHAT_CONVERSATION_IDS.has(m.conversationId))
+    .map(local => {
+      const server = incomingMap.get(local.id);
+      if (!server) {
+        return local;
+      }
+
+      const serverReactions = server.reactions || {};
+      const localReactions = local.reactions || {};
+      const mergedReactions: Record<string, string[]> = { ...serverReactions };
+
+      Object.entries(localReactions).forEach(([emoji, userIds]) => {
+        if (!mergedReactions[emoji]) {
+          mergedReactions[emoji] = userIds;
+        } else {
+          mergedReactions[emoji] = Array.from(new Set([...mergedReactions[emoji], ...userIds]));
+        }
+      });
+
+      const combinedReadBy = Array.from(new Set([...(local.readBy || []), ...(server.readBy || [])]));
+
+      return {
+        ...server,
+        reactions: Object.keys(serverReactions).length > 0 ? serverReactions : mergedReactions,
+        readBy: combinedReadBy
+      };
+    });
+
+  const existingIds = new Set(existingList.map(m => m.id));
+  incomingList.forEach(inc => {
+    if (inc && inc.id && !existingIds.has(inc.id) && !SEED_CHAT_MESSAGE_IDS.has(inc.id) && !SEED_CHAT_CONVERSATION_IDS.has(inc.conversationId)) {
+      merged.push(inc);
+    }
+  });
+
+  // Re-assign any messages from redirected duplicate conversation IDs into their canonical conversation
+  const finalMessages = redirectMap && redirectMap.size > 0
+    ? merged.map(m => {
+        if (redirectMap.has(m.conversationId)) {
+          return { ...m, conversationId: redirectMap.get(m.conversationId)! };
+        }
+        return m;
+      })
+    : merged;
+
+  return finalMessages.sort((a, b) => {
+    const timeA = new Date(a.timestamp || 0).getTime();
+    const timeB = new Date(b.timestamp || 0).getTime();
+    return timeA - timeB;
+  });
+}
+

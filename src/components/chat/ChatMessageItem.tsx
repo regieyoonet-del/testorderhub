@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { Copy, Check, Smile, Trash2 } from 'lucide-react';
-import { ChatMessage } from '../../types';
+import { ChatMessage, SystemSettings } from '../../types';
 import UserAvatar from '../UserAvatar';
 import ReactionChip from '../ReactionChip';
 import EmojiPickerPopover from '../EmojiPickerPopover';
@@ -19,6 +19,7 @@ export interface ChatMessageItemProps {
   onToggleReaction: (messageId: string, emoji: string) => void;
   onDeleteMessage?: (messageId: string) => void;
   canDelete?: boolean;
+  systemSettings?: SystemSettings;
 }
 
 /**
@@ -54,7 +55,8 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   currentUserDisplayName,
   onToggleReaction,
   onDeleteMessage,
-  canDelete = false
+  canDelete = false,
+  systemSettings
 }) => {
   const [copied, setCopied] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
@@ -80,6 +82,13 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
   // Quick top reaction emojis
   const QUICK_REACTIONS = ['👍', '❤️', '🔥', '🎉', '😂'];
 
+  // Resolve sender display name and avatar (Admin always displays as ARH)
+  const isSenderAdmin = message.senderRole === 'admin' || message.senderId === 'admin' || message.senderId?.toLowerCase() === 'arh';
+  const effectiveSenderName = isSenderAdmin ? 'ARH' : message.senderName;
+  const effectiveSenderAvatar = isSenderAdmin
+    ? (systemSettings?.logoUrl || message.senderAvatarUrl)
+    : message.senderAvatarUrl;
+
   return (
     <div
       className={`group relative flex gap-3 px-4 py-2 transition-colors ${
@@ -91,8 +100,8 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
       {!isCurrentUser && (
         <div className="shrink-0 mt-0.5">
           <UserAvatar
-            name={message.senderName}
-            profilePictureUrl={message.senderAvatarUrl}
+            name={effectiveSenderName}
+            profilePictureUrl={effectiveSenderAvatar}
             size={34}
           />
         </div>
@@ -111,18 +120,18 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
           }`}
         >
           {!isCurrentUser && (
-            <span className="font-bold text-gray-900 font-sans">{message.senderName}</span>
+            <span className="font-bold text-gray-900 font-sans">{effectiveSenderName}</span>
           )}
           <span
             className={`px-1.5 py-0.2 rounded text-[9px] uppercase tracking-wider font-semibold ${
-              message.senderRole === 'admin'
+              isSenderAdmin
                 ? 'bg-black text-white'
                 : message.senderRole === 'client'
                 ? 'bg-emerald-100 text-emerald-800'
                 : 'bg-blue-100 text-blue-800'
             }`}
           >
-            {message.senderRole}
+            {isSenderAdmin ? 'ARH' : message.senderRole}
           </span>
           <span className="text-gray-400">{formatChatTimestamp(message.timestamp)}</span>
         </div>

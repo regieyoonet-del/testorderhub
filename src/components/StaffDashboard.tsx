@@ -140,6 +140,7 @@ interface StaffDashboardProps {
   onCreateChatConversation?: (newConv: ChatConversation) => void;
   onMarkChatRead?: (conversationId: string) => void;
   unreadChatCount?: number;
+  onActiveChatConversationChange?: (id: string | null) => void;
 }
 
 export default function StaffDashboard({
@@ -188,7 +189,8 @@ export default function StaffDashboard({
   onDeleteChatMessage,
   onCreateChatConversation,
   onMarkChatRead,
-  unreadChatCount = 0
+  unreadChatCount = 0,
+  onActiveChatConversationChange
 }: StaffDashboardProps) {
   // Navigation tabs for Staff Portal (Dashboard, Job Management, ARH Products, Time & Attendance, Payslips, Work History, Account Settings, Messages & Chat)
   const [internalTab, setInternalTab] = useState<StaffPortalTab>('dashboard');
@@ -1632,11 +1634,13 @@ export default function StaffDashboard({
             staffMembers={staff}
             staffAccounts={staffAccounts}
             companies={companies}
+            systemSettings={systemSettings}
             onSendMessage={onSendMessage || (() => {})}
             onToggleReaction={onToggleReaction || (() => {})}
             onDeleteMessage={onDeleteChatMessage || (() => {})}
             onCreateConversation={onCreateChatConversation || (() => {})}
             onMarkRead={onMarkChatRead || (() => {})}
+            onActiveConversationChange={onActiveChatConversationChange}
           />
         </div>
       )}

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Product,
@@ -67,7 +67,12 @@ import {
   getCurrentChatUserId,
   getCurrentChatUserDisplayName,
   getCurrentChatUserAvatar,
-  getTotalUnreadCount
+  getTotalUnreadCount,
+  SEED_CHAT_CONVERSATION_IDS,
+  SEED_CHAT_MESSAGE_IDS,
+  reconcileChatConversations,
+  reconcileChatMessages,
+  deduplicateAndMergeConversations
 } from './utils/chatUtils';
 import { applyPwaBranding, registerPwaServiceWorker } from './utils/dynamicPWA';
 import OrderPortals from './components/OrderPortals';
@@ -640,7 +645,12 @@ export default function App() {
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
-        return Array.isArray(parsed) ? parsed : [];
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter(c => c && c.id && !SEED_CHAT_CONVERSATION_IDS.has(c.id));
+          const { conversations } = deduplicateAndMergeConversations(filtered);
+          return conversations;
+        }
+        return [];
       } catch {
         return [];
       }
@@ -653,7 +663,9 @@ export default function App() {
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
-        return Array.isArray(parsed) ? parsed : [];
+        return Array.isArray(parsed)
+          ? parsed.filter(m => m && m.id && !SEED_CHAT_MESSAGE_IDS.has(m.id) && !SEED_CHAT_CONVERSATION_IDS.has(m.conversationId))
+          : [];
       } catch {
         return [];
       }
@@ -980,7 +992,7 @@ export default function App() {
   // Chat messaging state & actions
   const unreadChatCount = useMemo(() => {
     if (!loggedInUser) return 0;
-    const currentUserId = getCurrentChatUserId(loggedInUser, activeCompany);
+    const currentUserId = getCurrentChatUserId(loggedInUser, activeCompany, staff, staffAccounts);
     const currentUserRole: 'admin' | 'staff' | 'client' =
       loggedInUser.role === 'admin' ? 'admin' : loggedInUser.role === 'client' ? 'client' : 'staff';
     return getTotalUnreadCount(
@@ -990,15 +1002,15 @@ export default function App() {
       currentUserRole,
       activeCompany?.id || loggedInUser.companyId
     );
-  }, [loggedInUser, chatConversations, chatMessages, activeCompany]);
+  }, [loggedInUser, chatConversations, chatMessages, activeCompany, staff, staffAccounts]);
 
   const handleSendChatMessage = (conversationId: string, text: string) => {
     if (!loggedInUser || !text.trim()) return;
-    const currentUserId = getCurrentChatUserId(loggedInUser, activeCompany);
+    const currentUserId = getCurrentChatUserId(loggedInUser, activeCompany, staff, staffAccounts);
     const currentUserDisplayName = getCurrentChatUserDisplayName(loggedInUser, activeCompany, staff);
     const currentUserRole: 'admin' | 'staff' | 'client' =
       loggedInUser.role === 'admin' ? 'admin' : loggedInUser.role === 'client' ? 'client' : 'staff';
-    const currentUserAvatar = getCurrentChatUserAvatar(loggedInUser, activeCompany, staff, staffAccounts);
+    const currentUserAvatar = getCurrentChatUserAvatar(loggedInUser, activeCompany, staff, staffAccounts, systemSettings);
 
     const newMessage: ChatMessage = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -1042,7 +1054,7 @@ export default function App() {
 
   const handleToggleChatReaction = (messageId: string, emoji: string) => {
     if (!loggedInUser) return;
-    const currentUserId = getCurrentChatUserId(loggedInUser, activeCompany);
+    const currentUserId = getCurrentChatUserId(loggedInUser, activeCompany, staff, staffAccounts);
 
     setChatMessages(prev => prev.map(m => {
       if (m.id !== messageId) return m;
@@ -1074,7 +1086,7 @@ export default function App() {
   const handleCreateChatConversation = (newConv: ChatConversation) => {
     setChatConversations(prev => {
       if (prev.some(c => c.id === newConv.id)) return prev;
-      return [newConv, ...prev];
+      return reconcileChatConversations(prev, [newConv]);
     });
     if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
       sheetsService.saveChatConversation(appsScriptConfig.webAppUrl, newConv);
@@ -1083,7 +1095,7 @@ export default function App() {
 
   const handleMarkChatRead = (conversationId: string) => {
     if (!loggedInUser) return;
-    const currentUserId = getCurrentChatUserId(loggedInUser, activeCompany);
+    const currentUserId = getCurrentChatUserId(loggedInUser, activeCompany, staff, staffAccounts);
 
     setChatMessages(prev => prev.map(m => {
       if (m.conversationId === conversationId && !m.readBy?.includes(currentUserId)) {
@@ -2266,35 +2278,12 @@ export default function App() {
 
         // Process Chat Conversations
         if (fetchedChatConversations !== null && Array.isArray(fetchedChatConversations)) {
-          setChatConversations(prev => {
-            const fetchedMap = new Map(fetchedChatConversations.map(c => [c.id, c]));
-            const merged = prev.map(local => {
-              const server = fetchedMap.get(local.id);
-              if (!server) return local;
-              const localTime = new Date(local.updatedAt || 0).getTime();
-              const serverTime = new Date(server.updatedAt || 0).getTime();
-              if (localTime > serverTime) return local;
-              return server;
-            });
-            const prevIds = new Set(prev.map(c => c.id));
-            const newConvs = fetchedChatConversations.filter(c => !prevIds.has(c.id));
-            return [...merged, ...newConvs];
-          });
+          setChatConversations(prev => reconcileChatConversations(prev, fetchedChatConversations));
         }
 
         // Process Chat Messages
         if (fetchedChatMessages !== null && Array.isArray(fetchedChatMessages)) {
-          setChatMessages(prev => {
-            const fetchedMap = new Map(fetchedChatMessages.map(m => [m.id, m]));
-            const merged = prev.map(local => {
-              const server = fetchedMap.get(local.id);
-              if (!server) return local;
-              return server;
-            });
-            const prevIds = new Set(prev.map(m => m.id));
-            const newMsgs = fetchedChatMessages.filter(m => !prevIds.has(m.id));
-            return [...merged, ...newMsgs];
-          });
+          setChatMessages(prev => reconcileChatMessages(prev, fetchedChatMessages));
         }
 
         setLastSyncedTime(new Date().toLocaleTimeString());
@@ -2310,22 +2299,63 @@ export default function App() {
     }
   };
 
+  // Active chat conversation ID being viewed
+  const [activeChatConversationId, setActiveChatConversationId] = useState<string | null>(null);
+
+  // Determine if Chat/Messages view is currently open
+  const isChatOpen = useMemo(() => {
+    if (!loggedInUser) return false;
+    if (loggedInUser.role === 'admin') {
+      return activeTab === 'chat' || adminCurrentTab === 'chat';
+    }
+    return activeTab === 'chat';
+  }, [loggedInUser, activeTab, adminCurrentTab]);
+
+  const isSyncingChatRef = useRef(false);
+
+  // Lightweight Chat-only sync from Google Sheets (only fetches ChatConversations & ChatMessages)
+  const syncChat = useCallback(async () => {
+    if (!appsScriptConfig.isConnected || !appsScriptConfig.webAppUrl || isSyncingChatRef.current) return;
+    isSyncingChatRef.current = true;
+    try {
+      const updates = await sheetsService.fetchChatUpdates(
+        appsScriptConfig.webAppUrl,
+        activeChatConversationId || undefined
+      );
+      if (updates) {
+        if (Array.isArray(updates.conversations) && updates.conversations.length > 0) {
+          setChatConversations(prev => reconcileChatConversations(prev, updates.conversations));
+        }
+        if (Array.isArray(updates.messages) && updates.messages.length > 0) {
+          setChatMessages(prev => reconcileChatMessages(prev, updates.messages));
+        }
+      }
+    } catch (err) {
+      console.warn('Google Sheets sync notice (syncChat):', err);
+    } finally {
+      isSyncingChatRef.current = false;
+    }
+  }, [appsScriptConfig.isConnected, appsScriptConfig.webAppUrl, activeChatConversationId]);
+
   // Pull live data from Sheets on load or config change
   useEffect(() => {
     syncWithSheets(false);
   }, [appsScriptConfig.isConnected, appsScriptConfig.webAppUrl]);
 
-  // High-frequency silent background polling (every 4 seconds) + instant tab focus/visibility trigger
+  // General application polling (Orders, Jobs, Products, Payroll, etc.) - non-aggressive (60 seconds)
   useEffect(() => {
     if (!appsScriptConfig.isConnected || !appsScriptConfig.webAppUrl) return;
 
     const intervalId = setInterval(() => {
       syncWithSheets(true);
-    }, 4000);
+    }, 60000);
 
     const handleFocusOrVisible = () => {
       if (document.visibilityState === 'visible') {
         syncWithSheets(true);
+        if (isChatOpen) {
+          syncChat();
+        }
       }
     };
 
@@ -2337,7 +2367,42 @@ export default function App() {
       window.removeEventListener('focus', handleFocusOrVisible);
       document.removeEventListener('visibilitychange', handleFocusOrVisible);
     };
-  }, [appsScriptConfig.isConnected, appsScriptConfig.webAppUrl]);
+  }, [appsScriptConfig.isConnected, appsScriptConfig.webAppUrl, isChatOpen, syncChat]);
+
+  // Dedicated lightweight Chat-only polling (approx. 3 seconds when open, non-intrusive 30s when closed)
+  useEffect(() => {
+    if (!appsScriptConfig.isConnected || !appsScriptConfig.webAppUrl) return;
+
+    if (isChatOpen) {
+      // 1. Immediately perform Chat sync when opened
+      syncChat();
+
+      // 2. Poll every 3 seconds while Chat is open
+      const chatIntervalId = setInterval(() => {
+        syncChat();
+      }, 3000);
+
+      return () => {
+        clearInterval(chatIntervalId);
+      };
+    } else {
+      // When Chat is closed: slow check every 30 seconds for global unread badge
+      const idleIntervalId = setInterval(() => {
+        syncChat();
+      }, 30000);
+
+      return () => {
+        clearInterval(idleIntervalId);
+      };
+    }
+  }, [isChatOpen, syncChat, appsScriptConfig.isConnected, appsScriptConfig.webAppUrl]);
+
+  // When active conversation changes while chat is open, immediately sync for that conversation
+  useEffect(() => {
+    if (isChatOpen && activeChatConversationId) {
+      syncChat();
+    }
+  }, [activeChatConversationId, isChatOpen, syncChat]);
 
   // Ensure default active tab is appropriate for logged-in user
   useEffect(() => {
@@ -4353,6 +4418,7 @@ export default function App() {
                 onCreateChatConversation={handleCreateChatConversation}
                 onMarkChatRead={handleMarkChatRead}
                 unreadChatCount={unreadChatCount}
+                onActiveChatConversationChange={setActiveChatConversationId}
               />
             )}
 
@@ -4443,6 +4509,7 @@ export default function App() {
                 onCreateChatConversation={handleCreateChatConversation}
                 onMarkChatRead={handleMarkChatRead}
                 unreadChatCount={unreadChatCount}
+                onActiveChatConversationChange={setActiveChatConversationId}
               />
             )}
 
@@ -4530,6 +4597,7 @@ export default function App() {
                   staff={staff}
                   companies={companies}
                   systemSettings={systemSettings}
+                  onActiveConversationChange={setActiveChatConversationId}
                 />
               </div>
             )}

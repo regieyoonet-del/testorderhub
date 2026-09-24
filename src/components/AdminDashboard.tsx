@@ -189,6 +189,7 @@ interface AdminDashboardProps {
   onCreateChatConversation?: (newConv: ChatConversation) => void;
   onMarkChatRead?: (conversationId: string) => void;
   unreadChatCount?: number;
+  onActiveChatConversationChange?: (id: string | null) => void;
 }
 
 export default function AdminDashboard({
@@ -273,7 +274,8 @@ export default function AdminDashboard({
   onDeleteChatMessage,
   onCreateChatConversation,
   onMarkChatRead,
-  unreadChatCount = 0
+  unreadChatCount = 0,
+  onActiveChatConversationChange
 }: AdminDashboardProps) {
   const [adminTab, setAdminTab] = useState<'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'sales-goals' | 'receipt' | 'quotes' | 'settings' | 'sync' | 'chat'>(activeTab || initialTab || 'jobs');
   const [showSalesGoalsModal, setShowSalesGoalsModal] = useState(false);
@@ -2265,7 +2267,7 @@ export default function AdminDashboard({
             currentUser={currentUser || {
               id: 'admin',
               username: 'admin',
-              name: systemSettings.hubName ? `${systemSettings.hubName} Admin` : 'ARH Admin',
+              name: 'ARH',
               role: 'admin',
               profilePictureUrl: systemSettings.logoUrl
             }}
@@ -2274,11 +2276,13 @@ export default function AdminDashboard({
             staffMembers={staff}
             staffAccounts={staffAccounts}
             companies={companies}
+            systemSettings={systemSettings}
             onSendMessage={onSendMessage || (() => {})}
             onToggleReaction={onToggleReaction || (() => {})}
             onDeleteMessage={onDeleteChatMessage || (() => {})}
             onCreateConversation={onCreateChatConversation || (() => {})}
             onMarkRead={onMarkChatRead || (() => {})}
+            onActiveConversationChange={onActiveChatConversationChange}
           />
         </div>
       )}

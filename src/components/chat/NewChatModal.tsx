@@ -9,9 +9,14 @@ import {
   StaffMember,
   StaffAccount,
   CompanyProfile,
-  ChatConversation
+  ChatConversation,
+  SystemSettings
 } from '../../types';
 import UserAvatar from '../UserAvatar';
+import {
+  getCanonicalDirectConversationId,
+  findExistingDirectConversation
+} from '../../utils/chatUtils';
 
 export interface NewChatModalProps {
   isOpen: boolean;
@@ -24,6 +29,7 @@ export interface NewChatModalProps {
   existingConversations: ChatConversation[];
   onSelectConversation: (conversationId: string) => void;
   onCreateConversation: (newConv: ChatConversation) => void;
+  systemSettings?: SystemSettings;
 }
 
 export default function NewChatModal({
@@ -36,7 +42,8 @@ export default function NewChatModal({
   companies = [],
   existingConversations = [],
   onSelectConversation,
-  onCreateConversation
+  onCreateConversation,
+  systemSettings
 }: NewChatModalProps) {
   const [modalTab, setModalTab] = useState<'direct' | 'group' | 'client'>('direct');
   const [searchQuery, setSearchQuery] = useState('');
@@ -115,15 +122,11 @@ export default function NewChatModal({
 
   // Handler for starting a direct conversation
   const handleStartDirectChat = (targetId: string, targetName: string) => {
-    // Check if direct conversation already exists between these two
-    const existing = existingConversations.find(c => {
-      if (c.type !== 'direct') return false;
-      return (
-        c.participantIds.length === 2 &&
-        c.participantIds.includes(currentUserId) &&
-        c.participantIds.includes(targetId)
-      );
-    });
+    const canonicalTarget = (targetId.toLowerCase() === 'arh' ? 'admin' : targetId).trim();
+    const canonicalCurrent = (currentUserId.toLowerCase() === 'arh' ? 'admin' : currentUserId).trim();
+
+    // Check if direct conversation already exists between these two participants
+    const existing = findExistingDirectConversation(existingConversations, canonicalCurrent, canonicalTarget);
 
     if (existing) {
       onSelectConversation(existing.id);
@@ -131,12 +134,14 @@ export default function NewChatModal({
       return;
     }
 
+    const canonicalId = getCanonicalDirectConversationId(canonicalCurrent, canonicalTarget);
+
     const newConv: ChatConversation = {
-      id: `conv-dir-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      id: canonicalId,
       type: 'direct',
-      title: targetName,
-      participantIds: [currentUserId, targetId],
-      createdBy: currentUserId,
+      title: canonicalTarget === 'admin' ? 'ARH' : targetName,
+      participantIds: [canonicalCurrent, canonicalTarget],
+      createdBy: canonicalCurrent,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -147,9 +152,13 @@ export default function NewChatModal({
 
   // Handler for starting a client support conversation (Admin only)
   const handleStartClientChat = (company: CompanyProfile) => {
+    const cleanCoId = String(company.id || '').trim();
     const existing = existingConversations.find(c => {
       if (c.type !== 'client_admin') return false;
-      return c.companyId === company.id || c.participantIds.includes(company.id);
+      return (
+        String(c.companyId || '').trim().toLowerCase() === cleanCoId.toLowerCase() ||
+        (Array.isArray(c.participantIds) && c.participantIds.some(p => String(p).trim().toLowerCase() === cleanCoId.toLowerCase()))
+      );
     });
 
     if (existing) {
@@ -158,12 +167,14 @@ export default function NewChatModal({
       return;
     }
 
+    const canonicalId = `conv-client-${cleanCoId}`;
+
     const newConv: ChatConversation = {
-      id: `conv-client-${company.id}-${Date.now()}`,
+      id: canonicalId,
       type: 'client_admin',
       title: company.name,
-      companyId: company.id,
-      participantIds: ['admin', company.id],
+      companyId: cleanCoId,
+      participantIds: ['admin', cleanCoId],
       createdBy: 'admin',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -303,27 +314,31 @@ export default function NewChatModal({
         {/* Tab Content: DIRECT CHAT */}
         {modalTab === 'direct' && (
           <div className="flex-1 overflow-y-auto p-5 space-y-2">
-            {/* If current user is staff, offer direct chat with Admin */}
+            {/* If current user is staff, offer direct chat with ARH */}
             {currentUserRole === 'staff' && (
               <button
                 type="button"
-                onClick={() => handleStartDirectChat('admin', 'Admin')}
+                onClick={() => handleStartDirectChat('admin', 'ARH')}
                 className="w-full text-left p-3 rounded-xl border border-gray-200 hover:border-black hover:bg-gray-50 flex items-center gap-3 transition-all cursor-pointer group"
                 id="btn-chat-with-admin"
               >
-                <div className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs shrink-0">
-                  ADM
+                <div className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
+                  {systemSettings?.logoUrl ? (
+                    <img src={systemSettings.logoUrl} alt="ARH" className="w-full h-full object-contain p-1" />
+                  ) : (
+                    'ARH'
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-gray-900 group-hover:text-black">
-                      ARH Admin / Management
+                      ARH Management
                     </span>
-                    <span className="text-[10px] bg-black text-white px-2 py-0.5 rounded-full font-mono uppercase">
-                      Admin
+                    <span className="text-[10px] bg-black text-white px-2 py-0.5 rounded-full font-mono uppercase font-semibold">
+                      ARH
                     </span>
                   </div>
-                  <p className="text-[11px] text-gray-500 truncate">Official admin management & dispatch</p>
+                  <p className="text-[11px] text-gray-500 truncate">Official studio management & dispatch</p>
                 </div>
               </button>
             )}
