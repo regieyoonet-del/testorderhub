@@ -190,6 +190,7 @@ interface AdminDashboardProps {
   onMarkChatRead?: (conversationId: string) => void;
   unreadChatCount?: number;
   onActiveChatConversationChange?: (id: string | null) => void;
+  onDeleteChatConversation?: (conversationId: string) => void;
 }
 
 export default function AdminDashboard({
@@ -275,7 +276,8 @@ export default function AdminDashboard({
   onCreateChatConversation,
   onMarkChatRead,
   unreadChatCount = 0,
-  onActiveChatConversationChange
+  onActiveChatConversationChange,
+  onDeleteChatConversation
 }: AdminDashboardProps) {
   const [adminTab, setAdminTab] = useState<'jobs' | 'clients' | 'catalog' | 'orders' | 'staff' | 'expenses' | 'financial-overview' | 'analytics' | 'sales-goals' | 'receipt' | 'quotes' | 'settings' | 'sync' | 'chat'>(activeTab || initialTab || 'jobs');
   const [showSalesGoalsModal, setShowSalesGoalsModal] = useState(false);
@@ -2283,6 +2285,7 @@ export default function AdminDashboard({
             onCreateConversation={onCreateChatConversation || (() => {})}
             onMarkRead={onMarkChatRead || (() => {})}
             onActiveConversationChange={onActiveChatConversationChange}
+            onDeleteConversation={onDeleteChatConversation}
           />
         </div>
       )}

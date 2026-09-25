@@ -317,11 +317,11 @@ export function formatChatDateHeader(isoString: string): string {
 /**
  * Returns a stable, deterministic direct conversation ID from two participant IDs.
  * Always produces the exact same conversation ID regardless of browser, device, or ordering.
- * e.g. "conv-direct-admin-STF-101"
+ * e.g. "conv-direct-admin-stf-101"
  */
 export function getCanonicalDirectConversationId(participantA: string, participantB: string): string {
-  const normA = (participantA.toLowerCase() === 'arh' ? 'admin' : participantA).trim();
-  const normB = (participantB.toLowerCase() === 'arh' ? 'admin' : participantB).trim();
+  const normA = (participantA.toLowerCase() === 'arh' ? 'admin' : participantA).trim().toLowerCase();
+  const normB = (participantB.toLowerCase() === 'arh' ? 'admin' : participantB).trim().toLowerCase();
   const sorted = [normA, normB].sort((a, b) => a.localeCompare(b));
   return `conv-direct-${sorted[0]}-${sorted[1]}`;
 }
@@ -432,13 +432,11 @@ export function getConversationDisplayAvatar(
   return info.avatarUrl;
 }
 
-export const SEED_CHAT_CONVERSATION_IDS = new Set([
-  'conv-group-studio-production',
-  'conv-direct-admin-stf101',
-  'conv-client-co-1'
+export const SEED_CHAT_CONVERSATION_IDS = new Set<string>([
+  'conv-group-studio-production'
 ]);
 
-export const SEED_CHAT_MESSAGE_IDS = new Set([
+export const SEED_CHAT_MESSAGE_IDS = new Set<string>([
   'msg-grp-1', 'msg-grp-2', 'msg-grp-3',
   'msg-dir-1', 'msg-dir-2',
   'msg-client-1', 'msg-clt-1', 'msg-clt-2'
@@ -607,19 +605,48 @@ export function reconcileChatMessages(
   incomingList: ChatMessage[],
   redirectMap?: Map<string, string>
 ): ChatMessage[] {
+  const isDeletedMessage = (m: any): boolean => {
+    if (!m) return true;
+    if (m.isDeleted) return true;
+    if (m.deletedAt) return true;
+    if (m.status === 'deleted') return true;
+    return false;
+  };
+
   const incomingMap = new Map<string, ChatMessage>();
   incomingList.forEach(m => {
-    if (m && m.id && !SEED_CHAT_MESSAGE_IDS.has(m.id) && !SEED_CHAT_CONVERSATION_IDS.has(m.conversationId)) {
-      incomingMap.set(m.id, m);
+    if (m && m.id) {
+      const cleanId = String(m.id).trim();
+      const cleanConvId = String(m.conversationId || '').trim();
+      if (!SEED_CHAT_MESSAGE_IDS.has(cleanId) && !SEED_CHAT_CONVERSATION_IDS.has(cleanConvId) && !isDeletedMessage(m)) {
+        incomingMap.set(cleanId, {
+          ...m,
+          id: cleanId,
+          conversationId: cleanConvId
+        });
+      }
     }
   });
 
   const merged = existingList
-    .filter(m => m && m.id && !SEED_CHAT_MESSAGE_IDS.has(m.id) && !SEED_CHAT_CONVERSATION_IDS.has(m.conversationId))
+    .filter(m => {
+      if (!m || !m.id) return false;
+      const cleanId = String(m.id).trim();
+      const cleanConvId = String(m.conversationId || '').trim();
+      if (SEED_CHAT_MESSAGE_IDS.has(cleanId) || SEED_CHAT_CONVERSATION_IDS.has(cleanConvId) || isDeletedMessage(m)) {
+        return false;
+      }
+      return true;
+    })
     .map(local => {
-      const server = incomingMap.get(local.id);
+      const cleanLocalId = String(local.id).trim();
+      const server = incomingMap.get(cleanLocalId);
       if (!server) {
-        return local;
+        return {
+          ...local,
+          id: cleanLocalId,
+          conversationId: String(local.conversationId || '').trim()
+        };
       }
 
       const serverReactions = server.reactions || {};
@@ -638,23 +665,37 @@ export function reconcileChatMessages(
 
       return {
         ...server,
+        id: cleanLocalId,
+        conversationId: String(server.conversationId || local.conversationId || '').trim(),
         reactions: Object.keys(serverReactions).length > 0 ? serverReactions : mergedReactions,
         readBy: combinedReadBy
       };
     });
 
-  const existingIds = new Set(existingList.map(m => m.id));
+  const existingIds = new Set(merged.map(m => String(m.id).trim()));
   incomingList.forEach(inc => {
-    if (inc && inc.id && !existingIds.has(inc.id) && !SEED_CHAT_MESSAGE_IDS.has(inc.id) && !SEED_CHAT_CONVERSATION_IDS.has(inc.conversationId)) {
-      merged.push(inc);
+    if (inc && inc.id && !isDeletedMessage(inc)) {
+      const cleanId = String(inc.id).trim();
+      const cleanConvId = String(inc.conversationId || '').trim();
+      if (!existingIds.has(cleanId) && !SEED_CHAT_MESSAGE_IDS.has(cleanId) && !SEED_CHAT_CONVERSATION_IDS.has(cleanConvId)) {
+        merged.push({
+          ...inc,
+          id: cleanId,
+          conversationId: cleanConvId
+        });
+        existingIds.add(cleanId);
+      }
     }
   });
 
   // Re-assign any messages from redirected duplicate conversation IDs into their canonical conversation
   const finalMessages = redirectMap && redirectMap.size > 0
     ? merged.map(m => {
-        if (redirectMap.has(m.conversationId)) {
-          return { ...m, conversationId: redirectMap.get(m.conversationId)! };
+        const cleanCId = String(m.conversationId).trim();
+        for (const [oldId, canonId] of redirectMap.entries()) {
+          if (cleanCId.toLowerCase() === oldId.toLowerCase()) {
+            return { ...m, conversationId: canonId };
+          }
         }
         return m;
       })

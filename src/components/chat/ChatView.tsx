@@ -44,6 +44,7 @@ export interface ChatViewProps {
   onSendMessage: (conversationId: string, text: string) => void;
   onToggleReaction: (messageId: string, emoji: string) => void;
   onDeleteMessage?: (messageId: string) => void;
+  onDeleteConversation?: (conversationId: string) => void;
   onCreateConversation: (newConv: ChatConversation) => void;
   onMarkRead: (conversationId: string) => void;
   initialConversationId?: string;
@@ -65,6 +66,7 @@ export default function ChatView({
   onSendMessage,
   onToggleReaction,
   onDeleteMessage,
+  onDeleteConversation,
   onCreateConversation,
   onMarkRead,
   initialConversationId,
@@ -90,11 +92,19 @@ export default function ChatView({
 
   // Selected conversation state
   const [activeConversationId, setActiveConversationId] = useState<string | null>(() => {
-    if (initialConversationId && accessibleConversations.some(c => c.id === initialConversationId)) {
+    if (initialConversationId && accessibleConversations.some(c => c.id.toLowerCase().trim() === initialConversationId.toLowerCase().trim())) {
       return initialConversationId;
     }
     return accessibleConversations.length > 0 ? accessibleConversations[0].id : null;
   });
+
+  // If currently active conversation was deleted or removed from accessible list, gracefully switch or clear
+  useEffect(() => {
+    if (activeConversationId && !accessibleConversations.some(c => c.id.toLowerCase().trim() === activeConversationId.toLowerCase().trim())) {
+      const nextId = accessibleConversations.length > 0 ? accessibleConversations[0].id : null;
+      setActiveConversationId(nextId);
+    }
+  }, [accessibleConversations, activeConversationId]);
 
   // New Chat Modal state
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
@@ -102,16 +112,23 @@ export default function ChatView({
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Active conversation object
+  // Active conversation object (case-insensitive ID matching)
   const activeConversation = useMemo(() => {
-    return accessibleConversations.find(c => c.id === activeConversationId) || null;
+    if (!activeConversationId) return null;
+    const cleanId = activeConversationId.trim().toLowerCase();
+    return accessibleConversations.find(c => c.id.trim().toLowerCase() === cleanId) || null;
   }, [accessibleConversations, activeConversationId]);
 
-  // Messages for active conversation
+  // Messages for active conversation (case-insensitive conversationId matching + filters out deleted messages)
   const activeMessages = useMemo(() => {
     if (!activeConversationId) return [];
+    const cleanId = activeConversationId.trim().toLowerCase();
     return messages
-      .filter(m => m.conversationId === activeConversationId)
+      .filter(m => {
+        if (!m || !m.conversationId) return false;
+        if (m.isDeleted || m.status === 'deleted' || m.deletedAt) return false;
+        return String(m.conversationId).trim().toLowerCase() === cleanId;
+      })
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }, [messages, activeConversationId]);
 
@@ -211,6 +228,8 @@ export default function ChatView({
           companies={companies}
           staff={staff}
           staffAccounts={staffAccounts}
+          systemSettings={systemSettings}
+          onDeleteConversation={onDeleteConversation}
         />
       </div>
 

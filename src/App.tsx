@@ -1083,6 +1083,22 @@ export default function App() {
     }
   };
 
+  const handleDeleteChatConversation = (conversationId: string) => {
+    const cleanId = conversationId.trim().toLowerCase();
+    // 1. Remove conversation from local state
+    setChatConversations(prev => prev.filter(c => c.id.trim().toLowerCase() !== cleanId));
+    // 2. Remove all messages for this conversation
+    setChatMessages(prev => prev.filter(m => String(m.conversationId).trim().toLowerCase() !== cleanId));
+    // 3. Clear active chat conversation if this one was active
+    if (activeChatConversationId && activeChatConversationId.trim().toLowerCase() === cleanId) {
+      setActiveChatConversationId(null);
+    }
+    // 4. Persist deletion to Google Sheets via Apps Script
+    if (appsScriptConfig.isConnected && appsScriptConfig.webAppUrl) {
+      sheetsService.deleteChatConversation(appsScriptConfig.webAppUrl, conversationId);
+    }
+  };
+
   const handleCreateChatConversation = (newConv: ChatConversation) => {
     setChatConversations(prev => {
       if (prev.some(c => c.id === newConv.id)) return prev;
@@ -2323,10 +2339,24 @@ export default function App() {
         activeChatConversationId || undefined
       );
       if (updates) {
-        if (Array.isArray(updates.conversations) && updates.conversations.length > 0) {
-          setChatConversations(prev => reconcileChatConversations(prev, updates.conversations));
+        if (Array.isArray(updates.conversations)) {
+          const serverConvIds = new Set(updates.conversations.map(c => c.id.toLowerCase().trim()));
+          setChatConversations(prev => {
+            const now = Date.now();
+            const validLocal = prev.filter(c => {
+              const isServerKnown = serverConvIds.has(c.id.toLowerCase().trim());
+              const isOptimistic = (now - new Date(c.createdAt || 0).getTime()) < 10000;
+              return isServerKnown || isOptimistic;
+            });
+            return reconcileChatConversations(validLocal, updates.conversations);
+          });
+
+          // If active conversation was deleted on server, clear it gracefully
+          if (activeChatConversationId && !serverConvIds.has(activeChatConversationId.toLowerCase().trim())) {
+            setActiveChatConversationId(null);
+          }
         }
-        if (Array.isArray(updates.messages) && updates.messages.length > 0) {
+        if (Array.isArray(updates.messages)) {
           setChatMessages(prev => reconcileChatMessages(prev, updates.messages));
         }
       }
@@ -2410,10 +2440,10 @@ export default function App() {
     if (loggedInUser.role === 'admin') {
       if (activeTab !== 'admin' && activeTab !== 'sync') setActiveTab('admin');
     } else if (loggedInUser.role === 'staff') {
-      const validStaffTabs = ['dashboard', 'jobs', 'catalog', 'attendance', 'payslips', 'work-history', 'profile'];
+      const validStaffTabs = ['dashboard', 'jobs', 'catalog', 'attendance', 'payslips', 'work-history', 'profile', 'chat'];
       if (!validStaffTabs.includes(activeTab)) setActiveTab('dashboard');
     } else if (loggedInUser.role === 'client') {
-      const validClientTabs = ['catalog', 'browse', 'portals', 'history', 'quote-history', 'settings'];
+      const validClientTabs = ['catalog', 'browse', 'portals', 'history', 'quote-history', 'settings', 'chat'];
       if (!validClientTabs.includes(activeTab)) setActiveTab('catalog');
     }
   }, [loggedInUser?.role]);
@@ -4510,6 +4540,7 @@ export default function App() {
                 onMarkChatRead={handleMarkChatRead}
                 unreadChatCount={unreadChatCount}
                 onActiveChatConversationChange={setActiveChatConversationId}
+                onDeleteChatConversation={handleDeleteChatConversation}
               />
             )}
 

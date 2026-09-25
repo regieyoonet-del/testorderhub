@@ -2657,9 +2657,65 @@ function saveChatConversationsBatch(ss, conversations) {
 
 function deleteChatConversation(ss, conversationId) {
   if (!conversationId) return { status: "error", message: "Missing conversation ID" };
-  deleteRowById(ss, "ChatConversations", "Conversation ID", conversationId);
-  deleteRowById(ss, "ChatMessages", "Conversation ID", conversationId);
-  deleteRowById(ss, "ChatParticipants", "Conversation ID", conversationId);
+  var cleanId = String(conversationId).trim().toLowerCase();
+
+  // 1. Delete matching conversation(s) from ChatConversations
+  var convSheet = ss.getSheetByName("ChatConversations");
+  if (convSheet && convSheet.getLastRow() > 1) {
+    var cData = convSheet.getDataRange().getValues();
+    var cHeaders = cData[0] || [];
+    var cIdCol = -1;
+    for (var c = 0; c < cHeaders.length; c++) {
+      var cnh = cHeaders[c].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (cnh === "conversationid" || cnh === "id") { cIdCol = c; break; }
+    }
+    if (cIdCol !== -1) {
+      for (var cr = cData.length - 1; cr >= 1; cr--) {
+        if (String(cData[cr][cIdCol]).trim().toLowerCase() === cleanId) {
+          convSheet.deleteRow(cr + 1);
+        }
+      }
+    }
+  }
+
+  // 2. Delete all messages for this conversation from ChatMessages
+  var msgSheet = ss.getSheetByName("ChatMessages");
+  if (msgSheet && msgSheet.getLastRow() > 1) {
+    var mData = msgSheet.getDataRange().getValues();
+    var mHeaders = mData[0] || [];
+    var mConvCol = -1;
+    for (var mc = 0; mc < mHeaders.length; mc++) {
+      var mnh = mHeaders[mc].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (mnh === "conversationid") { mConvCol = mc; break; }
+    }
+    if (mConvCol !== -1) {
+      for (var mr = mData.length - 1; mr >= 1; mr--) {
+        if (String(mData[mr][mConvCol]).trim().toLowerCase() === cleanId) {
+          msgSheet.deleteRow(mr + 1);
+        }
+      }
+    }
+  }
+
+  // 3. Delete participants from ChatParticipants
+  var partSheet = ss.getSheetByName("ChatParticipants");
+  if (partSheet && partSheet.getLastRow() > 1) {
+    var pData = partSheet.getDataRange().getValues();
+    var pHeaders = pData[0] || [];
+    var pConvCol = -1;
+    for (var pc = 0; pc < pHeaders.length; pc++) {
+      var pnh = pHeaders[pc].toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (pnh === "conversationid") { pConvCol = pc; break; }
+    }
+    if (pConvCol !== -1) {
+      for (var pr = pData.length - 1; pr >= 1; pr--) {
+        if (String(pData[pr][pConvCol]).trim().toLowerCase() === cleanId) {
+          partSheet.deleteRow(pr + 1);
+        }
+      }
+    }
+  }
+
   return { status: "success", conversationId: conversationId };
 }
 
@@ -2885,9 +2941,7 @@ function deduplicateAndConsolidateChatConversations(ss) {
   }
 
   var seedConvSet = {
-    "conv-group-studio-production": true,
-    "conv-direct-admin-stf101": true,
-    "conv-client-co-1": true
+    "conv-group-studio-production": true
   };
 
   var directGroups = {};
@@ -2996,9 +3050,7 @@ function deduplicateAndConsolidateChatConversations(ss) {
 
 function cleanKnownSeedChat(ss) {
   var seedConvIds = [
-    "conv-group-studio-production",
-    "conv-direct-admin-stf101",
-    "conv-client-co-1"
+    "conv-group-studio-production"
   ];
   var seedMsgIds = [
     "msg-grp-1", "msg-grp-2", "msg-grp-3",
@@ -3024,23 +3076,16 @@ function getChatUpdates(ss, since, conversationId) {
   var convs = convSheet ? getTableData(ss, "ChatConversations") : [];
   var msgs = [];
 
-  if (msgSheet && msgSheet.getLastRow() > 1) {
-    var rawMsgs = getTableData(ss, "ChatMessages");
-    if (conversationId) {
-      var cleanCId = String(conversationId).trim();
-      msgs = rawMsgs.filter(function(m) {
-        var cId = m["Conversation ID"] || m["conversationId"] || m["ConversationID"];
-        return String(cId).trim() === cleanCId;
-      });
-    } else {
-      msgs = rawMsgs.slice(-150);
-    }
+  function isDeletedRow(r) {
+    if (!r) return true;
+    var st = String(r["Status"] || r["status"] || "").trim().toLowerCase();
+    var dAt = r["Deleted At"] || r["deletedAt"] || r["DeletedAt"];
+    var isD = r["isDeleted"] || r["IsDeleted"];
+    return st === "deleted" || Boolean(dAt) || isD === true || isD === "true";
   }
 
   var seedConvSet = {
-    "conv-group-studio-production": true,
-    "conv-direct-admin-stf101": true,
-    "conv-client-co-1": true
+    "conv-group-studio-production": true
   };
   var seedMsgSet = {
     "msg-grp-1": true, "msg-grp-2": true, "msg-grp-3": true,
@@ -3049,19 +3094,57 @@ function getChatUpdates(ss, since, conversationId) {
   };
 
   convs = convs.filter(function(c) {
-    var id = String(c["Conversation ID"] || c["id"] || "");
-    return !seedConvSet[id];
+    var id = String(c["Conversation ID"] || c["id"] || c["conversationId"] || "").trim();
+    return id && !seedConvSet[id] && !isDeletedRow(c);
   });
-  msgs = msgs.filter(function(m) {
-    var id = String(m["Message ID"] || m["id"] || "");
-    return !seedMsgSet[id];
-  });
+
+  if (msgSheet && msgSheet.getLastRow() > 1) {
+    var rawMsgs = getTableData(ss, "ChatMessages");
+    var activeRaw = rawMsgs.filter(function(m) {
+      var mId = String(m["Message ID"] || m["id"] || m["messageId"] || "").trim();
+      return mId && !seedMsgSet[mId] && !isDeletedRow(m);
+    });
+
+    if (conversationId) {
+      var cleanCId = String(conversationId).trim().toLowerCase();
+      var activeConvMsgs = [];
+      var otherMsgs = [];
+
+      for (var mi = 0; mi < activeRaw.length; mi++) {
+        var msg = activeRaw[mi];
+        var cId = String(msg["Conversation ID"] || msg["conversationId"] || msg["ConversationID"] || msg["conversationid"] || "").trim().toLowerCase();
+        if (cId === cleanCId) {
+          activeConvMsgs.push(msg);
+        } else {
+          otherMsgs.push(msg);
+        }
+      }
+
+      // Return ALL messages for the active conversation, PLUS the most recent 100 messages from others
+      var recentOthers = otherMsgs.slice(-100);
+      msgs = activeConvMsgs.concat(recentOthers);
+    } else {
+      msgs = activeRaw.slice(-200);
+    }
+  }
+
+  // Deduplicate messages by Message ID
+  var seenMsgIds = {};
+  var dedupedMsgs = [];
+  for (var k = 0; k < msgs.length; k++) {
+    var mItem = msgs[k];
+    var uniqueId = String(mItem["Message ID"] || mItem["id"] || mItem["messageId"] || "").trim();
+    if (uniqueId && !seenMsgIds[uniqueId]) {
+      seenMsgIds[uniqueId] = true;
+      dedupedMsgs.push(mItem);
+    }
+  }
 
   return {
     status: "success",
     timestamp: new Date().toISOString(),
     conversations: convs,
-    messages: msgs
+    messages: dedupedMsgs
   };
 }
 

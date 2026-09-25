@@ -410,13 +410,11 @@ function parseSalesGoalRecord(item: any): SalesGoalRecord | null {
   };
 }
 
-const SEED_CHAT_CONVERSATION_IDS = new Set([
-  'conv-group-studio-production',
-  'conv-direct-admin-stf101',
-  'conv-client-co-1'
+const SEED_CHAT_CONVERSATION_IDS = new Set<string>([
+  'conv-group-studio-production'
 ]);
 
-const SEED_CHAT_MESSAGE_IDS = new Set([
+const SEED_CHAT_MESSAGE_IDS = new Set<string>([
   'msg-grp-1', 'msg-grp-2', 'msg-grp-3',
   'msg-dir-1', 'msg-dir-2',
   'msg-client-1', 'msg-clt-1', 'msg-clt-2'
@@ -470,6 +468,12 @@ function parseChatMessage(raw: any): ChatMessage | null {
   const id = String(getProp(raw, ['Message ID', 'messageId', 'id', 'MessageID', 'Id']) || '').trim();
   const conversationId = String(getProp(raw, ['Conversation ID', 'conversationId', 'ConversationID']) || '').trim();
   if (!id || !conversationId || SEED_CHAT_MESSAGE_IDS.has(id) || SEED_CHAT_CONVERSATION_IDS.has(conversationId)) return null;
+
+  // Ignore deleted messages
+  const status = String(getProp(raw, ['Status', 'status']) || '').trim().toLowerCase();
+  const deletedAt = getProp(raw, ['Deleted At', 'deletedAt', 'DeletedAt']);
+  const isDeleted = getProp(raw, ['isDeleted', 'IsDeleted']);
+  if (status === 'deleted' || deletedAt || isDeleted === true || isDeleted === 'true') return null;
 
   const rawReadBy = getProp(raw, ['Read By', 'readBy', 'ReadBy']);
   let readBy: string[] = [];
@@ -3288,6 +3292,30 @@ export const sheetsService = {
       return true;
     } catch (error) {
       console.warn('Google Sheets sync notice (deleteChatMessage):', error);
+      return false;
+    }
+  },
+
+  /**
+   * Delete an entire chat conversation and its messages in Google Sheets.
+   */
+  async deleteChatConversation(url: string, conversationId: string): Promise<boolean> {
+    if (!url || !conversationId) return false;
+    const cleanedUrl = resolveUrl(url);
+    try {
+      await fetch(cleanedUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'deleteChatConversation',
+          conversationId,
+          id: conversationId
+        })
+      });
+      return true;
+    } catch (error) {
+      console.warn('Google Sheets sync notice (deleteChatConversation):', error);
       return false;
     }
   },

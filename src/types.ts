@@ -655,6 +655,9 @@ export interface ChatConversation {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  status?: string;
+  deletedAt?: string;
+  isDeleted?: boolean;
 }
 
 export interface ChatMessage {
@@ -673,5 +676,8 @@ export interface ChatMessage {
   }>;
   readBy?: string[]; // user IDs who have read this message
   reactions?: Record<string, string[]>; // emoji -> [user names or IDs]
+  status?: string;
+  deletedAt?: string;
+  isDeleted?: boolean;
 }
 
